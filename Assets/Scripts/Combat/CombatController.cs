@@ -3,18 +3,17 @@ using System.Collections.Generic;
 
 public class CombatController : MonoBehaviour
 {
-
     [SerializeField] private Character playerCharacter;
     [SerializeField] private Character enemyCharacter;
     
     [SerializeField] private GameObject playerCharacterGameObject; 
     [SerializeField] private GameObject enemyCharacterGameObject;  
     
-    private CharacterManager playerCharacterManager;  // These will be found automatically
-    private CharacterManager enemyCharacterManager;   // These will be found automatically
-    private GameObject[] enemyGameObjects;           // Array to store all enemy objects
+    private CharacterManager playerCharacterManager;
+    private CharacterManager enemyCharacterManager;
+    private GameObject[] enemyGameObjects;
 
-	public Character currentTarget;
+    public CharacterManager currentTargetManager; // Changed to CharacterManager instead of Character
     public Action selectedAction;
     private bool currentPlayerTurn;
 
@@ -64,8 +63,8 @@ public class CombatController : MonoBehaviour
 
     void Start()
     {
-    enemyGameObjects = GameObject.FindGameObjectsWithTag("Enemy");
-    StartNewRound();
+        enemyGameObjects = GameObject.FindGameObjectsWithTag("Enemy");
+        StartNewRound();
     }
 
     public void StartNewRound()
@@ -84,26 +83,21 @@ public class CombatController : MonoBehaviour
 
     private void HandlePlayerTurn()
     {
-        // Enable player input, show UI, etc.
         Debug.Log("Player's turn - waiting for input");
     }
 
     private void HandleEnemyTurn()
     {
-        // Execute enemy AI logic
         Debug.Log("Enemy's turn");
-        // After enemy action, switch to player
         currentPlayerTurn = true;
         HandlePlayerTurn();
     }
 
-    // Call this when player completes their action
     public void OnPlayerActionComplete()
     {
         currentPlayerTurn = false;
         HandleEnemyTurn();
     }
-
 
     public void SelectAction(Action action)
     {
@@ -111,18 +105,64 @@ public class CombatController : MonoBehaviour
         Debug.Log(selectedAction);
     }
 
-    public bool TryExecuteActionOnTarget(Character target)
+    // Method to set the current target when a character manager is clicked
+    public void SetCurrentTarget(CharacterManager targetManager)
     {
-        if (selectedAction == null || !IsValidTarget(target))
-            return false;
+        currentTargetManager = targetManager;
+        Debug.Log($"Current target set to: {targetManager.gameObject.name}");
+    }
 
-        PerformAction(target);
+    // Method to set target by Character (for backward compatibility)
+    public void SetCurrentTarget(Character target)
+    {
+        CharacterManager manager = GetCharacterManager(target);
+        if (manager != null)
+        {
+            SetCurrentTarget(manager);
+        }
+        else
+        {
+            Debug.LogError($"Could not find CharacterManager for character: {target.name}");
+        }
+    }
+
+    // Execute action on the current target
+    public bool TryExecuteActionOnCurrentTarget()
+    {
+        if (selectedAction == null || currentTargetManager == null)
+        {
+            Debug.LogError("No action selected or no target set!");
+            return false;
+        }
+
+        if (!IsValidTarget(currentTargetManager))
+        {
+            Debug.LogError($"Invalid target for action {selectedAction.name}");
+            return false;
+        }
+
+        PerformAction(currentTargetManager);
         selectedAction = null;
+        currentTargetManager = null; // Clear target after action
         OnPlayerActionComplete();
         return true;
     }
 
-    private bool IsValidTarget(Character target)
+    // Keep the old method for backward compatibility
+    public bool TryExecuteActionOnTarget(Character target)
+    {
+        SetCurrentTarget(target);
+        return TryExecuteActionOnCurrentTarget();
+    }
+
+    // New method that works directly with CharacterManager
+    public bool TryExecuteActionOnTarget(CharacterManager targetManager)
+    {
+        SetCurrentTarget(targetManager);
+        return TryExecuteActionOnCurrentTarget();
+    }
+
+    private bool IsValidTarget(CharacterManager targetManager)
     {
         if (selectedAction == null)
             return false;
@@ -130,27 +170,39 @@ public class CombatController : MonoBehaviour
         switch (selectedAction.targetType)
         {
             case Action.TargetType.SingleEnemy:
-                return target == enemyCharacter;
+                return IsEnemyCharacterManager(targetManager);
             case Action.TargetType.SingleAlly:
-                return target == playerCharacter;
+                return IsPlayerCharacterManager(targetManager);
             case Action.TargetType.AllAllies:
-                return target == playerCharacter;
+                return IsPlayerCharacterManager(targetManager);
             case Action.TargetType.AllEnemies:
-                return target == enemyCharacter;
+                return IsEnemyCharacterManager(targetManager);
             default:
                 return false;
         }
     }
 
-    public void PerformAction(Character target)
+    // Helper method to check if a CharacterManager is an enemy
+    private bool IsEnemyCharacterManager(CharacterManager characterManager)
     {
-        CharacterManager targetManager = GetCharacterManager(target);
-        
+        return characterManager.gameObject.CompareTag("Enemy");
+    }
+
+    // Helper method to check if a CharacterManager is a player character
+    private bool IsPlayerCharacterManager(CharacterManager characterManager)
+    {
+        return characterManager == playerCharacterManager;
+    }
+
+    public void PerformAction(CharacterManager targetManager)
+    {
         if (targetManager == null)
         {
-            Debug.LogError($"Could not find CharacterManager for target character!");
+            Debug.LogError($"Target CharacterManager is null!");
             return;
         }
+        
+        Debug.Log($"Performing {selectedAction.actionType} on {targetManager.gameObject.name}");
         
         switch (selectedAction.actionType)
         {
@@ -168,6 +220,20 @@ public class CombatController : MonoBehaviour
                 break;
         }
     }
+
+    // Overload for backward compatibility
+    public void PerformAction(Character target)
+    {
+        CharacterManager targetManager = GetCharacterManager(target);
+        if (targetManager != null)
+        {
+            PerformAction(targetManager);
+        }
+        else
+        {
+            Debug.LogError($"Could not find CharacterManager for target character!");
+        }
+    }
     
     private CharacterManager GetCharacterManager(Character target)
     {
@@ -177,12 +243,19 @@ public class CombatController : MonoBehaviour
             return enemyCharacterManager;
         else
         {
-            Debug.LogError($"Unknown character target - not player or enemy character!");
+            // This method still has the same issue, but it's kept for backward compatibility
+            // It's better to use the CharacterManager-based methods instead
+            foreach (GameObject enemyGO in enemyGameObjects)
+            {
+                CharacterManager cm = enemyGO.GetComponent<CharacterManager>();
+                if (cm != null && cm.characterData == target)
+                {
+                    return cm;
+                }
+            }
+            
+            Debug.LogError($"Unknown character target - could not find CharacterManager!");
             return null;
         }
     }
 }
-
-	
-    
-

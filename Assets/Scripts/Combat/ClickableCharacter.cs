@@ -9,19 +9,26 @@ public class ClickableCharacter : MonoBehaviour
     
     private PlayerControls PlayerControls;
     private InputAction clickAction;
-
-    void Awake()
-    {
-        //PlayerControls = new PlayerControls();
-        //clickAction = PlayerControls.Player.Click;
-        //clickAction.performed += ctx => OnClick();
-    }
-
+ 
     public void CharacterClicked()
     {
     if (combatController != null)
     {
-        combatController.currentTarget = character;
+        
+        // Get CharacterManager from this GameObject
+        CharacterManager characterManager = GetComponent<CharacterManager>();
+        if (characterManager != null)
+        {
+            combatController.TryExecuteActionOnTarget(characterManager);
+        }
+        else
+        {
+            Debug.LogError($"No CharacterManager component found on {gameObject.name}!");
+            // Fallback to the old Character-based method if needed
+            combatController.TryExecuteActionOnTarget(character);
+        }
+
+        
 
         if (combatController.selectedAction != null)
         {

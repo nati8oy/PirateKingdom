@@ -8,6 +8,7 @@ public class Character : ScriptableObject
     public string characterName;
     private const int ACTION_SLOTS = 6;
     private Action[] actionSlots = new Action[ACTION_SLOTS];
+    [SerializeField] private List<Action> availableActions = new List<Action>();
     public int level = 1;
     [SerializeField] public float reputation = 0f;
     public enum CharacterClass
@@ -101,6 +102,27 @@ public class Character : ScriptableObject
     public float Reputation
     {
         get => reputation;
+    }
+
+    public void AddAction(Action action)
+    {
+        if (availableActions.Count < ACTION_SLOTS)
+        {
+            availableActions.Add(action);
+        }
+    }
+
+    public Action[] GetActions()
+    {
+        return actionSlots;
+    }
+
+    public void ClearActionSlots()
+    {
+        for (int i = 0; i < ACTION_SLOTS; i++)
+        {
+            actionSlots[i] = null;
+        }
     }
 
     

@@ -6,9 +6,12 @@ using UnityEngine;
 public class TurnManager : MonoBehaviour
 {
     public Character playerCharacter;
-    public Character currentCharacterTurn;
+    public CharacterManager currentCharacterTurn;
     private GameObject[] enemyCharacters;
     private CharacterManager[] enemyCharacterManagers;
+    private int currentTurnIndex = 0;
+
+    public GameObject actionsGrid;
     
     public List<GameObject> turnOrder = new List<GameObject>();
     public List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>(); // Made public and moved to class level
@@ -17,8 +20,8 @@ public class TurnManager : MonoBehaviour
     {
 
         GetTurnOrder();
-        //StartNewRound();
-        
+        SetCharacterTurn();
+
     }
 
     
@@ -46,35 +49,51 @@ public class TurnManager : MonoBehaviour
         
             Debug.Log($"Turn {i + 1}: {characterName} - Initiative: {entry.initiative:F1}");
         }
-        Debug.Log($"Total characters: {initiativeList.Count}");
+        //Debug.Log($"Total characters: {initiativeList.Count}");
     }
-
+    
 
     public void SetCharacterTurn()
     {
-        Debug.Log(turnOrder.Count);
-    }
-    
-    
-    public bool IsPlayerTurn()
-    {
-        int randomBonus = Random.Range(1, 9);
-        float playerInitiative = playerCharacter.speed + randomBonus;
-        float highestEnemyInitiative = 0;
-
-        foreach(CharacterManager enemy in enemyCharacterManagers)
+        if (turnOrder.Count > 0)
         {
-            randomBonus = Random.Range(1, 9);
-            float enemyInitiative = enemy.Speed + randomBonus;
-            highestEnemyInitiative = Mathf.Max(highestEnemyInitiative, enemyInitiative);
+            currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
+        
+            if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
+            {
+                Debug.Log($"Current turn: {currentCharacterTurn.characterData.characterName}");
+            }
+            else
+            {
+                Debug.Log($"Current turn: {turnOrder[currentTurnIndex].name}");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("Turn order is empty!");
+        }
+    }
+
+
+    public void CompleteTurn()
+    {
+        currentTurnIndex++;
+        Debug.Log($"Turn {currentTurnIndex} complete!");
+        if (currentTurnIndex >= turnOrder.Count)
+        {
+            currentTurnIndex = 0;
+            GetTurnOrder();
         }
 
-        bool isPlayerTurn = playerInitiative >= highestEnemyInitiative;
-        Debug.Log($"Turn Order - Player Initiative: {playerInitiative}, Highest Enemy Initiative: {highestEnemyInitiative}. It's {(isPlayerTurn ? "Player's" : "Enemy's")} turn!");
-
-        return isPlayerTurn;
-        
+        if (currentTurnIndex == turnOrder.Count)
+        {
+            RoundComplete();
+        }
     }
-    
-    
+
+    private void RoundComplete()
+    {
+        Debug.Log("Round complete!");
+        SetCharacterTurn();
+    }
 }

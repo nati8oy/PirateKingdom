@@ -5,7 +5,6 @@ public class CombatController : MonoBehaviour
 {
     [SerializeField] private Character playerCharacter;
     [SerializeField] private Character enemyCharacter;
-    
     [SerializeField] private GameObject playerCharacterGameObject; 
     [SerializeField] private GameObject enemyCharacterGameObject;  
     
@@ -181,7 +180,7 @@ public class CombatController : MonoBehaviour
             return;
         }
 
-        Debug.Log($"Performing {selectedAction.actionType} on {targetManager.gameObject.name}");
+        //Debug.Log($"Performing {selectedAction.actionType} on {targetManager.gameObject.name}");
 
         switch (selectedAction.actionType)
         {
@@ -217,6 +216,9 @@ public class CombatController : MonoBehaviour
                 targetManager.AddBuff(selectedAction.buffType, -selectedAction.baseValue, selectedAction.duration);
                 break;
         }
+        
+        turnManager.CompleteTurn();
+
     }
 
     
@@ -232,6 +234,7 @@ public class CombatController : MonoBehaviour
         {
             Debug.LogError($"Could not find CharacterManager for target character!");
         }
+        
     }
     
     private CharacterManager GetCharacterManager(Character target)

@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -5,8 +6,8 @@ public class CharacterManager : MonoBehaviour
 {
     [SerializeField] public Character characterData;
     [SerializeField] private Slider healthBar;
-    
-
+    [SerializeField] TMP_Text characterName;  
+    public Image turnMarker;
     public delegate void OnDeathHandler();
     public event OnDeathHandler OnDeath;
     
@@ -25,6 +26,7 @@ public class CharacterManager : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        characterName.text = characterData.characterName;
         if (characterData != null)
         {
             MaxHealth = characterData.maxHealth;
@@ -32,7 +34,6 @@ public class CharacterManager : MonoBehaviour
             AttackPower = characterData.attackPower;
             DefenseValue = characterData.defenseValue;
             Speed = characterData.speed;
-            Position = characterData.position;
             UpdateHealthBar();
         }
         else

@@ -33,6 +33,10 @@ public class GameManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         Initialize();
+        
+        
+        
+        
     }
 
     private void Initialize()

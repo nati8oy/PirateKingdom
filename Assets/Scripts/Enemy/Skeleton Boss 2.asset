@@ -9,16 +9,20 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
-  m_Name: Elaine
+  m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
+  m_Name: Skeleton Boss 2
   m_EditorClassIdentifier: 
-  characterName: Elaine
-  availableActions:
-  - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
+  characterName: Yaargo
+  availableActions: []
   level: 1
   reputation: 0
   characterClass: 0
-  maxHealth: 67
-  attackPower: 10
-  defenseValue: 3
-  speed: 7
+  maxHealth: 40
+  attackPower: 8
+  defenseValue: 4
+  speed: 4
+  enemyType: 0
+  difficulty: 1
+  commonDropRate: 0.6
+  rareDropRate: 0.3
+  uniqueDropRate: 0.1

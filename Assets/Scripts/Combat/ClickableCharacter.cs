@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 public class ClickableCharacter : MonoBehaviour
 {
-    [SerializeField] public Character character;
+    private Character character;
     [SerializeField] private CombatController combatController;
 
     
@@ -48,14 +48,21 @@ public class ClickableCharacter : MonoBehaviour
     }
     }
     
+    private void Awake()
+    {
+        CharacterManager characterManager = GetComponentInParent<CharacterManager>();
+        if (characterManager != null)
+        {
+            character = characterManager.characterData;
+        }
+        else
+        {
+            Debug.LogError($"No CharacterManager found in parent of {gameObject.name}!");
+        }
+    }
+
     private void Start()
     {
-        // Character should be assigned in the Inspector since it's not a component
-        if (character == null)
-        {
-            Debug.LogError($"Character is not assigned on {gameObject.name}. Please assign it in the Inspector.");
-        }
-        
         // Find the CombatController if not assigned
         if (combatController == null)
             combatController = FindObjectOfType<CombatController>();

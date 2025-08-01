@@ -498,6 +498,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2012829652}
     m_Modifications:
+    - target: {fileID: 1369033989806091186, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: character
+      value: 
+      objectReference: {fileID: 11400000, guid: 1cd54e50bd6bb479e91e790ec6562aab, type: 2}
     - target: {fileID: 1449396921620451659, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -1668,8 +1672,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerCharacter: {fileID: 11400000, guid: 18e8e45ffb6224195a106df36a1b5e5d, type: 2}
-  currentPlayerCharacter: {fileID: 0}
-  currentPlayerTurn: 0
+  currentCharacterTurn: {fileID: 0}
   turnOrder: []
 --- !u!1 &1426598063
 GameObject:
@@ -3020,6 +3023,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2012829652}
     m_Modifications:
+    - target: {fileID: 1045454470820543341, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
+      propertyPath: characterData
+      value: 
+      objectReference: {fileID: 11400000, guid: a79b1411c0bcf4b509f78c464f3bdb03, type: 2}
     - target: {fileID: 1814813490090445820, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_Name
       value: Enemy 1

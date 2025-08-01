@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
   m_Name: Skeleton Boss
   m_EditorClassIdentifier: 
-  characterName: 
+  characterName: Eyaaargh
   level: 1
   reputation: 0
   characterClass: 0
@@ -20,7 +20,6 @@ MonoBehaviour:
   attackPower: 8
   defenseValue: 4
   speed: 4
-  position: 1
   enemyType: 0
   difficulty: 1
   commonDropRate: 0.6

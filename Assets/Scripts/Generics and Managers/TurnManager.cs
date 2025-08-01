@@ -6,40 +6,53 @@ using UnityEngine;
 public class TurnManager : MonoBehaviour
 {
     public Character playerCharacter;
-    public Character currentPlayerCharacter;
+    public Character currentCharacterTurn;
     private GameObject[] enemyCharacters;
     private CharacterManager[] enemyCharacterManagers;
     
-    public bool currentPlayerTurn;
-	public List<GameObject> turnOrder = new List<GameObject>();
+    public List<GameObject> turnOrder = new List<GameObject>();
+    public List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>(); // Made public and moved to class level
 
     void Start()
     {
-        currentPlayerCharacter = playerCharacter;
 
         GetTurnOrder();
         //StartNewRound();
         
-        
     }
 
+    
     public void GetTurnOrder()
     {
-    var characters = FindObjectsOfType<Character>();
-    var initiativeList = new List<(GameObject obj, float initiative)>();
+        var characterManagers = FindObjectsOfType<CharacterManager>();
+        initiativeList.Clear(); // Clear previous data
 
-    foreach (var character in characters)
-    {
-        float initiative = character.speed + Random.Range(1, 9);
-        Debug.Log($"{character.name} - Initiative: {initiative}");
+        foreach (var characterManager in characterManagers)
+        {
+            float initiative = characterManager.Speed + Random.Range(1, 9);
+            initiativeList.Add((characterManager.gameObject, initiative));
+        }
+
+        initiativeList.Sort((a, b) => b.initiative.CompareTo(a.initiative));
+        turnOrder = initiativeList.Select(x => x.obj).ToList();
+
+        // Display turn order with initiatives
+        Debug.Log("=== TURN ORDER ===");
+        for (int i = 0; i < initiativeList.Count; i++)
+        {
+            var entry = initiativeList[i];
+            var characterManager = entry.obj.GetComponent<CharacterManager>();
+            string characterName = characterManager?.characterData?.characterName ?? entry.obj.name;
         
-        initiativeList.Add((character.GameObject(), initiative));
+            Debug.Log($"Turn {i + 1}: {characterName} - Initiative: {entry.initiative:F1}");
+        }
+        Debug.Log($"Total characters: {initiativeList.Count}");
     }
 
-    initiativeList.Sort((a, b) => b.initiative.CompareTo(a.initiative));
-    turnOrder = initiativeList.Select(x => x.obj).ToList();
-    Debug.Log(initiativeList.Count);
-    
+
+    public void SetCharacterTurn()
+    {
+        Debug.Log(turnOrder.Count);
     }
     
     

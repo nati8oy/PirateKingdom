@@ -247,7 +247,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d775dae39eed049078410e4e13feb72d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  character: {fileID: 11400000, guid: 2a8181bd0bad54fe995c0d2e7129221f, type: 2}
   combatController: {fileID: 0}
 --- !u!114 &1045454470820543341
 MonoBehaviour:
@@ -528,7 +527,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &706301778756361806
 RectTransform:
   m_ObjectHideFlags: 0

@@ -1,7 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class TurnManager : MonoBehaviour
 {
@@ -9,6 +12,8 @@ public class TurnManager : MonoBehaviour
     public CharacterManager currentCharacterTurn;
     private GameObject[] enemyCharacters;
     private CharacterManager[] enemyCharacterManagers;
+    [SerializeField] private TMP_Text roundCounter;
+    [SerializeField] private TMP_Text playerTurn;
     private int currentTurnIndex = 0;
 
     public GameObject actionsGrid;
@@ -24,7 +29,13 @@ public class TurnManager : MonoBehaviour
 
     }
 
-    
+    private void Update()
+    {
+        
+        playerTurn.text = currentCharacterTurn.characterData.name+"'s" + " Turn";
+        roundCounter.text = "Round " + (currentTurnIndex + 1) + " of " + turnOrder.Count + "";
+    }
+
     public void GetTurnOrder()
     {
         var characterManagers = FindObjectsOfType<CharacterManager>();
@@ -58,6 +69,7 @@ public class TurnManager : MonoBehaviour
         if (turnOrder.Count > 0)
         {
             currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
+            currentCharacterTurn.turnMarker.gameObject.SetActive(true);
         
             if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
             {
@@ -77,6 +89,7 @@ public class TurnManager : MonoBehaviour
 
     public void CompleteTurn()
     {
+        currentCharacterTurn.turnMarker.gameObject.SetActive(false);
         currentTurnIndex++;
         Debug.Log($"Turn {currentTurnIndex} complete!");
         if (currentTurnIndex >= turnOrder.Count)
@@ -89,6 +102,8 @@ public class TurnManager : MonoBehaviour
         {
             RoundComplete();
         }
+
+        SetCharacterTurn();
     }
 
     private void RoundComplete()

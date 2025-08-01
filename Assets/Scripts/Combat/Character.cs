@@ -1,0 +1,116 @@
+using UnityEngine;
+using System.Collections.Generic;
+
+[CreateAssetMenu(fileName = "Character", menuName = "Scriptable Objects/Character")]
+public class Character : ScriptableObject
+{
+    [Header("Basic Info")]
+    public string characterName;
+    private const int ACTION_SLOTS = 6;
+    private Action[] actionSlots = new Action[ACTION_SLOTS];
+    public int level = 1;
+    [SerializeField] public float reputation = 0f;
+    public enum CharacterClass
+    {
+        Duelist,
+        Trader,
+        Doctor,
+        Musketeer,
+        WitchDoctor
+    }
+
+    public enum Allegiance
+    {
+        Buccaneer,
+        Privateer
+    }
+
+    [SerializeField] public CharacterClass characterClass;
+    //[SerializeField] public Allegiance allegiance;
+    
+    [Header("Stats")]
+    [SerializeField] public float maxHealth = 100f;
+    [SerializeField] public float attackPower = 10f;
+    [SerializeField] public float defenseValue = 5f;
+    [SerializeField] public float speed = 5f;
+    [SerializeField] public int position = 1;
+
+    public enum BuffType
+    {
+        Attack,
+        Defense,
+        Health
+    }
+
+    public class ActiveBuff
+    {
+        public BuffType Type { get; private set; }
+        public float Value { get; private set; }
+        public float Duration { get; private set; }
+
+        public ActiveBuff(BuffType type, float value, float duration)
+        {
+            Type = type;
+            Value = value;
+            Duration = duration;
+        }
+
+        public void UpdateDuration(float deltaTime)
+        {
+            Duration -= deltaTime;
+        }
+    }
+
+    private List<ActiveBuff> activeBuffs = new List<ActiveBuff>();
+    
+    public void Initialize()
+    {
+        position = Mathf.Clamp(position, 1, 4);
+        reputation = 0f;
+        actionSlots = new Action[ACTION_SLOTS];
+        // Initialize first slot with Move action
+        actionSlots[0] = ScriptableObject.CreateInstance<Action>();
+        actionSlots[0].actionName = "Move";
+    }
+   
+    public float GetAttackPower()
+    {
+        float totalAttack = attackPower;
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Type == BuffType.Attack)
+            {
+                totalAttack += buff.Value;
+            }
+        }
+        return totalAttack;
+        
+    }
+
+
+    public void UpdateBuffs(float deltaTime)
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            activeBuffs[i].UpdateDuration(deltaTime);
+            if (activeBuffs[i].Duration <= 0)
+            {
+                activeBuffs.RemoveAt(i);
+            }
+        }
+    }
+
+    public int Position
+    {
+        get => position;
+        set => position = Mathf.Clamp(value, 1, 4);
+    }
+
+    public float Reputation
+    {
+        get => reputation;
+    }
+
+    
+
+}

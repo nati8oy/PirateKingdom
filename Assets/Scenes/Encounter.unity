@@ -178,7 +178,7 @@ PrefabInstance:
     - target: {fileID: 1045454470820543341, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: characterData
       value: 
-      objectReference: {fileID: 11400000, guid: a79b1411c0bcf4b509f78c464f3bdb03, type: 2}
+      objectReference: {fileID: 11400000, guid: 87e6753ddfdd6433d8f42e2a073e0161, type: 2}
     - target: {fileID: 1814813490090445820, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_Name
       value: Enemy (1)
@@ -245,7 +245,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2910450085442628519, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 177
+      value: 265
       objectReference: {fileID: 0}
     - target: {fileID: 2910450085442628519, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -871,7 +871,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2910450085442628519, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 716
+      value: 804
       objectReference: {fileID: 0}
     - target: {fileID: 2910450085442628519, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -1865,7 +1865,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2910450085442628519, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 444
+      value: 532
       objectReference: {fileID: 0}
     - target: {fileID: 2910450085442628519, guid: 72cc1ca882d70494c9bcec8672a81c69, type: 3}
       propertyPath: m_AnchoredPosition.y

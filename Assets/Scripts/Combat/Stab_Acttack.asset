@@ -16,9 +16,10 @@ MonoBehaviour:
   actionType: 0
   targetType: 0
   cooldown: 0
+  minDamage: 5
+  maxDamage: 10
+  minHeal: 0
+  maxHeal: 0
   baseValue: 0
-  baseDamage: 10
   duration: 0
   buffType: 0
-  minimumLevel: 0
-  allowedClasses: 00000000

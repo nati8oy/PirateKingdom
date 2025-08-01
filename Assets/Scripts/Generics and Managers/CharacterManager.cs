@@ -6,7 +6,7 @@ public class CharacterManager : MonoBehaviour
     [SerializeField] public Character characterData;
     [SerializeField] private Slider healthBar;
     
-
+    public Image turnMarker;
     public delegate void OnDeathHandler();
     public event OnDeathHandler OnDeath;
     
@@ -32,7 +32,6 @@ public class CharacterManager : MonoBehaviour
             AttackPower = characterData.attackPower;
             DefenseValue = characterData.defenseValue;
             Speed = characterData.speed;
-            Position = characterData.position;
             UpdateHealthBar();
         }
         else

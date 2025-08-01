@@ -28,8 +28,12 @@ public class Action : ScriptableObject
     public float cooldown;
 
     [Header("Spell Effects")]
+    public float minDamage;
+    public float maxDamage;
+    public float minHeal;
+    public float maxHeal;
+
     public float baseValue;
-    public float baseDamage;
     public float duration;
     public Character.BuffType buffType;
 

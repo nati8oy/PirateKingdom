@@ -33,7 +33,6 @@ public class Character : ScriptableObject
     [SerializeField] public float attackPower = 10f;
     [SerializeField] public float defenseValue = 5f;
     [SerializeField] public float speed = 5f;
-    [SerializeField] public int position = 1;
 
     public enum BuffType
     {
@@ -65,7 +64,6 @@ public class Character : ScriptableObject
     
     public void Initialize()
     {
-        position = Mathf.Clamp(position, 1, 4);
         reputation = 0f;
         actionSlots = new Action[ACTION_SLOTS];
         // Initialize first slot with Move action
@@ -99,13 +97,7 @@ public class Character : ScriptableObject
             }
         }
     }
-
-    public int Position
-    {
-        get => position;
-        set => position = Mathf.Clamp(value, 1, 4);
-    }
-
+    
     public float Reputation
     {
         get => reputation;

@@ -8,7 +8,7 @@ public class CrewManager : MonoBehaviour
 
     private class CharacterStats
     {
-        public float maxHealth;
+        public float maxHealth;     
         public float attackPower;
         public float defenseValue;
         public float currentHealth;
@@ -19,8 +19,11 @@ public class CrewManager : MonoBehaviour
     public Character crewSlot3;
     public Character crewSlot4;
     
+    private GameObject[] playerCharacters;
+
     private void Awake()
     {
+        playerCharacters = GameObject.FindGameObjectsWithTag("Player");
         InitializeCrew();
     }
 
@@ -29,17 +32,18 @@ public class CrewManager : MonoBehaviour
         crewMembers = new Character[MAX_CREW_SIZE];
         crewStats = new CharacterStats[MAX_CREW_SIZE];
 
-        Character[] tempSlots = { crewSlot1, crewSlot2, crewSlot3, crewSlot4 };
-
-        for (int i = 0; i < tempSlots.Length; i++)
+        foreach (GameObject playerChar in playerCharacters)
         {
-            if (tempSlots[i] != null)
+            Character character = playerChar.GetComponent<Character>();
+            if (character != null)
             {
                 int position = FindNextAvailablePosition();
-                tempSlots[i].Position = position;
-                crewMembers[position - 1] = tempSlots[i];
-                crewMembers[position - 1].Initialize();
-                StoreCharacterStats(position - 1);
+                if (position <= MAX_CREW_SIZE)
+                {
+                    crewMembers[position - 1] = character;
+                    crewMembers[position - 1].Initialize();
+                    StoreCharacterStats(position - 1);
+                }
             }
         }
 
@@ -89,25 +93,5 @@ public class CrewManager : MonoBehaviour
         crewSlot3 = crewMembers[2];
         crewSlot4 = crewMembers[3];
     }
-
-    public bool SwapCrewPositions(int position1, int position2)
-    {
-        if (!IsValidPosition(position1) || !IsValidPosition(position2))
-            return false;
-
-        Character temp = crewMembers[position1];
-        crewMembers[position1] = crewMembers[position2];
-        crewMembers[position2] = temp;
-
-        if (crewMembers[position1] != null)
-            crewMembers[position1].Position = position1 + 1;
-        if (crewMembers[position2] != null)
-            crewMembers[position2].Position = position2 + 1;
-
-        UpdateCrewSlots();
-        return true;
-    }
-    
-    
     
 }

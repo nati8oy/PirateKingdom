@@ -12,10 +12,10 @@ public class CombatController : MonoBehaviour
     private CharacterManager playerCharacterManager;
     private CharacterManager enemyCharacterManager;
     private GameObject[] enemyGameObjects;
+    private TurnManager turnManager;
 
     public CharacterManager currentTargetManager; // Changed to CharacterManager instead of Character
     public Action selectedAction;
-    private bool currentPlayerTurn;
 
     void Awake()
     {
@@ -45,59 +45,33 @@ public class CombatController : MonoBehaviour
         {
             Debug.LogError("Enemy Character GameObject is not assigned in CombatController!");
         }
+
+        turnManager = FindObjectOfType<TurnManager>();
+        if (turnManager == null)
+        {
+            Debug.LogError("No TurnManager found in the scene!");
+        }
     }
     
-    public bool IsPlayerTurn()
-    {
-        int randomBonus = Random.Range(1, 9);
-        float playerInitiative = playerCharacter.speed + randomBonus;
-
-        randomBonus = Random.Range(1, 9);
-        float enemyInitiative = enemyCharacter.speed + randomBonus;
-
-        bool isPlayerTurn = playerInitiative >= enemyInitiative;
-        Debug.Log($"Turn Order - Player Initiative: {playerInitiative}, Enemy Initiative: {enemyInitiative}. It's {(isPlayerTurn ? "Player's" : "Enemy's")} turn!");
-
-        return isPlayerTurn;
-    }
 
     void Start()
     {
         enemyGameObjects = GameObject.FindGameObjectsWithTag("Enemy");
-        StartNewRound();
-    }
-
-    public void StartNewRound()
-    {
-        currentPlayerTurn = IsPlayerTurn();
         
-        if (currentPlayerTurn)
+    }
+    public void OnPlayerActionComplete()
+    {
+        
+        if (turnManager != null)
         {
-            HandlePlayerTurn();
+            //turnManager.HandleEnemyTurn();
         }
         else
         {
-            HandleEnemyTurn();
+            Debug.LogError("Cannot handle enemy turn: TurnManager is null!");
         }
     }
-
-    private void HandlePlayerTurn()
-    {
-        Debug.Log("Player's turn - waiting for input");
-    }
-
-    private void HandleEnemyTurn()
-    {
-        Debug.Log("Enemy's turn");
-        currentPlayerTurn = true;
-        HandlePlayerTurn();
-    }
-
-    public void OnPlayerActionComplete()
-    {
-        currentPlayerTurn = false;
-        HandleEnemyTurn();
-    }
+   
 
     public void SelectAction(Action action)
     {
@@ -109,7 +83,7 @@ public class CombatController : MonoBehaviour
     public void SetCurrentTarget(CharacterManager targetManager)
     {
         currentTargetManager = targetManager;
-        Debug.Log($"Current target set to: {targetManager.gameObject.name}");
+        //Debug.Log($"Current target set to: {targetManager.gameObject.name}");
     }
 
     // Method to set target by Character (for backward compatibility)
@@ -194,6 +168,11 @@ public class CombatController : MonoBehaviour
         return characterManager == playerCharacterManager;
     }
 
+    private int RollForCritical()
+    {
+        return Random.Range(1, 21); // Returns 1-20
+    }
+
     public void PerformAction(CharacterManager targetManager)
     {
         if (targetManager == null)
@@ -201,16 +180,35 @@ public class CombatController : MonoBehaviour
             Debug.LogError($"Target CharacterManager is null!");
             return;
         }
-        
+
         Debug.Log($"Performing {selectedAction.actionType} on {targetManager.gameObject.name}");
-        
+
         switch (selectedAction.actionType)
         {
             case Action.ActionType.Attack:
-                targetManager.TakeDamage(selectedAction.baseDamage);
+                int attackRoll = RollForCritical();
+                if (attackRoll == 1)
+                {
+                    Debug.Log("Critical Fail! Attack missed.");
+                    break;
+                }
+                float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
+                if (attackRoll == 20)
+                {
+                    Debug.Log("Critical Hit! Double damage!");
+                    damage *= 2;
+                }
+                targetManager.TakeDamage(damage);
                 break;
             case Action.ActionType.Heal:
-                targetManager.Heal(selectedAction.baseValue); 
+                int healRoll = RollForCritical();
+                float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
+                if (healRoll == 20)
+                {
+                    Debug.Log("Critical Heal! Double healing!");
+                    healAmount *= 2;
+                }
+                targetManager.Heal(healAmount);
                 break;
             case Action.ActionType.Buff:
                 targetManager.AddBuff(selectedAction.buffType, selectedAction.baseValue, selectedAction.duration);
@@ -221,6 +219,7 @@ public class CombatController : MonoBehaviour
         }
     }
 
+    
     // Overload for backward compatibility
     public void PerformAction(Character target)
     {

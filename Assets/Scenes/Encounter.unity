@@ -128,7 +128,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 47567478}
-  - component: {fileID: 47567479}
   m_Layer: 0
   m_Name: Crew
   m_TagString: Untagged
@@ -151,22 +150,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1226729287}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &47567479
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 47567477}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 17f665ba37f524d5cb8836b78ed6fb5a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  crewSlot1: {fileID: 11400000, guid: 18e8e45ffb6224195a106df36a1b5e5d, type: 2}
-  crewSlot2: {fileID: 11400000, guid: c51a851f6fb8443fa933bd960b73e29b, type: 2}
-  crewSlot3: {fileID: 11400000, guid: 1cd54e50bd6bb479e91e790ec6562aab, type: 2}
-  crewSlot4: {fileID: 11400000, guid: 2f096fa7f3fa04cc4945a2ff99c4b3bf, type: 2}
 --- !u!1001 &261224489
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -566,6 +549,10 @@ PrefabInstance:
     - target: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Name
       value: PlayerCharacter (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_TagString
+      value: Player
       objectReference: {fileID: 0}
     - target: {fileID: 5705306982772367693, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: characterData
@@ -1781,6 +1768,10 @@ PrefabInstance:
     - target: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Name
       value: PlayerCharacter
+      objectReference: {fileID: 0}
+    - target: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_TagString
+      value: Player
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

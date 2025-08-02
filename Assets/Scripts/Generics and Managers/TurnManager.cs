@@ -14,6 +14,7 @@ public class TurnManager : MonoBehaviour
     private CharacterManager[] enemyCharacterManagers;
     [SerializeField] private TMP_Text roundCounter;
     [SerializeField] private TMP_Text playerTurn;
+    [SerializeField] private float actionDelay = 1f;
     private int currentTurnIndex = 0;
 
     public GameObject actionsGrid;
@@ -69,11 +70,21 @@ public class TurnManager : MonoBehaviour
         if (turnOrder.Count > 0)
         {
             currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
+            
             currentCharacterTurn.turnMarker.gameObject.SetActive(true);
         
             if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
             {
-                Debug.Log($"Current turn: {currentCharacterTurn.characterData.characterName}");
+              // Debug.Log($"Current turn: {currentCharacterTurn.characterData.characterName}");
+
+              if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
+              {
+                  turnOrder[currentTurnIndex].GetComponent<EnemyManager>().EnemyTurnAction();
+              }
+              else
+              {
+                  //Debug.Log("it's a player turn"); 
+              }
             }
             else
             {
@@ -91,7 +102,7 @@ public class TurnManager : MonoBehaviour
     {
         currentCharacterTurn.turnMarker.gameObject.SetActive(false);
         currentTurnIndex++;
-        Debug.Log($"Turn {currentTurnIndex} complete!");
+        //Debug.Log($"Turn {currentTurnIndex} complete!");
         if (currentTurnIndex >= turnOrder.Count)
         {
             currentTurnIndex = 0;
@@ -111,4 +122,5 @@ public class TurnManager : MonoBehaviour
         Debug.Log("Round complete!");
         SetCharacterTurn();
     }
+
 }

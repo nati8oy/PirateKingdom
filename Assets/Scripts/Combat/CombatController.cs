@@ -1,5 +1,4 @@
 using UnityEngine;
-using System.Collections.Generic;
 
 public class CombatController : MonoBehaviour
 {
@@ -75,7 +74,7 @@ public class CombatController : MonoBehaviour
     public void SelectAction(Action action)
     {
         selectedAction = action;
-        Debug.Log(selectedAction);
+        //Debug.Log(selectedAction);
     }
 
     // Method to set the current target when a character manager is clicked

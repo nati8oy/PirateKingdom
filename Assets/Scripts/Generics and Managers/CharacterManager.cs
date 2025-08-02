@@ -6,7 +6,8 @@ public class CharacterManager : MonoBehaviour
 {
     [SerializeField] public Character characterData;
     [SerializeField] private Slider healthBar;
-    [SerializeField] TMP_Text characterName;  
+    [SerializeField] TMP_Text characterName;
+    [SerializeField] private TMP_Text hp;
     public Image turnMarker;
     public delegate void OnDeathHandler();
     public event OnDeathHandler OnDeath;
@@ -27,6 +28,9 @@ public class CharacterManager : MonoBehaviour
     void Start()
     {
         characterName.text = characterData.characterName;
+        hp.text = CurrentHealth.ToString() + "/" + MaxHealth.ToString();
+        
+        
         if (characterData != null)
         {
             MaxHealth = characterData.maxHealth;
@@ -45,6 +49,7 @@ public class CharacterManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        hp.text = CurrentHealth.ToString() + "/" + MaxHealth.ToString();
         CurrentHealth = Mathf.Clamp(CurrentHealth, 0, MaxHealth);
         
         if (!isDead && CurrentHealth <= 0)
@@ -57,7 +62,9 @@ public class CharacterManager : MonoBehaviour
 
     public void TakeDamage(float damage)
     {
-        CurrentHealth = Mathf.Max(0, CurrentHealth - damage);
+        // Round damage using standard rounding (0.5 rounds up)
+        float roundedDamage = Mathf.Round(damage);
+        CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
         UpdateHealthBar();
 
         if (CurrentHealth <= 0)
@@ -68,7 +75,9 @@ public class CharacterManager : MonoBehaviour
 
     public void Heal(float amount)
     {
-        CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + amount);
+        // Round heal amount using standard rounding (0.5 rounds up)
+        float roundedHeal = Mathf.Round(amount);
+        CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + roundedHeal);
         UpdateHealthBar();
     }
 

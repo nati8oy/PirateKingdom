@@ -41,7 +41,7 @@ public class ClickableCharacter : MonoBehaviour
             }
             else
             {
-                Debug.Log($"Cannot target {character.name} with selected action");
+                Debug.Log($"Cannot target {character.name} with " + combatController.selectedAction.actionName);
             }
         }
     

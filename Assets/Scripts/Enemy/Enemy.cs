@@ -28,6 +28,16 @@ public class Enemy : Character
         Unique
     }
 
+    public enum TargetingStrategy
+    {
+        LowestHealth,
+        HighestHealth,
+        LowestDefense,
+        HighestAttack,
+        HighestSpeed,
+        SpecificClass
+    }
+
     private const float NORMAL_MULT = 1.0f;
     private const float ELITE_MULT = 1.5f;
     private const float MINIBOSS_MULT = 2.0f;
@@ -40,6 +50,10 @@ public class Enemy : Character
     [SerializeField] [Range(0f, 1f)] private float commonDropRate = 0.6f;
     [SerializeField] [Range(0f, 1f)] private float rareDropRate = 0.3f;
     [SerializeField] [Range(0f, 1f)] private float uniqueDropRate = 0.1f;
+
+    [Header("Targeting")]
+    [SerializeField] private TargetingStrategy targetingStrategy = TargetingStrategy.LowestHealth;
+    //[SerializeField] private CharacterClass targetClass = CharacterClass.Duelist;
 
     public float GetStatMultiplier()
     {

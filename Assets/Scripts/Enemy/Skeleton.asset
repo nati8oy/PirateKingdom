@@ -13,9 +13,18 @@ MonoBehaviour:
   m_Name: Skeleton
   m_EditorClassIdentifier: 
   characterName: Yargh
+  actionSlots:
+  - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  availableActions: []
   level: 1
   reputation: 0
   characterClass: 0
+  allegiance: 1
   maxHealth: 20
   attackPower: 5
   defenseValue: 3
@@ -25,3 +34,4 @@ MonoBehaviour:
   commonDropRate: 0.6
   rareDropRate: 0.3
   uniqueDropRate: 0.1
+  targetingStrategy: 0

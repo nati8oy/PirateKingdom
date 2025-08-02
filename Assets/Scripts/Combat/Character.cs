@@ -7,7 +7,7 @@ public class Character : ScriptableObject
     [Header("Basic Info")]
     public string characterName;
     private const int ACTION_SLOTS = 6;
-    private Action[] actionSlots = new Action[ACTION_SLOTS];
+    public Action[] actionSlots = new Action[ACTION_SLOTS];
     [SerializeField] private List<Action> availableActions = new List<Action>();
     public int level = 1;
     [SerializeField] public float reputation = 0f;
@@ -19,15 +19,14 @@ public class Character : ScriptableObject
         Musketeer,
         WitchDoctor
     }
-
     public enum Allegiance
     {
-        Buccaneer,
-        Privateer
+        Player,
+        Enemy
     }
 
     [SerializeField] public CharacterClass characterClass;
-    //[SerializeField] public Allegiance allegiance;
+    [SerializeField] public Allegiance allegiance;
     
     [Header("Stats")]
     [SerializeField] public float maxHealth = 100f;

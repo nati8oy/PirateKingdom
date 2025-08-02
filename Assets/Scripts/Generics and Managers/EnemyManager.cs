@@ -5,6 +5,7 @@ using Random = UnityEngine.Random;
 public class EnemyManager : MonoBehaviour
 {
     [SerializeField] private Character mainCharacterData;
+    [SerializeField] private float enemyActionDelay = 1.25f;
     private readonly List<GameObject> _playerCharacters = new List<GameObject>();
     private Action _selectedAction;
     private TurnManager _turnManager;
@@ -33,6 +34,11 @@ public class EnemyManager : MonoBehaviour
     }
 
     public void EnemyTurnAction()
+    {
+        Invoke(nameof(ExecuteEnemyAction), enemyActionDelay);
+    }
+
+    private void ExecuteEnemyAction()
     {
         PerformAction(_playerCharacters[0].GetComponent<CharacterManager>());
         _turnManager.CompleteTurn();

@@ -207,6 +207,7 @@ public class CombatController : MonoBehaviour
                     healAmount *= 2;
                 }
                 targetManager.Heal(healAmount);
+                Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount}");
                 break;
             case Action.ActionType.Buff:
                 targetManager.AddBuff(selectedAction.buffType, selectedAction.baseValue, selectedAction.duration);

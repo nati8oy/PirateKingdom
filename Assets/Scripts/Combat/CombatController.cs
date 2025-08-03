@@ -189,6 +189,7 @@ public class CombatController : MonoBehaviour
                 {
                     Debug.Log("Critical Fail! Attack missed.");
                     break;
+                    targetManager.Miss();
                 }
 
                 if (attackRoll == 20 || (attackRoll + playerCharacterManager.AttackPower >= targetManager.DefenseValue))
@@ -205,6 +206,7 @@ public class CombatController : MonoBehaviour
                 else
                 {
                    Debug.Log("Attack value of " + (attackRoll + playerCharacterManager.AttackPower) +" Missed enemy with defense value of: " + targetManager.DefenseValue);
+                   targetManager.Miss();
                 }
                 break;
             case Action.ActionType.Heal:

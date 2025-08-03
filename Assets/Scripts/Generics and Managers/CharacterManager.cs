@@ -5,31 +5,50 @@ using MoreMountains.Feedbacks;
 
 public class CharacterManager : MonoBehaviour
 {
-    [SerializeField] public Character characterData;
+    [Header("Character Stats")]
+    [SerializeField]
+    [Tooltip("Scriptable object containing the character's base stats and information")]
+    public Character characterData;
+    [Tooltip("Current health value of the character")]
+    private float CurrentHealth;
+    [Tooltip("Maximum health value the character can have")]
+    public float MaxHealth;
+    [Tooltip("Character's attack power used for damage calculations")]
+    public float AttackPower;
+    [Tooltip("Character's defense value used to determine if attacks hit")]
+    public float DefenseValue;
+    [Tooltip("Character's speed value used for turn order")]
+    public float Speed;
+    [Tooltip("Character's position in the battle formation")]
+    public int Position;
+
+    [Header("UI Elements")]
     [SerializeField] private Slider healthBar;
     [SerializeField] TMP_Text characterName;
     [SerializeField] private TMP_Text hp;
+    [SerializeField] private TMP_Text healthModifier;
     public Image turnMarker;
 
+    [Header("Feedback Players")]
+    [Tooltip("Feeback player for damage")]
+    public MMF_Player damageFeedback;
+    [Tooltip("Feeback player for healing")]
+    public MMF_Player healFeedback;
+    [Tooltip("Feeback player for missing or dodges")]
+    public MMF_Player missFeedback;
+    public MMF_Player feedbackPlayer;
+    
+    
     //[SerializeField] private TurnManager _turnManager;
     public delegate void OnDeathHandler();
     public event OnDeathHandler OnDeath;
-    
-    private float CurrentHealth;
 
-    public float MaxHealth;
-
-    public MMF_Player feedbackPlayer;
-    public float AttackPower;
-    public float DefenseValue;
-    public float Speed;
-    public int Position;
-    
     private bool isDead = false;
     
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        healthModifier.enabled = false;
         characterName.text = characterData.characterName;
         hp.text = CurrentHealth.ToString() + "/" + MaxHealth.ToString();
         
@@ -66,6 +85,10 @@ public class CharacterManager : MonoBehaviour
 
     public void TakeDamage(float damage)
     {
+        healthModifier.enabled = true;
+        healthModifier.text = "-" + Mathf.Round(damage).ToString();
+        damageFeedback.PlayFeedbacks();
+        
         // Round damage using standard rounding (0.5 rounds up)
         float roundedDamage = Mathf.Round(damage);
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
@@ -80,7 +103,11 @@ public class CharacterManager : MonoBehaviour
     }
 
     public void Heal(float amount)
-    {
+    {   
+        healthModifier.enabled = true;
+        healthModifier.text = "+" + Mathf.Round(amount).ToString();
+        healFeedback.PlayFeedbacks();
+        
         // Round heal amount using standard rounding (0.5 rounds up)
         float roundedHeal = Mathf.Round(amount);
         CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + roundedHeal);
@@ -90,6 +117,13 @@ public class CharacterManager : MonoBehaviour
     public void AddBuff(Character.BuffType Type, float amount, float duration)
     {
         //add debuff code here. Is used for both buff and debuff.
+    }
+
+    public void Miss()
+    {
+        healthModifier.enabled = true;
+        healthModifier.text = "Missed!";
+        missFeedback.PlayFeedbacks();
     }
 
     private void UpdateHealthBar()
@@ -111,5 +145,13 @@ public class CharacterManager : MonoBehaviour
             }
         }
     }
-    
+
+
+    public void HideHealthUI()
+    {
+        
+        healthModifier.enabled = false;
+        
+        
+    }
 }

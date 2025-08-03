@@ -243,7 +243,7 @@ GameObject:
   - component: {fileID: 5569271145082223404}
   - component: {fileID: 1522092721142645926}
   m_Layer: 5
-  m_Name: EnemyCharacter
+  m_Name: 'EnemyCharacter[DEPRECIATED]'
   m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

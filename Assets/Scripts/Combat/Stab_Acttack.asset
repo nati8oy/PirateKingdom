@@ -16,7 +16,7 @@ MonoBehaviour:
   actionType: 0
   targetType: 0
   cooldown: 0
-  minDamage: 5
+  minDamage: 2
   maxDamage: 10
   minHeal: 0
   maxHeal: 0

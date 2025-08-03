@@ -23,16 +23,18 @@ public class EnemyManager : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        mainCharacterData = GetComponent<CharacterManager>().characterData; 
+        mainCharacterData = GetComponent<CharacterManager>().characterData;
+        RefreshTargetList();
+    }
 
+    public void RefreshTargetList()
+    {
+        
         _selectedAction = mainCharacterData.actionSlots[0];
-        
-        
         _playerCharacters.Clear();
         GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
         _playerCharacters.AddRange(players);
     }
-
     public void EnemyTurnAction()
     {
         Invoke(nameof(ExecuteEnemyAction), enemyActionDelay);
@@ -40,8 +42,17 @@ public class EnemyManager : MonoBehaviour
 
     private void ExecuteEnemyAction()
     {
-        PerformAction(_playerCharacters[0].GetComponent<CharacterManager>());
-        _turnManager.CompleteTurn();
+        if (_playerCharacters[0] != null)
+        {
+            PerformAction(_playerCharacters[0].GetComponent<CharacterManager>());
+            _turnManager.CompleteTurn(); 
+        }
+
+        else
+        {
+            RefreshTargetList();
+            ExecuteEnemyAction();
+        }
     }
 
     private void PerformAction(CharacterManager targetManager)

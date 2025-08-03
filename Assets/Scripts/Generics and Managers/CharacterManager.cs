@@ -10,6 +10,8 @@ public class CharacterManager : MonoBehaviour
     [SerializeField] TMP_Text characterName;
     [SerializeField] private TMP_Text hp;
     public Image turnMarker;
+
+    //[SerializeField] private TurnManager _turnManager;
     public delegate void OnDeathHandler();
     public event OnDeathHandler OnDeath;
     
@@ -58,6 +60,7 @@ public class CharacterManager : MonoBehaviour
             isDead = true;
             OnDeath?.Invoke();
             Destroy(gameObject);
+            
         }
     }
 

@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -15,7 +13,7 @@ public class TurnManager : MonoBehaviour
     [SerializeField] private TMP_Text roundCounter;
     [SerializeField] private TMP_Text playerTurn;
     [SerializeField] private float actionDelay = 1f;
-    private int currentTurnIndex = 0;
+    private int currentTurnIndex;
 
     public GameObject actionsGrid;
     

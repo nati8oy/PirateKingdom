@@ -166,7 +166,7 @@ public class CombatController : MonoBehaviour
         return characterManager == playerCharacterManager;
     }
 
-    private int RollForCritical()
+    private int HitChanceRoll()
     {
         return Random.Range(1, 21); // Returns 1-20
     }
@@ -184,22 +184,31 @@ public class CombatController : MonoBehaviour
         switch (selectedAction.actionType)
         {
             case Action.ActionType.Attack:
-                int attackRoll = RollForCritical();
+                int attackRoll = HitChanceRoll();
                 if (attackRoll == 1)
                 {
                     Debug.Log("Critical Fail! Attack missed.");
                     break;
                 }
-                float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
-                if (attackRoll == 20)
+
+                if (attackRoll == 20 || (attackRoll + playerCharacterManager.AttackPower >= targetManager.DefenseValue))
                 {
-                    Debug.Log("Critical Hit! Double damage!");
-                    damage *= 2;
+                    float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
+                    if (attackRoll == 20)
+                    {
+                        Debug.Log("Critical Hit! Double damage!");
+                        damage *= 2;
+                    }
+                    Debug.Log("Attack value of " + (attackRoll + playerCharacterManager.AttackPower) +" hit enemy with defense value of: " + targetManager.DefenseValue);
+                    targetManager.TakeDamage(damage);
                 }
-                targetManager.TakeDamage(damage);
+                else
+                {
+                   Debug.Log("Attack value of " + (attackRoll + playerCharacterManager.AttackPower) +" Missed enemy with defense value of: " + targetManager.DefenseValue);
+                }
                 break;
             case Action.ActionType.Heal:
-                int healRoll = RollForCritical();
+                int healRoll = HitChanceRoll();
                 float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
                 if (healRoll == 20)
                 {
@@ -215,8 +224,8 @@ public class CombatController : MonoBehaviour
             case Action.ActionType.Debuff:
                 targetManager.AddBuff(selectedAction.buffType, -selectedAction.baseValue, selectedAction.duration);
                 break;
-        }
         
+        }
         turnManager.CompleteTurn();
 
     }

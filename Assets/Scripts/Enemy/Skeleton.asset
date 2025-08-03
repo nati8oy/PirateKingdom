@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
   m_Name: Skeleton
   m_EditorClassIdentifier: 
-  characterName: Yargh
+  characterName: Minion
   actionSlots:
-  - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
+  - {fileID: 11400000, guid: 73a4ecfd977dd472f9765f6ca8453fcf, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}

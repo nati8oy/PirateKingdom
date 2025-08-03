@@ -33,7 +33,7 @@ public class Character : ScriptableObject
     [SerializeField] public float attackPower = 10f;
     [SerializeField] public float defenseValue = 5f;
     [SerializeField] public float speed = 5f;
-
+    
     public enum BuffType
     {
         Attack,

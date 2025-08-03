@@ -27,7 +27,7 @@ MonoBehaviour:
   allegiance: 1
   maxHealth: 40
   attackPower: 8
-  defenseValue: 4
+  defenseValue: 20
   speed: 4
   enemyType: 0
   difficulty: 1

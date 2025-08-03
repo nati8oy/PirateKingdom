@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using MoreMountains.Feedbacks;
 
 public class CharacterManager : MonoBehaviour
 {
@@ -16,7 +17,7 @@ public class CharacterManager : MonoBehaviour
 
     public float MaxHealth;
 
-    
+    public MMF_Player feedbackPlayer;
     public float AttackPower;
     public float DefenseValue;
     public float Speed;
@@ -66,6 +67,8 @@ public class CharacterManager : MonoBehaviour
         float roundedDamage = Mathf.Round(damage);
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
         UpdateHealthBar();
+
+       feedbackPlayer.PlayFeedbacks();
 
         if (CurrentHealth <= 0)
         {

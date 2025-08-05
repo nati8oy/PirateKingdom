@@ -13,12 +13,18 @@ MonoBehaviour:
   m_Name: Lord Botty
   m_EditorClassIdentifier: 
   characterName: Lord Botty
-  availableActions:
+  actionSlots:
   - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
   - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  availableActions: []
   level: 1
   reputation: 0
   characterClass: 0
+  allegiance: 0
   maxHealth: 100
   attackPower: 10
   defenseValue: 5

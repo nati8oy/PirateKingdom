@@ -15,7 +15,7 @@ public class TurnManager : MonoBehaviour
     [SerializeField] private float actionDelay = 1f;
     private int currentTurnIndex;
 
-    public GameObject actionsGrid;
+    public ActionsManager actionsManager;
     
     public List<GameObject> turnOrder = new List<GameObject>();
     public List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>(); // Made public and moved to class level
@@ -73,6 +73,8 @@ public class TurnManager : MonoBehaviour
         
             if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
             {
+                
+               actionsManager.LoadCharacterActions(currentCharacterTurn.characterData); 
               // Debug.Log($"Current turn: {currentCharacterTurn.characterData.characterName}");
 
               if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)

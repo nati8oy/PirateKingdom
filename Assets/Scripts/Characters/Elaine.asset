@@ -13,11 +13,18 @@ MonoBehaviour:
   m_Name: Elaine
   m_EditorClassIdentifier: 
   characterName: Elaine
-  availableActions:
+  actionSlots:
   - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
+  - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
+  - {fileID: 11400000, guid: 73a4ecfd977dd472f9765f6ca8453fcf, type: 2}
+  - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  availableActions: []
   level: 1
   reputation: 0
   characterClass: 0
+  allegiance: 0
   maxHealth: 67
   attackPower: 10
   defenseValue: 3

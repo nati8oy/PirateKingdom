@@ -1,104 +1,78 @@
+
 using UnityEngine;
 
 public class CombatController : MonoBehaviour
 {
-    [SerializeField] private Character playerCharacter;
-    [SerializeField] private Character enemyCharacter;
-    [SerializeField] private GameObject playerCharacterGameObject; 
-    [SerializeField] private GameObject enemyCharacterGameObject;  
-    
-    private CharacterManager playerCharacterManager;
-    private CharacterManager enemyCharacterManager;
-    private GameObject[] enemyGameObjects;
     private TurnManager turnManager;
-
-    public CharacterManager currentTargetManager; // Changed to CharacterManager instead of Character
+    public CharacterManager currentTargetManager;
     public Action selectedAction;
 
     void Awake()
     {
-        // Automatically find and cache CharacterManager components
-        if (playerCharacterGameObject != null)
-        {
-            playerCharacterManager = playerCharacterGameObject.GetComponent<CharacterManager>();
-            if (playerCharacterManager == null)
-            {
-                Debug.LogError($"No CharacterManager component found on player character GameObject: {playerCharacterGameObject.name}");
-            }
-        }
-        else
-        {
-            Debug.LogError("Player Character GameObject is not assigned in CombatController!");
-        }
-
-        if (enemyCharacterGameObject != null)
-        {
-            enemyCharacterManager = enemyCharacterGameObject.GetComponent<CharacterManager>();
-            if (enemyCharacterManager == null)
-            {
-                Debug.LogError($"No CharacterManager component found on enemy character GameObject: {enemyCharacterGameObject.name}");
-            }
-        }
-        else
-        {
-            Debug.LogError("Enemy Character GameObject is not assigned in CombatController!");
-        }
-
         turnManager = FindObjectOfType<TurnManager>();
         if (turnManager == null)
         {
             Debug.LogError("No TurnManager found in the scene!");
         }
     }
-    
 
-    void Start()
-    {
-        enemyGameObjects = GameObject.FindGameObjectsWithTag("Enemy");
-        
-    }
     public void OnPlayerActionComplete()
     {
-        
         if (turnManager != null)
         {
-            //turnManager.HandleEnemyTurn();
+            // Handle any additional logic needed after player action
+            // Currently empty but kept for ClickableCharacter compatibility
         }
         else
         {
-            Debug.LogError("Cannot handle enemy turn: TurnManager is null!");
+            Debug.LogError("Cannot handle action complete: TurnManager is null!");
         }
     }
-   
 
     public void SelectAction(Action action)
     {
         selectedAction = action;
-        //Debug.Log(selectedAction);
     }
 
-    // Method to set the current target when a character manager is clicked
     public void SetCurrentTarget(CharacterManager targetManager)
     {
         currentTargetManager = targetManager;
-        //Debug.Log($"Current target set to: {targetManager.gameObject.name}");
     }
 
-    // Method to set target by Character (for backward compatibility)
-    public void SetCurrentTarget(Character target)
+    public bool TryExecuteActionOnTarget(CharacterManager targetManager)
     {
-        CharacterManager manager = GetCharacterManager(target);
-        if (manager != null)
+        SetCurrentTarget(targetManager);
+        return TryExecuteActionOnCurrentTarget();
+    }
+
+    // Keep this for backward compatibility with ClickableCharacter
+    public bool TryExecuteActionOnTarget(Character target)
+    {
+        // Since we no longer have hardcoded references, we need to find the CharacterManager
+        // by searching through all CharacterManagers in the scene
+        CharacterManager[] allManagers = FindObjectsOfType<CharacterManager>();
+        CharacterManager targetManager = null;
+        
+        foreach (CharacterManager manager in allManagers)
         {
-            SetCurrentTarget(manager);
+            if (manager.characterData == target)
+            {
+                targetManager = manager;
+                break;
+            }
+        }
+        
+        if (targetManager != null)
+        {
+            return TryExecuteActionOnTarget(targetManager);
         }
         else
         {
             Debug.LogError($"Could not find CharacterManager for character: {target.name}");
+            return false;
         }
     }
 
-    // Execute action on the current target
     public bool TryExecuteActionOnCurrentTarget()
     {
         if (selectedAction == null || currentTargetManager == null)
@@ -115,23 +89,8 @@ public class CombatController : MonoBehaviour
 
         PerformAction(currentTargetManager);
         selectedAction = null;
-        currentTargetManager = null; // Clear target after action
-        OnPlayerActionComplete();
+        currentTargetManager = null;
         return true;
-    }
-
-    // Keep the old method for backward compatibility
-    public bool TryExecuteActionOnTarget(Character target)
-    {
-        SetCurrentTarget(target);
-        return TryExecuteActionOnCurrentTarget();
-    }
-
-    // New method that works directly with CharacterManager
-    public bool TryExecuteActionOnTarget(CharacterManager targetManager)
-    {
-        SetCurrentTarget(targetManager);
-        return TryExecuteActionOnCurrentTarget();
     }
 
     private bool IsValidTarget(CharacterManager targetManager)
@@ -142,33 +101,21 @@ public class CombatController : MonoBehaviour
         switch (selectedAction.targetType)
         {
             case Action.TargetType.SingleEnemy:
-                return IsEnemyCharacterManager(targetManager);
+                return targetManager.gameObject.CompareTag("Enemy");
             case Action.TargetType.SingleAlly:
-                return IsPlayerCharacterManager(targetManager);
+                return targetManager.gameObject.CompareTag("Player");
             case Action.TargetType.AllAllies:
-                return IsPlayerCharacterManager(targetManager);
+                return targetManager.gameObject.CompareTag("Player");
             case Action.TargetType.AllEnemies:
-                return IsEnemyCharacterManager(targetManager);
+                return targetManager.gameObject.CompareTag("Enemy");
             default:
                 return false;
         }
     }
 
-    // Helper method to check if a CharacterManager is an enemy
-    private bool IsEnemyCharacterManager(CharacterManager characterManager)
-    {
-        return characterManager.gameObject.CompareTag("Enemy");
-    }
-
-    // Helper method to check if a CharacterManager is a player character
-    private bool IsPlayerCharacterManager(CharacterManager characterManager)
-    {
-        return characterManager == playerCharacterManager;
-    }
-
     private int HitChanceRoll()
     {
-        return Random.Range(1, 21); // Returns 1-20
+        return Random.Range(1, 21);
     }
 
     public void PerformAction(CharacterManager targetManager)
@@ -179,7 +126,8 @@ public class CombatController : MonoBehaviour
             return;
         }
 
-        //Debug.Log($"Performing {selectedAction.actionType} on {targetManager.gameObject.name}");
+        // Get the current character performing the action
+        CharacterManager currentCharacter = turnManager.currentCharacterTurn;
 
         switch (selectedAction.actionType)
         {
@@ -188,11 +136,11 @@ public class CombatController : MonoBehaviour
                 if (attackRoll == 1)
                 {
                     Debug.Log("Critical Fail! Attack missed.");
-                    break;
                     targetManager.Miss();
+                    break;
                 }
 
-                if (attackRoll == 20 || (attackRoll + playerCharacterManager.AttackPower >= targetManager.DefenseValue))
+                if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
                 {
                     float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
                     if (attackRoll == 20)
@@ -200,15 +148,16 @@ public class CombatController : MonoBehaviour
                         Debug.Log("Critical Hit! Double damage!");
                         damage *= 2;
                     }
-                    Debug.Log("Attack value of " + (attackRoll + playerCharacterManager.AttackPower) +" hit enemy with defense value of: " + targetManager.DefenseValue);
+                    Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
                     targetManager.TakeDamage(damage);
                 }
                 else
                 {
-                   Debug.Log("Attack value of " + (attackRoll + playerCharacterManager.AttackPower) +" Missed enemy with defense value of: " + targetManager.DefenseValue);
-                   targetManager.Miss();
+                    Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " Missed enemy with defense value of: " + targetManager.DefenseValue);
+                    targetManager.Miss();
                 }
                 break;
+
             case Action.ActionType.Heal:
                 int healRoll = HitChanceRoll();
                 float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
@@ -220,55 +169,16 @@ public class CombatController : MonoBehaviour
                 targetManager.Heal(healAmount);
                 Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount}");
                 break;
+
             case Action.ActionType.Buff:
                 targetManager.AddBuff(selectedAction.buffType, selectedAction.baseValue, selectedAction.duration);
                 break;
+
             case Action.ActionType.Debuff:
                 targetManager.AddBuff(selectedAction.buffType, -selectedAction.baseValue, selectedAction.duration);
                 break;
-        
         }
+        
         turnManager.CompleteTurn();
-
-    }
-
-    
-    // Overload for backward compatibility
-    public void PerformAction(Character target)
-    {
-        CharacterManager targetManager = GetCharacterManager(target);
-        if (targetManager != null)
-        {
-            PerformAction(targetManager);
-        }
-        else
-        {
-            Debug.LogError($"Could not find CharacterManager for target character!");
-        }
-        
-    }
-    
-    private CharacterManager GetCharacterManager(Character target)
-    {
-        if (target == playerCharacter)
-            return playerCharacterManager;
-        else if (target == enemyCharacter)
-            return enemyCharacterManager;
-        else
-        {
-            // This method still has the same issue, but it's kept for backward compatibility
-            // It's better to use the CharacterManager-based methods instead
-            foreach (GameObject enemyGO in enemyGameObjects)
-            {
-                CharacterManager cm = enemyGO.GetComponent<CharacterManager>();
-                if (cm != null && cm.characterData == target)
-                {
-                    return cm;
-                }
-            }
-            
-            Debug.LogError($"Unknown character target - could not find CharacterManager!");
-            return null;
-        }
     }
 }

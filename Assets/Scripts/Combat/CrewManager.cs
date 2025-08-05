@@ -24,6 +24,7 @@ public class CrewManager : MonoBehaviour
     private void Awake()
     {
         playerCharacters = GameObject.FindGameObjectsWithTag("Player");
+        Debug.Log(("crew size: " + playerCharacters.Length));
         InitializeCrew();
     }
 
@@ -34,13 +35,13 @@ public class CrewManager : MonoBehaviour
 
         foreach (GameObject playerChar in playerCharacters)
         {
-            Character character = playerChar.GetComponent<Character>();
+            CharacterManager character = playerChar.GetComponent<CharacterManager>();
             if (character != null)
             {
                 int position = FindNextAvailablePosition();
                 if (position <= MAX_CREW_SIZE)
                 {
-                    crewMembers[position - 1] = character;
+                    crewMembers[position - 1] = character.characterData;
                     crewMembers[position - 1].Initialize();
                     StoreCharacterStats(position - 1);
                 }

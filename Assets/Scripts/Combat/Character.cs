@@ -65,10 +65,30 @@ public class Character : ScriptableObject
     public void Initialize()
     {
         reputation = 0f;
+        // Don't touch actionSlots at all - let them be set up in Inspector or elsewhere
+        Debug.Log($"Character {characterName} initialized with {GetValidActionCount()} actions");
+    }
+
+// Call this method only when you want to reset actions to defaults
+    public void ResetActionsToDefault()
+    {
         actionSlots = new Action[ACTION_SLOTS];
-        // Initialize first slot with Move action
         actionSlots[0] = ScriptableObject.CreateInstance<Action>();
         actionSlots[0].actionName = "Move";
+    }
+
+    private int GetValidActionCount()
+    {
+        int count = 0;
+        if (actionSlots != null)
+        {
+            foreach (Action action in actionSlots)
+            {
+                if (action != null && !string.IsNullOrEmpty(action.actionName))
+                    count++;
+            }
+        }
+        return count;
     }
    
     public float GetAttackPower()

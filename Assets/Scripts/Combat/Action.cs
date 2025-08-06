@@ -26,6 +26,7 @@ public class Action : ScriptableObject
     public ActionType actionType;
     public TargetType targetType;
     public float cooldown;
+    public Sprite icon;
 
     [Header("Spell Effects")]
     public float minDamage;
@@ -33,7 +34,7 @@ public class Action : ScriptableObject
     public float minHeal;
     public float maxHeal;
 
-    public float baseValue;
+    public float buffValue;
     public float duration;
     public Character.BuffType buffType;
 

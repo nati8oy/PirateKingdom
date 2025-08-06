@@ -13,12 +13,19 @@ MonoBehaviour:
   m_Name: Kolo
   m_EditorClassIdentifier: 
   characterName: Kolo
+  actionSlots:
+  - {fileID: 11400000, guid: 01c9599a2e2b94caabb67bf8bd183f56, type: 2}
+  - {fileID: 11400000, guid: 2089de7ec83b54ca2a33489ee4278325, type: 2}
+  - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  availableActions: []
   level: 1
   reputation: 0
   characterClass: 4
+  allegiance: 0
   maxHealth: 76
-  currentHealth: 76
   attackPower: 11
   defenseValue: 4
   speed: 5
-  position: 1

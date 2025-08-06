@@ -38,25 +38,31 @@ public class Character : ScriptableObject
     {
         Attack,
         Defense,
-        Health
+        Health,
+        Speed
     }
 
     public class ActiveBuff
     {
         public BuffType Type { get; private set; }
         public float Value { get; private set; }
-        public float Duration { get; private set; }
+        public int RoundsRemaining { get; private set; }
 
-        public ActiveBuff(BuffType type, float value, float duration)
+        public ActiveBuff(BuffType type, float value, int roundsDuration)
         {
             Type = type;
             Value = value;
-            Duration = duration;
+            RoundsRemaining = roundsDuration;
         }
 
-        public void UpdateDuration(float deltaTime)
+        public void ReduceRounds()
         {
-            Duration -= deltaTime;
+            RoundsRemaining--;
+        }
+
+        public bool IsExpired()
+        {
+            return RoundsRemaining <= 0;
         }
     }
 
@@ -65,11 +71,10 @@ public class Character : ScriptableObject
     public void Initialize()
     {
         reputation = 0f;
-        // Don't touch actionSlots at all - let them be set up in Inspector or elsewhere
+        activeBuffs.Clear();
         Debug.Log($"Character {characterName} initialized with {GetValidActionCount()} actions");
     }
 
-// Call this method only when you want to reset actions to defaults
     public void ResetActionsToDefault()
     {
         actionSlots = new Action[ACTION_SLOTS];
@@ -90,8 +95,29 @@ public class Character : ScriptableObject
         }
         return count;
     }
-   
-    public float GetAttackPower()
+
+    public void AddBuff(BuffType buffType, float value, int roundsDuration)
+    {
+        ActiveBuff newBuff = new ActiveBuff(buffType, value, roundsDuration);
+        activeBuffs.Add(newBuff);
+        Debug.Log($"Added {(value > 0 ? "buff" : "debuff")} to {characterName}: {buffType} {value:+0;-0} for {roundsDuration} rounds");
+    }
+
+    public void UpdateBuffsForNewRound()
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            activeBuffs[i].ReduceRounds();
+            if (activeBuffs[i].IsExpired())
+            {
+                Debug.Log($"Buff/Debuff expired on {characterName}: {activeBuffs[i].Type}");
+                activeBuffs.RemoveAt(i);
+            }
+        }
+    }
+
+    // Get modified stats with buffs applied
+    public float GetModifiedAttackPower()
     {
         float totalAttack = attackPower;
         foreach (var buff in activeBuffs)
@@ -101,23 +127,53 @@ public class Character : ScriptableObject
                 totalAttack += buff.Value;
             }
         }
-        return totalAttack;
-        
+        return Mathf.Max(0, totalAttack); // Ensure it doesn't go negative
     }
 
-
-    public void UpdateBuffs(float deltaTime)
+    public float GetModifiedDefenseValue()
     {
-        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        float totalDefense = defenseValue;
+        foreach (var buff in activeBuffs)
         {
-            activeBuffs[i].UpdateDuration(deltaTime);
-            if (activeBuffs[i].Duration <= 0)
+            if (buff.Type == BuffType.Defense)
             {
-                activeBuffs.RemoveAt(i);
+                totalDefense += buff.Value;
             }
         }
+        return Mathf.Max(0, totalDefense);
     }
-    
+
+    public float GetModifiedSpeed()
+    {
+        float totalSpeed = speed;
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Type == BuffType.Speed)
+            {
+                totalSpeed += buff.Value;
+            }
+        }
+        return Mathf.Max(0.1f, totalSpeed); // Minimum speed of 0.1 to prevent issues
+    }
+
+    public float GetModifiedMaxHealth()
+    {
+        float totalHealth = maxHealth;
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Type == BuffType.Health)
+            {
+                totalHealth += buff.Value;
+            }
+        }
+        return Mathf.Max(1, totalHealth); // Minimum health of 1
+    }
+
+    public List<ActiveBuff> GetActiveBuffs()
+    {
+        return new List<ActiveBuff>(activeBuffs);
+    }
+
     public float Reputation
     {
         get => reputation;
@@ -144,6 +200,15 @@ public class Character : ScriptableObject
         }
     }
 
-    
+    // Obsolete methods for backwards compatibility
+    public float GetAttackPower()
+    {
+        return GetModifiedAttackPower();
+    }
 
+    public void UpdateBuffs(float deltaTime)
+    {
+        // This method is now obsolete since we use round-based buffs
+        // Keep for backwards compatibility but don't use it
+    }
 }

@@ -171,14 +171,17 @@ public class CombatController : MonoBehaviour
                 break;
 
             case Action.ActionType.Buff:
-                targetManager.AddBuff(selectedAction.buffType, selectedAction.baseValue, selectedAction.duration);
+                currentTargetManager.buffEffectText.text = selectedAction.buffType.ToString() + " +" + selectedAction.buffValue;
+                targetManager.AddBuff(selectedAction.buffType, selectedAction.buffValue, selectedAction.duration);
                 break;
 
             case Action.ActionType.Debuff:
-                targetManager.AddBuff(selectedAction.buffType, -selectedAction.baseValue, selectedAction.duration);
+                targetManager.AddBuff(selectedAction.buffType, -selectedAction.buffValue, selectedAction.duration);
                 break;
         }
         
         turnManager.CompleteTurn();
     }
+    
+    
 }

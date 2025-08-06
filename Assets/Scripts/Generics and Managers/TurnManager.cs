@@ -15,12 +15,12 @@ public class TurnManager : MonoBehaviour
     [SerializeField] private TMP_Text playerTurn;
     [SerializeField] private float actionDelay = 1f;
     private int currentTurnIndex;
-    private int roundCounterInt = 1; // Initialize to 1 for the first round
+    private int roundCounterInt = 1;
 
     public ActionsManager actionsManager;
     
     public List<GameObject> turnOrder = new List<GameObject>();
-    public List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>(); // Made public and moved to class level
+    public List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>();
 
     void Start()
     {
@@ -31,16 +31,18 @@ public class TurnManager : MonoBehaviour
     private void Update()
     {
         playerTurn.text = currentCharacterTurn.characterData.name+"'s" + " Turn";
-        roundCounter.text = "Round " + roundCounterInt; // Use the actual round counter
+        roundCounter.text = "Round " + roundCounterInt;
     }
 
     public void GetTurnOrder()
     {
         var characterManagers = FindObjectsOfType<CharacterManager>();
-        initiativeList.Clear(); // Clear previous data
+        initiativeList.Clear();
 
         foreach (var characterManager in characterManagers)
         {
+            // Update stats before calculating initiative
+            characterManager.RefreshStats();
             float initiative = characterManager.Speed + Random.Range(1, 9);
             initiativeList.Add((characterManager.gameObject, initiative));
         }
@@ -48,7 +50,6 @@ public class TurnManager : MonoBehaviour
         initiativeList.Sort((a, b) => b.initiative.CompareTo(a.initiative));
         turnOrder = initiativeList.Select(x => x.obj).ToList();
 
-        // Display turn order with initiatives
         Debug.Log("=== TURN ORDER ===");
         for (int i = 0; i < initiativeList.Count; i++)
         {
@@ -65,6 +66,9 @@ public class TurnManager : MonoBehaviour
         if (turnOrder.Count > 0)
         {
             currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
+            
+            // Update buffs and stats at the start of the character's turn
+            currentCharacterTurn.UpdateBuffsForTurn();
             
             currentCharacterTurn.turnMarker.gameObject.SetActive(true);
         
@@ -108,5 +112,12 @@ public class TurnManager : MonoBehaviour
     {
         roundCounterInt += 1;
         Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
+        
+        // Update buffs for all characters when a round completes
+        var allCharacterManagers = FindObjectsOfType<CharacterManager>();
+        foreach (var characterManager in allCharacterManagers)
+        {
+            characterManager.OnRoundComplete();
+        }
     }
 }

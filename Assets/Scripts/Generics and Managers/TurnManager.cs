@@ -1,3 +1,4 @@
+
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
@@ -14,6 +15,7 @@ public class TurnManager : MonoBehaviour
     [SerializeField] private TMP_Text playerTurn;
     [SerializeField] private float actionDelay = 1f;
     private int currentTurnIndex;
+    private int roundCounterInt = 1; // Initialize to 1 for the first round
 
     public ActionsManager actionsManager;
     
@@ -22,17 +24,14 @@ public class TurnManager : MonoBehaviour
 
     void Start()
     {
-
         GetTurnOrder();
         SetCharacterTurn();
-
     }
 
     private void Update()
     {
-        
         playerTurn.text = currentCharacterTurn.characterData.name+"'s" + " Turn";
-        roundCounter.text = "Round " + (currentTurnIndex + 1) + " of " + turnOrder.Count + "";
+        roundCounter.text = "Round " + roundCounterInt; // Use the actual round counter
     }
 
     public void GetTurnOrder()
@@ -59,9 +58,7 @@ public class TurnManager : MonoBehaviour
         
             Debug.Log($"Turn {i + 1}: {characterName} - Initiative: {entry.initiative:F1}");
         }
-        //Debug.Log($"Total characters: {initiativeList.Count}");
     }
-    
 
     public void SetCharacterTurn()
     {
@@ -73,18 +70,12 @@ public class TurnManager : MonoBehaviour
         
             if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
             {
-                
-               actionsManager.LoadCharacterActions(currentCharacterTurn.characterData); 
-              // Debug.Log($"Current turn: {currentCharacterTurn.characterData.characterName}");
+                actionsManager.LoadCharacterActions(currentCharacterTurn.characterData); 
 
-              if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
-              {
-                  turnOrder[currentTurnIndex].GetComponent<EnemyManager>().EnemyTurnAction();
-              }
-              else
-              {
-                  //Debug.Log("it's a player turn"); 
-              }
+                if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
+                {
+                    turnOrder[currentTurnIndex].GetComponent<EnemyManager>().EnemyTurnAction();
+                }
             }
             else
             {
@@ -97,21 +88,17 @@ public class TurnManager : MonoBehaviour
         }
     }
 
-
     public void CompleteTurn()
     {
         currentCharacterTurn.turnMarker.gameObject.SetActive(false);
         currentTurnIndex++;
-        //Debug.Log($"Turn {currentTurnIndex} complete!");
+        
+        // Check if we've completed a full round
         if (currentTurnIndex >= turnOrder.Count)
         {
+            RoundComplete();
             currentTurnIndex = 0;
             GetTurnOrder();
-        }
-
-        if (currentTurnIndex == turnOrder.Count)
-        {
-            RoundComplete();
         }
 
         SetCharacterTurn();
@@ -119,8 +106,7 @@ public class TurnManager : MonoBehaviour
 
     private void RoundComplete()
     {
-        Debug.Log("Round complete!");
-        SetCharacterTurn();
+        roundCounterInt += 1;
+        Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
     }
-
 }

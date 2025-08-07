@@ -109,6 +109,8 @@ public class TurnManager : MonoBehaviour
 
         SetCharacterTurn();
     }
+    
+    
 
     private void RoundComplete()
     {

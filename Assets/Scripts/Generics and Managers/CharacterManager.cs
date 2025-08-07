@@ -61,12 +61,12 @@ public class CharacterManager : MonoBehaviour
             Debug.LogError("Character Data is missing!");
         }
         
-        hp.text = CurrentHealth.ToString() + "/" + MaxHealth.ToString();
+        hp.text = CurrentHealth + "/" + MaxHealth;
     }
 
     void Update()
     {
-        hp.text = CurrentHealth.ToString() + "/" + MaxHealth.ToString();
+        hp.text = CurrentHealth + "/" + MaxHealth;
         CurrentHealth = Mathf.Clamp(CurrentHealth, 0, MaxHealth);
         
         if (!isDead && CurrentHealth <= 0)
@@ -100,8 +100,9 @@ public class CharacterManager : MonoBehaviour
     public void OnTurnComplete()
     {
         characterData?.UpdateBuffsForCharacterTurn();
+        characterData?.UpdateActionCooldowns(); 
         RefreshStats(); // Update stats after buffs are reduced
-        Debug.Log($"{characterData.characterName} completed their turn, buffs updated");
+        if (characterData != null) Debug.Log($"{characterData.characterName} completed their turn, buffs updated");
     }
 
     // Deprecated method - kept for backwards compatibility
@@ -115,7 +116,7 @@ public class CharacterManager : MonoBehaviour
     public void TakeDamage(float damage)
     {
         healthModifier.enabled = true;
-        healthModifier.text = "-" + Mathf.Round(damage).ToString();
+        healthModifier.text = "-" + Mathf.Round(damage);
         damageFeedback.PlayFeedbacks();
         
         float roundedDamage = Mathf.Round(damage);
@@ -133,7 +134,7 @@ public class CharacterManager : MonoBehaviour
     public void Heal(float amount)
     {   
         healthModifier.enabled = true;
-        healthModifier.text = "+" + Mathf.Round(amount).ToString();
+        healthModifier.text = "+" + Mathf.Round(amount);
         healFeedback.PlayFeedbacks();
         
         float roundedHeal = Mathf.Round(amount);

@@ -76,7 +76,6 @@ public class Character : ScriptableObject
         reputation = 0f;
         activeBuffs.Clear();
         actionCooldowns.Clear();
-        Debug.Log($"Character {characterName} initialized with {GetValidActionCount()} actions");
     }
 
     public void ResetActionsToDefault()

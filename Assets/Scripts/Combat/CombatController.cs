@@ -1,4 +1,3 @@
-
 using UnityEngine;
 
 public class CombatController : MonoBehaviour
@@ -32,6 +31,17 @@ public class CombatController : MonoBehaviour
     public void SelectAction(Action action)
     {
         selectedAction = action;
+        
+        // Your existing action selection logic here...
+        
+        // After successfully performing the action, mark it as used
+        if (turnManager.currentCharacterTurn != null && turnManager.currentCharacterTurn.characterData != null)
+        {
+            turnManager.currentCharacterTurn.characterData.UseAction(action);
+            
+            // Refresh the actions UI to show updated cooldown states
+            FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn.characterData);
+        }
     }
 
     public void SetCurrentTarget(CharacterManager targetManager)

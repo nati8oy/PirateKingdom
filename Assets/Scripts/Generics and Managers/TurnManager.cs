@@ -1,4 +1,3 @@
-
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
@@ -94,6 +93,9 @@ public class TurnManager : MonoBehaviour
 
     public void CompleteTurn()
     {
+        // Update the current character's buffs when they complete their turn
+        currentCharacterTurn.OnTurnComplete();
+        
         currentCharacterTurn.turnMarker.gameObject.SetActive(false);
         currentTurnIndex++;
         
@@ -113,11 +115,7 @@ public class TurnManager : MonoBehaviour
         roundCounterInt += 1;
         Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
         
-        // Update buffs for all characters when a round completes
-        var allCharacterManagers = FindObjectsOfType<CharacterManager>();
-        foreach (var characterManager in allCharacterManagers)
-        {
-            characterManager.OnRoundComplete();
-        }
+        // Note: We no longer update buffs here since they're now turn-based
+        // Buffs are updated individually when each character completes their turn
     }
 }

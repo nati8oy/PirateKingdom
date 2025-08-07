@@ -87,7 +87,6 @@ public class CharacterManager : MonoBehaviour
             DefenseValue = characterData.GetModifiedDefenseValue();
             Speed = characterData.GetModifiedSpeed();
             UpdateBuffDisplay();
-
         }
     }
 
@@ -97,11 +96,20 @@ public class CharacterManager : MonoBehaviour
         RefreshStats(); // Make sure we have the current modified stats
     }
 
-    // Call this when a round completes for this character
+    // Call this when the character completes their turn
+    public void OnTurnComplete()
+    {
+        characterData?.UpdateBuffsForCharacterTurn();
+        RefreshStats(); // Update stats after buffs are reduced
+        Debug.Log($"{characterData.characterName} completed their turn, buffs updated");
+    }
+
+    // Deprecated method - kept for backwards compatibility
     public void OnRoundComplete()
     {
-        characterData?.UpdateBuffsForNewRound();
-        RefreshStats(); // Update stats after buffs expire
+        // This method is now deprecated since we use turn-based buffs
+        // The method is kept to avoid breaking existing code, but does nothing
+        Debug.LogWarning($"OnRoundComplete() is deprecated for {characterData.characterName}. Buffs are now updated per turn.");
     }
 
     public void TakeDamage(float damage)
@@ -135,13 +143,13 @@ public class CharacterManager : MonoBehaviour
 
     public void AddBuff(Character.BuffType type, float amount, float duration)
     {
-        // Convert float duration to rounds (assuming 1 duration = 1 round)
-        int rounds = Mathf.RoundToInt(duration);
-        characterData?.AddBuff(type, amount, rounds);
+        // Convert float duration to turns (assuming 1 duration = 1 turn)
+        int turns = Mathf.RoundToInt(duration);
+        characterData?.AddBuff(type, amount, turns);
         RefreshStats(); // Immediately update stats to reflect the new buff
         
         string buffName = amount > 0 ? "Buff" : "Debuff";
-        Debug.Log($"{buffName} applied to {characterData.characterName}: {type} {amount:+0;-0} for {rounds} rounds");
+        Debug.Log($"{buffName} applied to {characterData.characterName}: {type} {amount:+0;-0} for {turns} turns");
     }
 
     public void Miss()
@@ -207,11 +215,9 @@ public class CharacterManager : MonoBehaviour
         {
             string buffName = buff.Type.ToString();
             string sign = buff.Value > 0 ? "+" : "";
-            buffText += $"{buffName}: {sign}{buff.Value} ({buff.RoundsRemaining}r)\n";
+            buffText += $"{buffName}: {sign}{buff.Value} ({buff.TurnsRemaining}t)\n";
         }
     
         buffEffectText.text = buffText.TrimEnd('\n');
     }
-
-
 }

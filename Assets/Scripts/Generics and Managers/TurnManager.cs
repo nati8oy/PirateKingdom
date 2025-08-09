@@ -18,6 +18,12 @@ public class TurnManager : MonoBehaviour
 
     public ActionsManager actionsManager;
     
+    [Header("Battle State")]
+    [SerializeField] private GameObject victoryUI;
+    [SerializeField] private GameObject defeatUI;
+    [SerializeField] private TMP_Text battleResultText;
+    private bool battleEnded = false;
+    
     public List<GameObject> turnOrder = new List<GameObject>();
     private List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>();
 
@@ -29,6 +35,12 @@ public class TurnManager : MonoBehaviour
 
     private void Update()
     {
+        // Don't process turns if battle has ended
+        if (battleEnded) return;
+        
+        // Check for battle end conditions
+        CheckBattleEndConditions();
+        
         // Check if the current character is still alive
         if (currentCharacterTurn == null || currentCharacterTurn.gameObject == null)
         {
@@ -44,8 +56,119 @@ public class TurnManager : MonoBehaviour
         roundCounter.text = "Round " + roundCounterInt;
     }
 
+    private void CheckBattleEndConditions()
+    {
+        if (battleEnded) return;
+        
+        // Count alive players and enemies
+        int alivePlayersCount = CountAliveCharacters(Character.Allegiance.Player);
+        int aliveEnemiesCount = CountAliveCharacters(Character.Allegiance.Enemy);
+        
+        if (alivePlayersCount == 0)
+        {
+            // All players are dead - Enemy victory
+            EndBattle(false);
+        }
+        else if (aliveEnemiesCount == 0)
+        {
+            // All enemies are dead - Player victory
+            EndBattle(true);
+        }
+    }
+    
+    private int CountAliveCharacters(Character.Allegiance allegiance)
+    {
+        var allCharacters = FindObjectsOfType<CharacterManager>();
+        int count = 0;
+        
+        foreach (var character in allCharacters)
+        {
+            if (character != null && 
+                character.gameObject != null && 
+                character.characterData != null && 
+                character.characterData.allegiance == allegiance)
+            {
+                count++;
+            }
+        }
+        
+        return count;
+    }
+    
+    private void EndBattle(bool playerVictory)
+    {
+        battleEnded = true;
+        
+        // Stop all turn processing
+        CancelInvoke();
+        
+        // Hide turn marker if current character exists
+        if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
+        {
+            currentCharacterTurn.turnMarker.gameObject.SetActive(false);
+        }
+        
+        // SHOW THE UI FIRST, BEFORE DISABLING OTHER THINGS
+        if (playerVictory)
+        {
+            Debug.Log("BATTLE WON! All enemies defeated!");
+            ShowVictoryScreen();
+        }
+        else
+        {
+            Debug.Log("BATTLE LOST! All players defeated!");
+            ShowDefeatScreen();
+        }
+        
+        // THEN disable action UI (after showing victory/defeat UI)
+        if (actionsManager != null)
+        {
+            actionsManager.gameObject.SetActive(false);
+        }
+    }
+    
+    private void ShowVictoryScreen()
+    {
+        if (victoryUI != null)
+        {
+            victoryUI.SetActive(true);
+        }
+        
+        if (battleResultText != null)
+        {
+            if (battleResultText.gameObject.activeSelf == false)
+            {
+                battleResultText.gameObject.SetActive(true);
+            }
+            battleResultText.text = "VICTORY!";
+        }
+        
+        // Hide turn UI
+        if (playerTurn != null) playerTurn.gameObject.SetActive(false);
+        if (roundCounter != null) roundCounter.gameObject.SetActive(false);
+    }
+    
+    private void ShowDefeatScreen()
+    {
+        if (defeatUI != null)
+        {
+            defeatUI.SetActive(true);
+        }
+        
+        if (battleResultText != null)
+        {
+            battleResultText.text = "DEFEAT!";
+        }
+        
+        // Hide turn UI
+        if (playerTurn != null) playerTurn.gameObject.SetActive(false);
+        if (roundCounter != null) roundCounter.gameObject.SetActive(false);
+    }
+
     private void GetTurnOrder()
     {
+        if (battleEnded) return;
+        
         var characterManagers = FindObjectsOfType<CharacterManager>();
         initiativeList.Clear();
 
@@ -73,6 +196,8 @@ public class TurnManager : MonoBehaviour
 
     private void SetCharacterTurn()
     {
+        if (battleEnded) return;
+        
         if (turnOrder.Count > 0)
         {
             // Skip any destroyed objects in the turn order
@@ -128,6 +253,8 @@ public class TurnManager : MonoBehaviour
 
     public void CompleteTurn()
     {
+        if (battleEnded) return;
+        
         // Check if currentCharacterTurn is still valid before accessing its components
         if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
         {
@@ -152,10 +279,40 @@ public class TurnManager : MonoBehaviour
 
     private void RoundComplete()
     {
+        if (battleEnded) return;
+        
         roundCounterInt += 1;
         Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
         
         // Note: We no longer update buffs here since they're now turn-based
         // Buffs are updated individually when each character completes their turn
+    }
+    
+    // Public method to restart battle (can be called from UI buttons)
+    public void RestartBattle()
+    {
+        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
+    
+    // Public method to return to main menu (can be called from UI buttons)
+    public void ReturnToMainMenu()
+    {
+        // You can implement this based on your game's structure
+        // For example: UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        Debug.Log("Return to Main Menu - Implement scene loading here");
+    }
+    
+    [ContextMenu("Test Victory UI")]
+    public void TestVictoryUI()
+    {
+        if (victoryUI != null)
+        {
+            victoryUI.SetActive(!victoryUI.activeSelf);
+            Debug.Log($"Victory UI is now: {(victoryUI.activeSelf ? "ACTIVE" : "INACTIVE")}");
+        }
+        else
+        {
+            Debug.LogError("Victory UI is NULL!");
+        }
     }
 }

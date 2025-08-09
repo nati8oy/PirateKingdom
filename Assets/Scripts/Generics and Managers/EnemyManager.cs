@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -29,12 +30,20 @@ public class EnemyManager : MonoBehaviour
 
     public void RefreshTargetList()
     {
-        
         _selectedAction = mainCharacterData.actionSlots[0];
         _playerCharacters.Clear();
         GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
-        _playerCharacters.AddRange(players);
+        
+        // Filter out null/destroyed objects
+        foreach (GameObject player in players)
+        {
+            if (player != null && player.GetComponent<CharacterManager>() != null)
+            {
+                _playerCharacters.Add(player);
+            }
+        }
     }
+    
     public void EnemyTurnAction()
     {
         Invoke(nameof(ExecuteEnemyAction), enemyActionDelay);
@@ -42,84 +51,102 @@ public class EnemyManager : MonoBehaviour
 
     private void ExecuteEnemyAction()
     {
-        if (_playerCharacters[0] != null)
+        // Refresh the target list to remove any destroyed characters
+        RefreshTargetList();
+        
+        if (_playerCharacters.Count > 0 && _playerCharacters[0] != null)
         {
             PerformAction(_playerCharacters[0].GetComponent<CharacterManager>());
             _turnManager.CompleteTurn(); 
         }
-
         else
         {
-            RefreshTargetList();
-            ExecuteEnemyAction();
+            Debug.Log("No valid player targets found, completing turn...");
+            _turnManager.CompleteTurn();
         }
     }
 
     
-private void PerformAction(CharacterManager targetManager)
-{
-    if (targetManager == null)
+    private void PerformAction(CharacterManager targetManager)
     {
-        Debug.LogError($"Target CharacterManager is null!");
-        return;
-    }
+        if (targetManager == null)
+        {
+            Debug.LogError($"Target CharacterManager is null!");
+            return;
+        }
 
-    // Get the current character's modified stats
-    CharacterManager currentCharacter = GetComponent<CharacterManager>();
-    currentCharacter.RefreshStats(); // Make sure we have current stats
+        // Get the current character's modified stats
+        CharacterManager currentCharacter = GetComponent<CharacterManager>();
+        if (currentCharacter == null)
+        {
+            Debug.LogError("Current CharacterManager is null!");
+            return;
+        }
+        
+        currentCharacter.RefreshStats(); // Make sure we have current stats
 
-    switch (_selectedAction.actionType)
-    {
-        case Action.ActionType.Attack:
-            int attackRoll = RollForCritical();
-            if (attackRoll == 1)
-            {
-                Debug.Log("Critical Fail! Attack missed.");
+        switch (_selectedAction.actionType)
+        {
+            case Action.ActionType.Attack:
+                int attackRoll = RollForCritical();
+                if (attackRoll == 1)
+                {
+                    Debug.Log("Critical Fail! Attack missed.");
+                    break;
+                }
+                
+                // Use modified attack power for damage calculation
+                float baseDamage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
+                float modifiedDamage = baseDamage + (currentCharacter.AttackPower * 0.1f); // Add 10% of attack power
+                
+                if (attackRoll == 20)
+                {
+                    Debug.Log("Critical Hit! Double damage!");
+                    modifiedDamage *= 2;
+                }
+                
+                // Refresh target list and filter out destroyed objects
+                RefreshTargetList();
+                var validTargets = _playerCharacters.Where(p => p != null && p.GetComponent<CharacterManager>() != null).ToList();
+                
+                if (validTargets.Count > 0)
+                {
+                    int randomIndex = Random.Range(0, validTargets.Count);
+                    var targetCharacter = validTargets[randomIndex].GetComponent<CharacterManager>();
+                    if (targetCharacter != null)
+                    {
+                        targetCharacter.TakeDamage(modifiedDamage);
+                    }
+                }
+                else
+                {
+                    Debug.Log("No valid targets for attack!");
+                }
                 break;
-            }
-            
-            // Use modified attack power for damage calculation
-            float baseDamage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
-            float modifiedDamage = baseDamage + (currentCharacter.AttackPower * 0.1f); // Add 10% of attack power
-            
-            if (attackRoll == 20)
-            {
-                Debug.Log("Critical Hit! Double damage!");
-                modifiedDamage *= 2;
-            }
-            
-            if (_playerCharacters.Count > 0)
-            {
-                int randomIndex = Random.Range(0, _playerCharacters.Count);
-                var targetCharacter = _playerCharacters[randomIndex].GetComponent<CharacterManager>();
-                targetCharacter.TakeDamage(modifiedDamage);
-            }
-            break;
-            
-        case Action.ActionType.Heal:
-            int healRoll = RollForCritical();
-            float healAmount = Random.Range(_selectedAction.minHeal, _selectedAction.maxHeal);
-            if (healRoll == 20)
-            {
-                Debug.Log("Critical Heal! Double healing!");
-                healAmount *= 2;
-            }
-            targetManager.Heal(healAmount);
-            break;
-            
-        case Action.ActionType.Buff:
-            targetManager.AddBuff(_selectedAction.buffType, _selectedAction.buffValue, _selectedAction.duration);
-            break;
-            
-        case Action.ActionType.Debuff:
-            targetManager.AddBuff(_selectedAction.buffType, -_selectedAction.buffValue, _selectedAction.duration);
-            break;
+                
+            case Action.ActionType.Heal:
+                int healRoll = RollForCritical();
+                float healAmount = Random.Range(_selectedAction.minHeal, _selectedAction.maxHeal);
+                if (healRoll == 20)
+                {
+                    Debug.Log("Critical Heal! Double healing!");
+                    healAmount *= 2;
+                }
+                targetManager.Heal(healAmount);
+                break;
+                
+            case Action.ActionType.Buff:
+                targetManager.AddBuff(_selectedAction.buffType, _selectedAction.buffValue, _selectedAction.duration);
+                break;
+                
+            case Action.ActionType.Debuff:
+                targetManager.AddBuff(_selectedAction.buffType, -_selectedAction.buffValue, _selectedAction.duration);
+                break;
+        }
     }
-}
     
     private int RollForCritical()
     {
         return Random.Range(1, 21); // Returns 1-20
     }
-
 }

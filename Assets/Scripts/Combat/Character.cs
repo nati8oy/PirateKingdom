@@ -38,43 +38,52 @@ public class Character : ScriptableObject
     {
         Attack,
         Defense,
-        Health
+        Health,
+        Speed
     }
 
     public class ActiveBuff
     {
         public BuffType Type { get; private set; }
         public float Value { get; private set; }
-        public float Duration { get; private set; }
+        public int TurnsRemaining { get; private set; }
 
-        public ActiveBuff(BuffType type, float value, float duration)
+        public ActiveBuff(BuffType type, float value, int turnsDuration)
         {
             Type = type;
             Value = value;
-            Duration = duration;
+            TurnsRemaining = turnsDuration;
         }
 
-        public void UpdateDuration(float deltaTime)
+        public void ReduceTurns()
         {
-            Duration -= deltaTime;
+            TurnsRemaining--;
+        }
+
+        public bool IsExpired()
+        {
+            return TurnsRemaining <= 0;
         }
     }
 
     private List<ActiveBuff> activeBuffs = new List<ActiveBuff>();
     
+    // Dictionary to track action cooldowns - maps action to turns remaining until usable
+    private Dictionary<Action, int> actionCooldowns = new Dictionary<Action, int>();
+    
     public void Initialize()
     {
         reputation = 0f;
-        // Don't touch actionSlots at all - let them be set up in Inspector or elsewhere
-        Debug.Log($"Character {characterName} initialized with {GetValidActionCount()} actions");
+        activeBuffs.Clear();
+        actionCooldowns.Clear();
     }
 
-// Call this method only when you want to reset actions to defaults
     public void ResetActionsToDefault()
     {
         actionSlots = new Action[ACTION_SLOTS];
         actionSlots[0] = ScriptableObject.CreateInstance<Action>();
         actionSlots[0].actionName = "Move";
+        actionCooldowns.Clear();
     }
 
     private int GetValidActionCount()
@@ -90,8 +99,96 @@ public class Character : ScriptableObject
         }
         return count;
     }
-   
-    public float GetAttackPower()
+
+    public void AddBuff(BuffType buffType, float value, int turnsDuration)
+    {
+        ActiveBuff newBuff = new ActiveBuff(buffType, value, turnsDuration);
+        activeBuffs.Add(newBuff);
+        Debug.Log($"Added {(value > 0 ? "buff" : "debuff")} to {characterName}: {buffType} {value:+0;-0} for {turnsDuration} turns");
+    }
+
+    public void UpdateBuffsForCharacterTurn()
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            activeBuffs[i].ReduceTurns();
+            if (activeBuffs[i].IsExpired())
+            {
+                Debug.Log($"Buff/Debuff expired on {characterName}: {activeBuffs[i].Type} after completing turn");
+                activeBuffs.RemoveAt(i);
+            }
+        }
+    }
+
+    // Update action cooldowns when the character completes their turn
+    public void UpdateActionCooldowns()
+    {
+        List<Action> actionsToRemove = new List<Action>();
+        
+        foreach (var kvp in actionCooldowns)
+        {
+            Action action = kvp.Key;
+            int turnsRemaining = kvp.Value - 1;
+            
+            if (turnsRemaining <= 0)
+            {
+                actionsToRemove.Add(action);
+                Debug.Log($"{characterName}: {action.actionName} cooldown expired and is now available");
+            }
+            else
+            {
+                actionCooldowns[action] = turnsRemaining;
+            }
+        }
+        
+        foreach (Action action in actionsToRemove)
+        {
+            actionCooldowns.Remove(action);
+        }
+    }
+
+    // Use an action and put it on cooldown
+    public void UseAction(Action action)
+    {
+        if (action.cooldown > 0)
+        {
+            int cooldownTurns = Mathf.RoundToInt(action.cooldown);
+            actionCooldowns[action] = cooldownTurns;
+            Debug.Log($"{characterName} used {action.actionName}, cooldown: {cooldownTurns} turns");
+        }
+    }
+
+    // Check if an action is available (not on cooldown)
+    public bool IsActionAvailable(Action action)
+    {
+        if (action == null) return false;
+        
+        // If the action has no cooldown, it's always available
+        if (action.cooldown <= 0) return true;
+        
+        // Check if the action is currently on cooldown
+        return !actionCooldowns.ContainsKey(action);
+    }
+
+    // Get the remaining cooldown turns for an action
+    public int GetActionCooldownRemaining(Action action)
+    {
+        if (action == null || !actionCooldowns.ContainsKey(action))
+            return 0;
+        
+        return actionCooldowns[action];
+    }
+
+    // Deprecated method - kept for backwards compatibility
+    public void UpdateBuffsForNewRound()
+    {
+        // This method is now deprecated since we use turn-based buffs
+        // The method is kept to avoid breaking existing code, but does nothing
+        Debug.LogWarning($"UpdateBuffsForNewRound() is deprecated for {characterName}. Use UpdateBuffsForCharacterTurn() instead.");
+    }
+
+    // Get modified stats with buffs applied
+    public float GetModifiedAttackPower()
     {
         float totalAttack = attackPower;
         foreach (var buff in activeBuffs)
@@ -101,23 +198,53 @@ public class Character : ScriptableObject
                 totalAttack += buff.Value;
             }
         }
-        return totalAttack;
-        
+        return Mathf.Max(0, totalAttack); // Ensure it doesn't go negative
     }
 
-
-    public void UpdateBuffs(float deltaTime)
+    public float GetModifiedDefenseValue()
     {
-        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        float totalDefense = defenseValue;
+        foreach (var buff in activeBuffs)
         {
-            activeBuffs[i].UpdateDuration(deltaTime);
-            if (activeBuffs[i].Duration <= 0)
+            if (buff.Type == BuffType.Defense)
             {
-                activeBuffs.RemoveAt(i);
+                totalDefense += buff.Value;
             }
         }
+        return Mathf.Max(0, totalDefense);
     }
-    
+
+    public float GetModifiedSpeed()
+    {
+        float totalSpeed = speed;
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Type == BuffType.Speed)
+            {
+                totalSpeed += buff.Value;
+            }
+        }
+        return Mathf.Max(0.1f, totalSpeed); // Minimum speed of 0.1 to prevent issues
+    }
+
+    public float GetModifiedMaxHealth()
+    {
+        float totalHealth = maxHealth;
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Type == BuffType.Health)
+            {
+                totalHealth += buff.Value;
+            }
+        }
+        return Mathf.Max(1, totalHealth); // Minimum health of 1
+    }
+
+    public List<ActiveBuff> GetActiveBuffs()
+    {
+        return new List<ActiveBuff>(activeBuffs);
+    }
+
     public float Reputation
     {
         get => reputation;
@@ -144,6 +271,15 @@ public class Character : ScriptableObject
         }
     }
 
-    
+    // Obsolete methods for backwards compatibility
+    public float GetAttackPower()
+    {
+        return GetModifiedAttackPower();
+    }
 
+    public void UpdateBuffs(float deltaTime)
+    {
+        // This method is now obsolete since we use turn-based buffs
+        // Keep for backwards compatibility but don't use it
+    }
 }

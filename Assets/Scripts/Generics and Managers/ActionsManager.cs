@@ -13,26 +13,17 @@ public class ActionsManager : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        // Debug logging to see what's happening
-        Debug.Log($"Loading actions for character: {character.characterName}");
-        Debug.Log($"ActionSlots array length: {character.actionSlots.Length}");
-
         // Create new action slots
-        int validActionCount = 0;
         for (int i = 0; i < character.actionSlots.Length; i++)
         {
             Action action = character.actionSlots[i];
-            Debug.Log($"Action slot {i}: {(action != null ? action.actionName : "NULL")}");
+            //Debug.Log($"Action slot {i}: {(action != null ? action.actionName : "NULL")}");
             
             if (action == null || string.IsNullOrEmpty(action.actionName)) 
             {
-                Debug.Log($"Skipping null or empty action at slot {i}");
                 continue; // Skip null or invalid actions
             }
-            
-            validActionCount++;
-            Debug.Log($"Creating action slot for: {action.actionName}");
-            
+
             GameObject actionSlot = Instantiate(actionSlotPrefab, actionsGrid.transform);
             
             if (actionSlot == null)
@@ -47,7 +38,6 @@ public class ActionsManager : MonoBehaviour
                 button.onClick.AddListener(() => {
                     FindObjectOfType<CombatController>().SelectAction(action);
                 });
-                Debug.Log($"Button listener added for {action.actionName}");
             }
             else
             {
@@ -58,7 +48,6 @@ public class ActionsManager : MonoBehaviour
             if (actionText != null)
             {
                 actionText.text = action.actionName;
-                Debug.Log($"Text set to: {action.actionName}");
             }
             else
             {
@@ -66,6 +55,5 @@ public class ActionsManager : MonoBehaviour
             }
         }
         
-        Debug.Log($"Created {validActionCount} action slots");
     }
 }

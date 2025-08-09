@@ -19,7 +19,7 @@ public class TurnManager : MonoBehaviour
     public ActionsManager actionsManager;
     
     public List<GameObject> turnOrder = new List<GameObject>();
-    public List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>();
+    private List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>();
 
     void Start()
     {
@@ -29,11 +29,22 @@ public class TurnManager : MonoBehaviour
 
     private void Update()
     {
-        playerTurn.text = currentCharacterTurn.characterData.name+"'s" + " Turn";
+        // Check if the current character is still alive
+        if (currentCharacterTurn == null || currentCharacterTurn.gameObject == null)
+        {
+            Debug.Log("Current character died, advancing turn...");
+            CompleteTurn();
+            return;
+        }
+
+        if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
+        {
+            playerTurn.text = currentCharacterTurn.characterData.name + "'s" + " Turn";
+        }
         roundCounter.text = "Round " + roundCounterInt;
     }
 
-    public void GetTurnOrder()
+    private void GetTurnOrder()
     {
         var characterManagers = FindObjectsOfType<CharacterManager>();
         initiativeList.Clear();
@@ -60,16 +71,36 @@ public class TurnManager : MonoBehaviour
         }
     }
 
-    public void SetCharacterTurn()
+    private void SetCharacterTurn()
     {
         if (turnOrder.Count > 0)
         {
+            // Skip any destroyed objects in the turn order
+            while (currentTurnIndex < turnOrder.Count && 
+                   (turnOrder[currentTurnIndex] == null || 
+                    turnOrder[currentTurnIndex].GetComponent<CharacterManager>() == null))
+            {
+                currentTurnIndex++;
+            }
+            
+            // If we've gone through all characters, complete the round
+            if (currentTurnIndex >= turnOrder.Count)
+            {
+                RoundComplete();
+                currentTurnIndex = 0;
+                GetTurnOrder();
+                return;
+            }
+            
             currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
             
             // Update buffs and stats at the start of the character's turn
             currentCharacterTurn.UpdateBuffsForTurn();
             
-            currentCharacterTurn.turnMarker.gameObject.SetActive(true);
+            if (currentCharacterTurn.turnMarker != null)
+            {
+                currentCharacterTurn.turnMarker.gameObject.SetActive(true);
+            }
         
             if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
             {
@@ -77,7 +108,11 @@ public class TurnManager : MonoBehaviour
 
                 if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
                 {
-                    turnOrder[currentTurnIndex].GetComponent<EnemyManager>().EnemyTurnAction();
+                    var enemyManager = turnOrder[currentTurnIndex].GetComponent<EnemyManager>();
+                    if (enemyManager != null)
+                    {
+                        enemyManager.EnemyTurnAction();
+                    }
                 }
             }
             else
@@ -93,10 +128,15 @@ public class TurnManager : MonoBehaviour
 
     public void CompleteTurn()
     {
-        // Update the current character's buffs when they complete their turn
-        currentCharacterTurn.OnTurnComplete();
+        // Check if currentCharacterTurn is still valid before accessing its components
+        if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
+        {
+            // Update the current character's buffs when they complete their turn
+            currentCharacterTurn.OnTurnComplete();
+            
+            currentCharacterTurn.turnMarker.gameObject.SetActive(false);
+        }
         
-        currentCharacterTurn.turnMarker.gameObject.SetActive(false);
         currentTurnIndex++;
         
         // Check if we've completed a full round
@@ -109,8 +149,6 @@ public class TurnManager : MonoBehaviour
 
         SetCharacterTurn();
     }
-    
-    
 
     private void RoundComplete()
     {

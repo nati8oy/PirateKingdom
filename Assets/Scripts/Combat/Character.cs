@@ -106,6 +106,47 @@ public class Character : ScriptableObject
         activeBuffs.Add(newBuff);
         Debug.Log($"Added {(value > 0 ? "buff" : "debuff")} to {characterName}: {buffType} {value:+0;-0} for {turnsDuration} turns");
     }
+    
+    // Add this method to your Character class, likely near the AddBuff method
+
+    public void RemoveBuff(BuffType buffType)
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            if (activeBuffs[i].Type == buffType)
+            {
+                activeBuffs.RemoveAt(i);
+                return; // Remove only the first matching buff
+            }
+        }
+    }
+
+// Alternative version that removes all buffs of a specific type
+    public void RemoveAllBuffsOfType(BuffType buffType)
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            if (activeBuffs[i].Type == buffType)
+            {
+                activeBuffs.RemoveAt(i);
+            }
+        }
+    }
+
+// Method to remove the first debuff (negative value) found - useful for drive actions
+    public bool RemoveFirstDebuff()
+    {
+        for (int i = 0; i < activeBuffs.Count; i++)
+        {
+            if (activeBuffs[i].Value < 0)
+            {
+                activeBuffs.RemoveAt(i);
+                return true; // Successfully removed a debuff
+            }
+        }
+        return false; // No debuffs found to remove
+    }
+
 
     public void UpdateBuffsForCharacterTurn()
     {

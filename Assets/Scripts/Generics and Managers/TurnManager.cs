@@ -157,6 +157,11 @@ public class TurnManager : MonoBehaviour
         
         if (battleResultText != null)
         {
+            if (battleResultText.gameObject.activeSelf == false)
+            {
+                battleResultText.gameObject.SetActive(true);
+            }
+            
             battleResultText.text = "DEFEAT!";
         }
         
@@ -302,17 +307,4 @@ public class TurnManager : MonoBehaviour
         Debug.Log("Return to Main Menu - Implement scene loading here");
     }
     
-    [ContextMenu("Test Victory UI")]
-    public void TestVictoryUI()
-    {
-        if (victoryUI != null)
-        {
-            victoryUI.SetActive(!victoryUI.activeSelf);
-            Debug.Log($"Victory UI is now: {(victoryUI.activeSelf ? "ACTIVE" : "INACTIVE")}");
-        }
-        else
-        {
-            Debug.LogError("Victory UI is NULL!");
-        }
-    }
 }

@@ -44,9 +44,12 @@ public class CharacterManager : MonoBehaviour
     public event OnDeathHandler OnDeath;
 
     private bool isDead = false;
+    private DriveManager driveManager;
     
     void Start()
     {
+        driveManager = GetComponent<DriveManager>();
+        
         healthModifier.enabled = false;
         characterName.text = characterData.characterName;
         
@@ -93,6 +96,7 @@ public class CharacterManager : MonoBehaviour
     // Call this at the beginning of each character's turn to update buffs and refresh stats
     public void UpdateBuffsForTurn()
     {
+        driveManager?.OnTurnStart(); // Regenerate drive at turn start
         RefreshStats(); // Make sure we have the current modified stats
     }
 
@@ -101,6 +105,7 @@ public class CharacterManager : MonoBehaviour
     {
         characterData?.UpdateBuffsForCharacterTurn();
         characterData?.UpdateActionCooldowns(); 
+        driveManager?.OnTurnEnd(); // Handle drive turn end effects
         RefreshStats(); // Update stats after buffs are reduced
         if (characterData != null) Debug.Log($"{characterData.characterName} completed their turn, buffs updated");
     }
@@ -129,6 +134,26 @@ public class CharacterManager : MonoBehaviour
         {
             OnDeath?.Invoke();
         }
+    }
+
+    // Modified to consider drive attack buffs
+    public float GetModifiedAttackPower()
+    {
+        float baseAttack = AttackPower;
+        
+        // Apply drive system attack buff if active
+        if (driveManager != null)
+        {
+            baseAttack *= driveManager.GetNextAttackDamageMultiplier();
+        }
+        
+        return baseAttack;
+    }
+    
+    // Call this when an attack is performed to consume drive buff
+    public void OnAttackPerformed()
+    {
+        driveManager?.ConsumeAttackBuff();
     }
 
     public void Heal(float amount)
@@ -220,5 +245,11 @@ public class CharacterManager : MonoBehaviour
         }
     
         buffEffectText.text = buffText.TrimEnd('\n');
+    }
+    
+    // Public getter for the drive manager
+    public DriveManager GetDriveManager()
+    {
+        return driveManager;
     }
 }

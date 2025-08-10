@@ -82,15 +82,11 @@ public class DriveUI : MonoBehaviour
                 driveBarFill.color = driveBarGradient.Evaluate(percentage);
             }
         }
-        
-        
     }
     
     private void UpdateSegmentDisplay(int availableSegments)
     {
-    
-        
-        // Update segment visual indicators
+        // Update segment visual indicators using editor-configurable colors
         for (int i = 0; i < segmentImages.Count; i++)
         {
             if (segmentImages[i] != null)

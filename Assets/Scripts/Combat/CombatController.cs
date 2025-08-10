@@ -160,6 +160,7 @@ public class CombatController : MonoBehaviour
                     }
                     Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
                     targetManager.TakeDamage(damage);
+                    currentCharacter.OnDamageDealt(damage);
                 }
                 else
                 {

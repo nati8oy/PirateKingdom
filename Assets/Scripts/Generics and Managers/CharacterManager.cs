@@ -46,6 +46,15 @@ public class CharacterManager : MonoBehaviour
     private bool isDead = false;
     private DriveManager driveManager;
     
+    private DriveMeter driveMeter;
+    
+    void Awake()
+    {
+        driveMeter = new DriveMeter();
+        driveMeter.Initialize();
+    }
+
+    
     void Start()
     {
         driveManager = GetComponent<DriveManager>();
@@ -123,7 +132,7 @@ public class CharacterManager : MonoBehaviour
         healthModifier.enabled = true;
         healthModifier.text = "-" + Mathf.Round(damage);
         damageFeedback.PlayFeedbacks();
-        
+    
         float roundedDamage = Mathf.Round(damage);
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
         UpdateHealthBar();
@@ -133,6 +142,34 @@ public class CharacterManager : MonoBehaviour
         if (CurrentHealth <= 0)
         {
             OnDeath?.Invoke();
+        }
+    
+        // Add damage taken to drive meter through DriveManager
+        if (driveManager != null)
+        {
+            driveManager.Drive.AddDrive(damage);
+        }
+    }
+
+    public void DealDamage(CharacterManager target, float damage)
+    {
+        // Deal damage to target
+        target.TakeDamage(damage);
+
+        // Add damage dealt to attacker's drive meter through DriveManager
+        if (driveManager != null)
+        {
+            driveManager.Drive.AddDrive(damage);
+        }
+    }
+    
+    public void OnDamageDealt(float damage)
+    {
+        // Add damage dealt to drive meter
+        if (driveManager != null)
+        {
+            driveManager.Drive.AddDrive(damage);
+            Debug.Log($"{characterData.characterName} dealt {damage} damage, drive increased");
         }
     }
 

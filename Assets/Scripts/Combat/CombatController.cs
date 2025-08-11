@@ -28,20 +28,22 @@ public class CombatController : MonoBehaviour
         }
     }
 
+    
     public void SelectAction(Action action)
     {
-        selectedAction = action;
-        
-        // Your existing action selection logic here...
-        
-        // After successfully performing the action, mark it as used
-        if (turnManager.currentCharacterTurn != null && turnManager.currentCharacterTurn.characterData != null)
+        // Check if the action is available before selecting it
+        if (turnManager.currentCharacterTurn != null && 
+            turnManager.currentCharacterTurn.characterData != null &&
+            !turnManager.currentCharacterTurn.characterData.IsActionAvailable(action))
         {
-            turnManager.currentCharacterTurn.characterData.UseAction(action);
-            
-            // Refresh the actions UI to show updated cooldown states
-            FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn.characterData);
+            int cooldownRemaining = turnManager.currentCharacterTurn.characterData.GetActionCooldownRemaining(action);
+            Debug.LogWarning($"Cannot use {action.actionName} - on cooldown for {cooldownRemaining} more turns");
+            return;
         }
+    
+        selectedAction = action;
+    
+        // Don't call UseAction here - it should be called after the action is successfully performed
     }
 
     public void SetCurrentTarget(CharacterManager targetManager)
@@ -129,70 +131,79 @@ public class CombatController : MonoBehaviour
     }
 
     public void PerformAction(CharacterManager targetManager)
+{
+    if (targetManager == null)
     {
-        if (targetManager == null)
-        {
-            Debug.LogError($"Target CharacterManager is null!");
-            return;
-        }
-
-        // Get the current character performing the action
-        CharacterManager currentCharacter = turnManager.currentCharacterTurn;
-
-        switch (selectedAction.actionType)
-        {
-            case Action.ActionType.Attack:
-                int attackRoll = HitChanceRoll();
-                if (attackRoll == 1)
-                {
-                    Debug.Log("Critical Fail! Attack missed.");
-                    targetManager.Miss();
-                    break;
-                }
-
-                if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
-                {
-                    float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
-                    if (attackRoll == 20)
-                    {
-                        Debug.Log("Critical Hit! Double damage!");
-                        damage *= 2;
-                    }
-                    Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
-                    targetManager.TakeDamage(damage);
-                    currentCharacter.OnDamageDealt(damage);
-                }
-                else
-                {
-                    Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " Missed enemy with defense value of: " + targetManager.DefenseValue);
-                    targetManager.Miss();
-                }
-                break;
-
-            case Action.ActionType.Heal:
-                int healRoll = HitChanceRoll();
-                float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
-                if (healRoll == 20)
-                {
-                    Debug.Log("Critical Heal! Double healing!");
-                    healAmount *= 2;
-                }
-                targetManager.Heal(healAmount);
-                Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount}");
-                break;
-
-            case Action.ActionType.Buff:
-                currentTargetManager.buffEffectText.text = selectedAction.buffType.ToString() + " +" + selectedAction.buffValue;
-                targetManager.AddBuff(selectedAction.buffType, selectedAction.buffValue, selectedAction.duration);
-                break;
-
-            case Action.ActionType.Debuff:
-                targetManager.AddBuff(selectedAction.buffType, -selectedAction.buffValue, selectedAction.duration);
-                break;
-        }
-        
-        turnManager.CompleteTurn();
+        Debug.LogError($"Target CharacterManager is null!");
+        return;
     }
+
+    // Get the current character performing the action
+    CharacterManager currentCharacter = turnManager.currentCharacterTurn;
+
+    switch (selectedAction.actionType)
+    {
+        case Action.ActionType.Attack:
+            int attackRoll = HitChanceRoll();
+            if (attackRoll == 1)
+            {
+                Debug.Log("Critical Fail! Attack missed.");
+                targetManager.Miss();
+                break;
+            }
+
+            if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
+            {
+                float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
+                if (attackRoll == 20)
+                {
+                    Debug.Log("Critical Hit! Double damage!");
+                    damage *= 2;
+                }
+                Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
+                targetManager.TakeDamage(damage);
+                currentCharacter.OnDamageDealt(damage);
+            }
+            else
+            {
+                Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " Missed enemy with defense value of: " + targetManager.DefenseValue);
+                targetManager.Miss();
+            }
+            break;
+
+        case Action.ActionType.Heal:
+            int healRoll = HitChanceRoll();
+            float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
+            if (healRoll == 20)
+            {
+                Debug.Log("Critical Heal! Double healing!");
+                healAmount *= 2;
+            }
+            targetManager.Heal(healAmount);
+            Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount}");
+            break;
+
+        case Action.ActionType.Buff:
+            currentTargetManager.buffEffectText.text = selectedAction.buffType.ToString() + " +" + selectedAction.buffValue;
+            targetManager.AddBuff(selectedAction.buffType, selectedAction.buffValue, selectedAction.duration);
+            break;
+
+        case Action.ActionType.Debuff:
+            targetManager.AddBuff(selectedAction.buffType, -selectedAction.buffValue, selectedAction.duration);
+            break;
+    }
+    
+    // Mark action as used AFTER successful execution
+    if (turnManager.currentCharacterTurn != null && turnManager.currentCharacterTurn.characterData != null)
+    {
+        turnManager.currentCharacterTurn.characterData.UseAction(selectedAction);
+        
+        // Refresh the actions UI to show updated cooldown states
+        FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn.characterData);
+    }
+    
+    turnManager.CompleteTurn();
+}
     
     
 }

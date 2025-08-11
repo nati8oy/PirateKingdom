@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 
 public class ActionsManager : MonoBehaviour
 {
@@ -17,7 +19,6 @@ public class ActionsManager : MonoBehaviour
         for (int i = 0; i < character.actionSlots.Length; i++)
         {
             Action action = character.actionSlots[i];
-            //Debug.Log($"Action slot {i}: {(action != null ? action.actionName : "NULL")}");
             
             if (action == null || string.IsNullOrEmpty(action.actionName)) 
             {
@@ -32,10 +33,20 @@ public class ActionsManager : MonoBehaviour
                 continue;
             }
 
-            UnityEngine.UI.Button button = actionSlot.GetComponent<UnityEngine.UI.Button>();
+            Button button = actionSlot.GetComponent<Button>();
+            TMP_Text actionText = actionSlot.GetComponentInChildren<TMP_Text>();
+            
+            // Check if action is available (not on cooldown)
+            bool isAvailable = character.IsActionAvailable(action);
+            int cooldownRemaining = character.GetActionCooldownRemaining(action);
+            
             if (button != null)
             {
+                // Enable/disable button based on availability
+                button.interactable = isAvailable;
+                
                 button.onClick.AddListener(() => {
+                    Debug.Log($"Button clicked for action: {action.actionName}");
                     FindObjectOfType<CombatController>().SelectAction(action);
                 });
             }
@@ -44,16 +55,24 @@ public class ActionsManager : MonoBehaviour
                 Debug.LogWarning($"No Button component found on actionSlotPrefab!");
             }
             
-            TMPro.TMP_Text actionText = actionSlot.GetComponentInChildren<TMPro.TMP_Text>();
             if (actionText != null)
             {
-                actionText.text = action.actionName;
+                if (isAvailable)
+                {
+                    actionText.text = action.actionName;
+                    // Don't change color - keep whatever was set in the editor
+                }
+                else
+                {
+                    // Show cooldown remaining
+                    actionText.text = $"{action.actionName} ({cooldownRemaining})";
+                    actionText.color = Color.gray; // Only change color when on cooldown
+                }
             }
             else
             {
                 Debug.LogWarning($"No TMP_Text component found in children of actionSlotPrefab!");
             }
         }
-        
     }
 }

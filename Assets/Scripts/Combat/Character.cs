@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 [CreateAssetMenu(fileName = "Character", menuName = "Scriptable Objects/Character")]
 public class Character : ScriptableObject
@@ -166,7 +167,8 @@ public class Character : ScriptableObject
     {
         List<Action> actionsToRemove = new List<Action>();
         
-        foreach (var kvp in actionCooldowns)
+        // Create a snapshot of the dictionary to avoid modification during enumeration
+        foreach (var kvp in actionCooldowns.ToList())
         {
             Action action = kvp.Key;
             int turnsRemaining = kvp.Value - 1;
@@ -182,6 +184,7 @@ public class Character : ScriptableObject
             }
         }
         
+        // Remove expired actions
         foreach (Action action in actionsToRemove)
         {
             actionCooldowns.Remove(action);
@@ -200,15 +203,31 @@ public class Character : ScriptableObject
     }
 
     // Check if an action is available (not on cooldown)
+    
+// Check if an action is available (not on cooldown)
     public bool IsActionAvailable(Action action)
     {
-        if (action == null) return false;
-        
+        if (action == null) 
+        {
+            Debug.Log("IsActionAvailable: action is null");
+            return false;
+        }
+    
+        Debug.Log($"IsActionAvailable: Checking {action.actionName}");
+        Debug.Log($"  - action.cooldown: {action.cooldown}");
+        Debug.Log($"  - actionCooldowns.ContainsKey(action): {actionCooldowns.ContainsKey(action)}");
+    
         // If the action has no cooldown, it's always available
-        if (action.cooldown <= 0) return true;
-        
+        if (action.cooldown <= 0) 
+        {
+            Debug.Log($"  - Result: TRUE (no cooldown)");
+            return true;
+        }
+    
         // Check if the action is currently on cooldown
-        return !actionCooldowns.ContainsKey(action);
+        bool result = !actionCooldowns.ContainsKey(action);
+        Debug.Log($"  - Result: {result} (not in cooldown dictionary)");
+        return result;
     }
 
     // Get the remaining cooldown turns for an action

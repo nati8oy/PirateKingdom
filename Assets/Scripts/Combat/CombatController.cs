@@ -209,16 +209,22 @@ public class CombatController : MonoBehaviour
             }
             break;
 
+// Example in your combat handler
         case Action.ActionType.Heal:
             int healRoll = HitChanceRoll();
             float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
+            
             if (healRoll == 20)
             {
                 Debug.Log("Critical Heal! Double healing!");
                 healAmount *= 2;
             }
-            targetManager.Heal(healAmount);
+            
+            targetManager.Heal(healAmount); // This now applies drive mode multiplier automatically
             Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount}");
+            
+            // IMPORTANT: Consume drive mode after the heal
+            currentCharacter.OnAttackPerformed();
             break;
 
         case Action.ActionType.Buff:

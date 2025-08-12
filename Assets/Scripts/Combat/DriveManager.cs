@@ -202,17 +202,43 @@ public class DriveManager : MonoBehaviour
         return multiplier;
     }
     
-    // NEW METHOD: Call this when an attack is performed to deactivate drive mode
-    public void OnAttackPerformed()
+    
+    public float GetNextHealingMultiplier()
+    {
+        float multiplier = 1f;
+    
+        // Apply drive mode multiplier if active
+        if (isDriveMode)
+        {
+            multiplier *= buffAttackMultiplier; // Using the same multiplier for consistency
+            Debug.Log($"Drive mode active: applying {buffAttackMultiplier}x healing multiplier. Current total: {multiplier}x");
+        }
+        else
+        {
+            Debug.Log("Drive mode not active, no drive mode healing multiplier applied");
+        }
+    
+        Debug.Log($"Final healing multiplier: {multiplier}x");
+        return multiplier;
+    }
+
+    // Rename the existing method to be more general
+    public void OnActionPerformed()
     {
         if (isDriveMode)
         {
-            Debug.Log($"Attack performed with drive mode active. Deactivating drive mode for {characterManager?.characterData?.characterName ?? gameObject.name}");
+            Debug.Log($"Action performed with drive mode active. Deactivating drive mode for {characterManager?.characterData?.characterName ?? gameObject.name}");
             ExitDriveMode();
         }
         
         // Also consume single-use attack buff
         nextAttackBuffed = false;
+    }
+
+    // Keep the old method for backward compatibility, but make it call the new general method
+    public void OnAttackPerformed()
+    {
+        OnActionPerformed();
     }
     
     public void ConsumeAttackBuff()

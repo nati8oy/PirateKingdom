@@ -1,3 +1,4 @@
+
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -187,14 +188,31 @@ public class CharacterManager : MonoBehaviour
         return baseAttack;
     }
     
-    // Call this when an attack is performed to consume drive buff
+    // Single method that handles all action types (attack, heal, etc.)
     public void OnAttackPerformed()
     {
         driveManager?.ConsumeAttackBuff();
+        // Also deactivate drive mode for any action, not just attacks
+        if (driveManager?.IsDriveMode == true)
+        {
+            driveManager.OnAttackPerformed(); // This will deactivate drive mode
+        }
     }
 
     public void Heal(float amount)
     {   
+        // Apply drive mode healing multiplier if active
+        if (driveManager != null)
+        {
+            float healingMultiplier = driveManager.GetNextHealingMultiplier();
+            amount *= healingMultiplier;
+            
+            if (healingMultiplier > 1f)
+            {
+                Debug.Log($"Drive mode boosted healing from base amount to {amount} (multiplier: {healingMultiplier}x)");
+            }
+        }
+        
         healthModifier.enabled = true;
         healthModifier.text = "+" + Mathf.Round(amount);
         healFeedback.PlayFeedbacks();

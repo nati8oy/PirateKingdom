@@ -29,12 +29,16 @@ public class DriveManager : MonoBehaviour
     
     private CharacterManager characterManager;
     private bool nextAttackBuffed;
+    private bool isDriveMode = false;
     
     public DriveMeter Drive => driveMeter;
     public bool NextAttackBuffed => nextAttackBuffed;
     public float BuffAttackMultiplier => buffAttackMultiplier;
+    public bool IsDriveMode => isDriveMode;
     
-    public event Action<DriveAction, bool> OnDriveActionAttempted;
+    public event System.Action<DriveAction, bool> OnDriveActionAttempted;
+    public event System.Action OnDriveModeEntered;
+    public event System.Action OnDriveModeExited;
     
     void Awake()
     {
@@ -53,7 +57,11 @@ public class DriveManager : MonoBehaviour
     public void OnTurnStart()
     {
         driveMeter.RegenerateDrive();
-       // Debug.Log($"{characterManager?.characterData?.characterName ?? gameObject.name} regenerated drive. Current: {driveMeter.CurrentDrive}, Segments: {driveMeter.AvailableSegments}");
+        
+        // No need to handle drive mode countdown since it's single-use
+        // Drive mode will be deactivated when an attack is made
+        
+        // Debug.Log($"{characterManager?.characterData?.characterName ?? gameObject.name} regenerated drive. Current: {driveMeter.CurrentDrive}, Segments: {driveMeter.AvailableSegments}");
     }
     
     public void OnTurnEnd()
@@ -166,12 +174,57 @@ public class DriveManager : MonoBehaviour
     
     public float GetNextAttackDamageMultiplier()
     {
-        return nextAttackBuffed ? buffAttackMultiplier : 1f;
+        float multiplier = 1f;
+        
+        // Apply drive mode multiplier if active
+        if (isDriveMode)
+        {
+            multiplier *= buffAttackMultiplier;
+            Debug.Log($"Drive mode active: applying {buffAttackMultiplier}x multiplier. Current total: {multiplier}x");
+        }
+        else
+        {
+            Debug.Log("Drive mode not active, no drive mode multiplier applied");
+        }
+        
+        // Apply single-use attack buff if active
+        if (nextAttackBuffed)
+        {
+            multiplier *= buffAttackMultiplier;
+            Debug.Log($"Next attack buff active: applying {buffAttackMultiplier}x multiplier. Current total: {multiplier}x");
+        }
+        else
+        {
+            Debug.Log("Next attack buff not active, no single-use buff applied");
+        }
+        
+        Debug.Log($"Final attack multiplier: {multiplier}x");
+        return multiplier;
+    }
+    
+    // NEW METHOD: Call this when an attack is performed to deactivate drive mode
+    public void OnAttackPerformed()
+    {
+        if (isDriveMode)
+        {
+            Debug.Log($"Attack performed with drive mode active. Deactivating drive mode for {characterManager?.characterData?.characterName ?? gameObject.name}");
+            ExitDriveMode();
+        }
+        
+        // Also consume single-use attack buff
+        nextAttackBuffed = false;
     }
     
     public void ConsumeAttackBuff()
     {
         nextAttackBuffed = false;
+        
+        // Also deactivate drive mode when consuming attack buffs
+        if (isDriveMode)
+        {
+            Debug.Log($"Consuming attack buff, also deactivating drive mode for {characterManager?.characterData?.characterName ?? gameObject.name}");
+            ExitDriveMode();
+        }
     }
     
     // Method to get available actions based on current segments
@@ -210,19 +263,29 @@ public class DriveManager : MonoBehaviour
     public void EnterDriveMode()
     {
         // Check if character has enough drive segments to enter drive mode (e.g., 3 segments)
-        
-    
         if (Drive.CanUseSegments(requiredSegments))
         {
             Drive.UseSegments(requiredSegments); // Consume the segments
-            // Add your drive mode activation logic here
-            Debug.Log($"{gameObject.name} entered drive mode! Used {requiredSegments} segments.");
+            isDriveMode = true;
+        
+            Debug.Log($"Drive mode activated! isDriveMode = {isDriveMode}");
+        
+            OnDriveModeEntered?.Invoke();
+            Debug.Log($"{gameObject.name} entered drive mode! Used {requiredSegments} segments. Drive mode will be active until next attack.");
         }
         else
         {
             Debug.Log($"{gameObject.name} doesn't have enough drive segments to enter drive mode! Need {requiredSegments}, have {Drive.AvailableSegments}");
         }
     }
-
-
+    
+    public void ExitDriveMode()
+    {
+        if (isDriveMode)
+        {
+            isDriveMode = false;
+            OnDriveModeExited?.Invoke();
+            Debug.Log($"{gameObject.name} exited drive mode.");
+        }
+    }
 }

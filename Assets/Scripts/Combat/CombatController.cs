@@ -149,17 +149,51 @@ public class CombatController : MonoBehaviour
             {
                 Debug.Log("Critical Fail! Attack missed.");
                 targetManager.Miss();
+                
+                // Even on a miss, if drive mode was active, it should be consumed
+                DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
+                attackerDriveManager?.OnAttackPerformed();
+                
                 break;
             }
 
             if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
             {
                 float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
+                Debug.Log($"Base damage before multipliers: {damage}");
+                
+                // Apply drive mode multiplier if the attacker is in drive mode
+                DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
+                if (attackerDriveManager != null)
+                {
+                    Debug.Log($"Drive manager found for {currentCharacter.characterData.characterName}");
+                    Debug.Log($"Drive mode active: {attackerDriveManager.IsDriveMode}");
+                    
+                    float driveMultiplier = attackerDriveManager.GetNextAttackDamageMultiplier();
+                    damage *= driveMultiplier;
+                    
+                    Debug.Log($"After drive multiplier ({driveMultiplier}x): {damage} damage");
+                    
+                    if (driveMultiplier > 1f)
+                    {
+                        Debug.Log($"Drive system applied {driveMultiplier}x damage multiplier!");
+                    }
+                    
+                    // IMPORTANT: Call OnAttackPerformed to deactivate drive mode after the attack
+                    attackerDriveManager.OnAttackPerformed();
+                }
+                else
+                {
+                    Debug.Log($"No drive manager found for {currentCharacter.characterData.characterName}");
+                }
+                
                 if (attackRoll == 20)
                 {
                     Debug.Log("Critical Hit! Double damage!");
                     damage *= 2;
                 }
+                
+                Debug.Log($"Final damage dealt: {damage}");
                 Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
                 targetManager.TakeDamage(damage);
                 currentCharacter.OnDamageDealt(damage);
@@ -168,6 +202,10 @@ public class CombatController : MonoBehaviour
             {
                 Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " Missed enemy with defense value of: " + targetManager.DefenseValue);
                 targetManager.Miss();
+                
+                // Even on a miss, if drive mode was active, it should be consumed
+                DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
+                attackerDriveManager?.OnAttackPerformed();
             }
             break;
 

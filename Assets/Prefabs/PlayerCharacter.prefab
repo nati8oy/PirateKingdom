@@ -3727,6 +3727,7 @@ MonoBehaviour:
     regenerationPerTurn: 50
     currentDrive: 0
     availableSegments: 0
+  requiredSegments: 1
   buffAttackCost: 1
   healSelfCost: 2
   removeDebuffCost: 1

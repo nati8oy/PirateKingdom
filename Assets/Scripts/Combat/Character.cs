@@ -213,14 +213,14 @@ public class Character : ScriptableObject
             return false;
         }
     
-        Debug.Log($"IsActionAvailable: Checking {action.actionName}");
-        Debug.Log($"  - action.cooldown: {action.cooldown}");
-        Debug.Log($"  - actionCooldowns.ContainsKey(action): {actionCooldowns.ContainsKey(action)}");
+        //Debug.Log($"IsActionAvailable: Checking {action.actionName}");
+        //Debug.Log($"  - action.cooldown: {action.cooldown}");
+        //Debug.Log($"  - actionCooldowns.ContainsKey(action): {actionCooldowns.ContainsKey(action)}");
     
         // If the action has no cooldown, it's always available
         if (action.cooldown <= 0) 
         {
-            Debug.Log($"  - Result: TRUE (no cooldown)");
+            //Debug.Log($"  - Result: TRUE (no cooldown)");
             return true;
         }
     

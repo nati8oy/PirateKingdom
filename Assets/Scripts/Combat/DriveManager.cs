@@ -14,6 +14,7 @@ public class DriveManager : MonoBehaviour
 {
     [Header("Drive Meter")]
     [SerializeField] private DriveMeter driveMeter = new DriveMeter();
+    [SerializeField] private int requiredSegments = 3; // Adjust this value as needed
     
     [Header("Drive Action Costs")]
     [SerializeField] private int buffAttackCost = 1;
@@ -52,7 +53,7 @@ public class DriveManager : MonoBehaviour
     public void OnTurnStart()
     {
         driveMeter.RegenerateDrive();
-        Debug.Log($"{characterManager?.characterData?.characterName ?? gameObject.name} regenerated drive. Current: {driveMeter.CurrentDrive}, Segments: {driveMeter.AvailableSegments}");
+       // Debug.Log($"{characterManager?.characterData?.characterName ?? gameObject.name} regenerated drive. Current: {driveMeter.CurrentDrive}, Segments: {driveMeter.AvailableSegments}");
     }
     
     public void OnTurnEnd()
@@ -205,4 +206,23 @@ public class DriveManager : MonoBehaviour
         }
         return false;
     }
+    
+    public void EnterDriveMode()
+    {
+        // Check if character has enough drive segments to enter drive mode (e.g., 3 segments)
+        
+    
+        if (Drive.CanUseSegments(requiredSegments))
+        {
+            Drive.UseSegments(requiredSegments); // Consume the segments
+            // Add your drive mode activation logic here
+            Debug.Log($"{gameObject.name} entered drive mode! Used {requiredSegments} segments.");
+        }
+        else
+        {
+            Debug.Log($"{gameObject.name} doesn't have enough drive segments to enter drive mode! Need {requiredSegments}, have {Drive.AvailableSegments}");
+        }
+    }
+
+
 }

@@ -8,6 +8,22 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1449396921620451659, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1449396921620451659, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2828092618574132589, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2828092618574132589, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2963772058983199491, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Color.b
       value: 0
@@ -102,7 +118,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Name
-      value: Enemy
+      value: EnemyCharacterVariant
       objectReference: {fileID: 0}
     - target: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_TagString
@@ -119,6 +135,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       insertIndex: -1
       addedObject: {fileID: 4453259525256210909}
+    - targetCorrespondingSourceObject: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4503596603177314470}
   m_SourcePrefab: {fileID: 100100000, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
 --- !u!1 &3095885209584146149 stripped
 GameObject:
@@ -139,3 +158,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mainCharacterData: {fileID: 0}
   enemyActionDelay: 1.25
+--- !u!114 &4503596603177314470
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3095885209584146149}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0057e2ee86d3f488689111993306b267, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

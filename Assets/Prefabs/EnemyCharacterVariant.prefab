@@ -135,9 +135,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       insertIndex: -1
       addedObject: {fileID: 4453259525256210909}
-    - targetCorrespondingSourceObject: {fileID: 4879667956975031156, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 4503596603177314470}
   m_SourcePrefab: {fileID: 100100000, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
 --- !u!1 &3095885209584146149 stripped
 GameObject:
@@ -157,16 +154,5 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mainCharacterData: {fileID: 0}
-  enemyActionDelay: 1.25
---- !u!114 &4503596603177314470
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3095885209584146149}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0057e2ee86d3f488689111993306b267, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  enemyActionDelay: 2
+  useParrySystem: 1

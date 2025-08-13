@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 [CreateAssetMenu(fileName = "Character", menuName = "Scriptable Objects/Character")]
 public class Character : ScriptableObject
@@ -106,6 +107,47 @@ public class Character : ScriptableObject
         activeBuffs.Add(newBuff);
         Debug.Log($"Added {(value > 0 ? "buff" : "debuff")} to {characterName}: {buffType} {value:+0;-0} for {turnsDuration} turns");
     }
+    
+    // Add this method to your Character class, likely near the AddBuff method
+
+    public void RemoveBuff(BuffType buffType)
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            if (activeBuffs[i].Type == buffType)
+            {
+                activeBuffs.RemoveAt(i);
+                return; // Remove only the first matching buff
+            }
+        }
+    }
+
+// Alternative version that removes all buffs of a specific type
+    public void RemoveAllBuffsOfType(BuffType buffType)
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            if (activeBuffs[i].Type == buffType)
+            {
+                activeBuffs.RemoveAt(i);
+            }
+        }
+    }
+
+// Method to remove the first debuff (negative value) found - useful for drive actions
+    public bool RemoveFirstDebuff()
+    {
+        for (int i = 0; i < activeBuffs.Count; i++)
+        {
+            if (activeBuffs[i].Value < 0)
+            {
+                activeBuffs.RemoveAt(i);
+                return true; // Successfully removed a debuff
+            }
+        }
+        return false; // No debuffs found to remove
+    }
+
 
     public void UpdateBuffsForCharacterTurn()
     {
@@ -125,7 +167,8 @@ public class Character : ScriptableObject
     {
         List<Action> actionsToRemove = new List<Action>();
         
-        foreach (var kvp in actionCooldowns)
+        // Create a snapshot of the dictionary to avoid modification during enumeration
+        foreach (var kvp in actionCooldowns.ToList())
         {
             Action action = kvp.Key;
             int turnsRemaining = kvp.Value - 1;
@@ -141,6 +184,7 @@ public class Character : ScriptableObject
             }
         }
         
+        // Remove expired actions
         foreach (Action action in actionsToRemove)
         {
             actionCooldowns.Remove(action);
@@ -159,15 +203,31 @@ public class Character : ScriptableObject
     }
 
     // Check if an action is available (not on cooldown)
+    
+// Check if an action is available (not on cooldown)
     public bool IsActionAvailable(Action action)
     {
-        if (action == null) return false;
-        
+        if (action == null) 
+        {
+            Debug.Log("IsActionAvailable: action is null");
+            return false;
+        }
+    
+        //Debug.Log($"IsActionAvailable: Checking {action.actionName}");
+        //Debug.Log($"  - action.cooldown: {action.cooldown}");
+        //Debug.Log($"  - actionCooldowns.ContainsKey(action): {actionCooldowns.ContainsKey(action)}");
+    
         // If the action has no cooldown, it's always available
-        if (action.cooldown <= 0) return true;
-        
+        if (action.cooldown <= 0) 
+        {
+            //Debug.Log($"  - Result: TRUE (no cooldown)");
+            return true;
+        }
+    
         // Check if the action is currently on cooldown
-        return !actionCooldowns.ContainsKey(action);
+        bool result = !actionCooldowns.ContainsKey(action);
+        Debug.Log($"  - Result: {result} (not in cooldown dictionary)");
+        return result;
     }
 
     // Get the remaining cooldown turns for an action

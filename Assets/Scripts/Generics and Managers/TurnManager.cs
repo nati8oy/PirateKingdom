@@ -157,6 +157,11 @@ public class TurnManager : MonoBehaviour
         
         if (battleResultText != null)
         {
+            if (battleResultText.gameObject.activeSelf == false)
+            {
+                battleResultText.gameObject.SetActive(true);
+            }
+            
             battleResultText.text = "DEFEAT!";
         }
         
@@ -183,73 +188,92 @@ public class TurnManager : MonoBehaviour
         initiativeList.Sort((a, b) => b.initiative.CompareTo(a.initiative));
         turnOrder = initiativeList.Select(x => x.obj).ToList();
 
-        Debug.Log("=== TURN ORDER ===");
+        //Debug.Log("=== TURN ORDER ===");
         for (int i = 0; i < initiativeList.Count; i++)
         {
             var entry = initiativeList[i];
             var characterManager = entry.obj.GetComponent<CharacterManager>();
             string characterName = characterManager?.characterData?.characterName ?? entry.obj.name;
         
-            Debug.Log($"Turn {i + 1}: {characterName} - Initiative: {entry.initiative:F1}");
+            //Debug.Log($"Turn {i + 1}: {characterName} - Initiative: {entry.initiative:F1}");
         }
     }
 
     private void SetCharacterTurn()
-    {
-        if (battleEnded) return;
-        
-        if (turnOrder.Count > 0)
         {
-            // Skip any destroyed objects in the turn order
-            while (currentTurnIndex < turnOrder.Count && 
-                   (turnOrder[currentTurnIndex] == null || 
-                    turnOrder[currentTurnIndex].GetComponent<CharacterManager>() == null))
-            {
-                currentTurnIndex++;
-            }
+            if (battleEnded) return;
             
-            // If we've gone through all characters, complete the round
-            if (currentTurnIndex >= turnOrder.Count)
+            if (turnOrder.Count > 0)
             {
-                RoundComplete();
-                currentTurnIndex = 0;
-                GetTurnOrder();
-                return;
-            }
-            
-            currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
-            
-            // Update buffs and stats at the start of the character's turn
-            currentCharacterTurn.UpdateBuffsForTurn();
-            
-            if (currentCharacterTurn.turnMarker != null)
-            {
-                currentCharacterTurn.turnMarker.gameObject.SetActive(true);
-            }
-        
-            if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
-            {
-                actionsManager.LoadCharacterActions(currentCharacterTurn.characterData); 
-
-                if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
+                // Skip any destroyed objects in the turn order
+                while (currentTurnIndex < turnOrder.Count && 
+                       (turnOrder[currentTurnIndex] == null || 
+                        turnOrder[currentTurnIndex].GetComponent<CharacterManager>() == null))
                 {
-                    var enemyManager = turnOrder[currentTurnIndex].GetComponent<EnemyManager>();
-                    if (enemyManager != null)
+                    currentTurnIndex++;
+                }
+                
+                // If we've gone through all characters, complete the round
+                if (currentTurnIndex >= turnOrder.Count)
+                {
+                    RoundComplete();
+                    currentTurnIndex = 0;
+                    GetTurnOrder();
+                    return;
+                }
+                
+                currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
+                
+                // ADD THIS: Set the current character for input handling
+                if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Player)
+                {
+                    PlayerInputHandler inputHandler = FindObjectOfType<PlayerInputHandler>();
+                    if (inputHandler != null)
                     {
-                        enemyManager.EnemyTurnAction();
+                        inputHandler.SetSelectedCharacter(currentCharacterTurn);
                     }
+                }
+                else
+                {
+                    // Clear selection when it's an enemy's turn
+                    PlayerInputHandler inputHandler = FindObjectOfType<PlayerInputHandler>();
+                    if (inputHandler != null)
+                    {
+                        inputHandler.ClearSelectedCharacter();
+                    }
+                }
+                
+                // Update buffs and stats at the start of the character's turn
+                currentCharacterTurn.UpdateBuffsForTurn();
+                
+                if (currentCharacterTurn.turnMarker != null)
+                {
+                    currentCharacterTurn.turnMarker.gameObject.SetActive(true);
+                }
+            
+                if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
+                {
+                    actionsManager.LoadCharacterActions(currentCharacterTurn.characterData); 
+
+                    if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
+                    {
+                        var enemyManager = turnOrder[currentTurnIndex].GetComponent<EnemyManager>();
+                        if (enemyManager != null)
+                        {
+                            enemyManager.EnemyTurnAction();
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.Log($"Current turn: {turnOrder[currentTurnIndex].name}");
                 }
             }
             else
             {
-                Debug.Log($"Current turn: {turnOrder[currentTurnIndex].name}");
+                Debug.LogWarning("Turn order is empty!");
             }
         }
-        else
-        {
-            Debug.LogWarning("Turn order is empty!");
-        }
-    }
 
     public void CompleteTurn()
     {
@@ -302,17 +326,4 @@ public class TurnManager : MonoBehaviour
         Debug.Log("Return to Main Menu - Implement scene loading here");
     }
     
-    [ContextMenu("Test Victory UI")]
-    public void TestVictoryUI()
-    {
-        if (victoryUI != null)
-        {
-            victoryUI.SetActive(!victoryUI.activeSelf);
-            Debug.Log($"Victory UI is now: {(victoryUI.activeSelf ? "ACTIVE" : "INACTIVE")}");
-        }
-        else
-        {
-            Debug.LogError("Victory UI is NULL!");
-        }
-    }
 }

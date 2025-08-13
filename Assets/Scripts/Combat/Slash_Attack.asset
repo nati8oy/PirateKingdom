@@ -15,11 +15,12 @@ MonoBehaviour:
   actionName: Slash
   actionType: 0
   targetType: 0
-  cooldown: 0
-  minDamage: 1
-  maxDamage: 5
+  cooldown: 2
+  icon: {fileID: 0}
+  minDamage: 3
+  maxDamage: 3
   minHeal: 0
   maxHeal: 0
-  baseValue: 0
+  buffValue: 0
   duration: 0
   buffType: 0

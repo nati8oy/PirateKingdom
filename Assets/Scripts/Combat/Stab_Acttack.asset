@@ -16,10 +16,11 @@ MonoBehaviour:
   actionType: 0
   targetType: 0
   cooldown: 0
-  minDamage: 2
-  maxDamage: 10
+  icon: {fileID: 0}
+  minDamage: 5
+  maxDamage: 5
   minHeal: 0
   maxHeal: 0
-  baseValue: 0
+  buffValue: 0
   duration: 0
   buffType: 0

@@ -24,7 +24,6 @@ public class CrewManager : MonoBehaviour
     private void Awake()
     {
         playerCharacters = GameObject.FindGameObjectsWithTag("Player");
-        Debug.Log(("crew size: " + playerCharacters.Length));
         InitializeCrew();
     }
 

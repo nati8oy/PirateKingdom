@@ -1,3 +1,4 @@
+
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -44,9 +45,21 @@ public class CharacterManager : MonoBehaviour
     public event OnDeathHandler OnDeath;
 
     private bool isDead = false;
+    private DriveManager driveManager;
+    
+    private DriveMeter driveMeter;
+    
+    void Awake()
+    {
+        driveMeter = new DriveMeter();
+        driveMeter.Initialize();
+    }
+
     
     void Start()
     {
+        driveManager = GetComponent<DriveManager>();
+        
         healthModifier.enabled = false;
         characterName.text = characterData.characterName;
         
@@ -93,6 +106,7 @@ public class CharacterManager : MonoBehaviour
     // Call this at the beginning of each character's turn to update buffs and refresh stats
     public void UpdateBuffsForTurn()
     {
+        driveManager?.OnTurnStart(); // Regenerate drive at turn start
         RefreshStats(); // Make sure we have the current modified stats
     }
 
@@ -101,6 +115,7 @@ public class CharacterManager : MonoBehaviour
     {
         characterData?.UpdateBuffsForCharacterTurn();
         characterData?.UpdateActionCooldowns(); 
+        driveManager?.OnTurnEnd(); // Handle drive turn end effects
         RefreshStats(); // Update stats after buffs are reduced
         if (characterData != null) Debug.Log($"{characterData.characterName} completed their turn, buffs updated");
     }
@@ -118,7 +133,7 @@ public class CharacterManager : MonoBehaviour
         healthModifier.enabled = true;
         healthModifier.text = "-" + Mathf.Round(damage);
         damageFeedback.PlayFeedbacks();
-        
+    
         float roundedDamage = Mathf.Round(damage);
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
         UpdateHealthBar();
@@ -129,10 +144,75 @@ public class CharacterManager : MonoBehaviour
         {
             OnDeath?.Invoke();
         }
+    
+        // Add damage taken to drive meter through DriveManager
+        if (driveManager != null)
+        {
+            driveManager.Drive.AddDrive(damage);
+        }
+    }
+
+    public void DealDamage(CharacterManager target, float damage)
+    {
+        // Deal damage to target
+        target.TakeDamage(damage);
+
+        // Add damage dealt to attacker's drive meter through DriveManager
+        if (driveManager != null)
+        {
+            driveManager.Drive.AddDrive(damage);
+        }
+    }
+    
+    public void OnDamageDealt(float damage)
+    {
+        // Add damage dealt to drive meter
+        if (driveManager != null)
+        {
+            driveManager.Drive.AddDrive(damage);
+            Debug.Log($"{characterData.characterName} dealt {damage} damage, drive increased");
+        }
+    }
+
+    // Modified to consider drive attack buffs
+    public float GetModifiedAttackPower()
+    {
+        float baseAttack = AttackPower;
+        
+        // Apply drive system attack buff if active
+        if (driveManager != null)
+        {
+            baseAttack *= driveManager.GetNextAttackDamageMultiplier();
+        }
+        
+        return baseAttack;
+    }
+    
+    // Single method that handles all action types (attack, heal, etc.)
+    public void OnAttackPerformed()
+    {
+        driveManager?.ConsumeAttackBuff();
+        // Also deactivate drive mode for any action, not just attacks
+        if (driveManager?.IsDriveMode == true)
+        {
+            driveManager.OnAttackPerformed(); // This will deactivate drive mode
+        }
     }
 
     public void Heal(float amount)
     {   
+        // Apply drive mode healing multiplier if active
+        if (driveManager != null)
+        {
+            float healingMultiplier = driveManager.GetNextHealingMultiplier();
+            amount *= healingMultiplier;
+            
+            if (healingMultiplier > 1f)
+            {
+                Debug.Log($"Drive mode boosted healing from base amount to {amount} (multiplier: {healingMultiplier}x)");
+            }
+        }
+        
         healthModifier.enabled = true;
         healthModifier.text = "+" + Mathf.Round(amount);
         healFeedback.PlayFeedbacks();
@@ -220,5 +300,11 @@ public class CharacterManager : MonoBehaviour
         }
     
         buffEffectText.text = buffText.TrimEnd('\n');
+    }
+    
+    // Public getter for the drive manager
+    public DriveManager GetDriveManager()
+    {
+        return driveManager;
     }
 }

@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
   m_Name: Witch Healer
   m_EditorClassIdentifier: 
-  characterName: Minion
+  characterName: Witch
   actionSlots:
   - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
   - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: 2089de7ec83b54ca2a33489ee4278325, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
@@ -29,9 +29,10 @@ MonoBehaviour:
   attackPower: 5
   defenseValue: 3
   speed: 3
-  enemyType: 0
-  difficulty: 1
-  commonDropRate: 0.6
-  rareDropRate: 0.3
-  uniqueDropRate: 0.1
-  targetingStrategy: 0
+  healThreshold: 0.3
+  showDebugInfo: 0
+  attackWeight: 0.3
+  healWeight: 0.9
+  buffWeight: 0.5
+  debuffWeight: 0.3
+  randomnessAmount: 0.1

@@ -5,16 +5,11 @@ using Random = UnityEngine.Random;
 
 public class EnemyManager : MonoBehaviour
 {
-    [SerializeField] private Character mainCharacterData;
+    [SerializeField] private Enemy enemyData;
     [SerializeField] private float enemyActionDelay = 1.25f;
     
     [Header("Attack System")]
     [SerializeField] private bool useParrySystem = true;
-    
-    [Header("AI Behavior")]
-    [SerializeField] private float healThreshold = 0.3f; // Heal when health is below 30%
-    [SerializeField] private bool preferAttacks = true; // Prioritize attacks over other actions
-    [SerializeField] private bool showDebugInfo = false; // Show AI decision making in console
     
     private readonly List<GameObject> _playerCharacters = new List<GameObject>();
     private Action _selectedAction;
@@ -62,7 +57,13 @@ public class EnemyManager : MonoBehaviour
 
     void Start()
     {
-        mainCharacterData = GetComponent<CharacterManager>().characterData;
+        // Get enemy data from CharacterManager
+        enemyData = GetComponent<CharacterManager>().characterData as Enemy;
+        if (enemyData == null)
+        {
+            Debug.LogError($"[EnemyManager] No Enemy scriptable object found on {gameObject.name}! Make sure to assign an Enemy (not Character) to CharacterManager.");
+        }
+        
         RefreshTargetList();
     }
 
@@ -101,7 +102,10 @@ public class EnemyManager : MonoBehaviour
             return;
         }
         
-        Debug.Log($"[EnemyManager] {gameObject.name} chose action: {_selectedAction.actionName}");
+        if (enemyData != null && enemyData.showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} chose action: {_selectedAction.actionName}");
+        }
         
         // Execute the chosen action
         CharacterManager target = SelectTarget(_selectedAction);
@@ -117,44 +121,40 @@ public class EnemyManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Chooses the best action based on current battle conditions and AI preferences
+    /// Chooses the best action based on current battle conditions and Enemy scriptable object settings
     /// </summary>
     private Action ChooseBestAction()
     {
-        if (mainCharacterData == null) return null;
+        if (enemyData == null) return null;
         
         // Get all available actions (non-null action slots that are NOT on cooldown)
         List<Action> availableActions = new List<Action>();
         
         // Get actions from action slots
-        if (mainCharacterData.actionSlots != null)
+        if (enemyData.actionSlots != null)
         {
-            foreach (Action action in mainCharacterData.actionSlots)
+            foreach (Action action in enemyData.actionSlots)
             {
-                if (action != null && mainCharacterData.IsActionAvailable(action))
+                if (action != null && enemyData.IsActionAvailable(action))
                 {
                     availableActions.Add(action);
                 }
-                else if (action != null)
+                else if (action != null && enemyData.showDebugInfo)
                 {
-                    // Debug log for actions on cooldown
-                    int cooldownRemaining = mainCharacterData.GetActionCooldownRemaining(action);
-                    if (showDebugInfo)
-                    {
-                        Debug.Log($"[EnemyManager] {gameObject.name} - {action.actionName} on cooldown ({cooldownRemaining} turns remaining)");
-                    }
+                    int cooldownRemaining = enemyData.GetActionCooldownRemaining(action);
+                    Debug.Log($"[EnemyManager] {gameObject.name} - {action.actionName} on cooldown ({cooldownRemaining} turns remaining)");
                 }
             }
         }
         
         // Also get actions from Character.GetActions() if available
-        if (mainCharacterData.GetActions() != null)
+        if (enemyData.GetActions() != null)
         {
-            foreach (Action action in mainCharacterData.GetActions())
+            foreach (Action action in enemyData.GetActions())
             {
                 if (action != null && 
                     !availableActions.Contains(action) && 
-                    mainCharacterData.IsActionAvailable(action))
+                    enemyData.IsActionAvailable(action))
                 {
                     availableActions.Add(action);
                 }
@@ -167,70 +167,67 @@ public class EnemyManager : MonoBehaviour
             return null;
         }
         
-        if (showDebugInfo)
+        if (enemyData.showDebugInfo)
         {
             Debug.Log($"[EnemyManager] {gameObject.name} has {availableActions.Count} available actions: {string.Join(", ", availableActions.ConvertAll(a => a.actionName))}");
         }
         
-        // Check if we need healing
-        if (_characterManager != null)
+        // Get current health percentage
+        float healthPercentage = _characterManager != null ? 
+            _characterManager.GetCurrentHealth() / _characterManager.MaxHealth : 1f;
+        
+        // Check for emergency healing
+        if (healthPercentage <= enemyData.healThreshold)
         {
-            float healthPercentage = _characterManager.GetCurrentHealth() / _characterManager.MaxHealth;
-            if (healthPercentage <= healThreshold)
+            var healActions = availableActions.Where(a => a.actionType == Action.ActionType.Heal).ToList();
+            if (healActions.Count > 0)
             {
-                // Look for heal actions that are available (not on cooldown)
-                var healActions = availableActions.Where(a => a.actionType == Action.ActionType.Heal).ToList();
-                if (healActions.Count > 0)
+                if (enemyData.showDebugInfo)
                 {
                     Debug.Log($"[EnemyManager] {gameObject.name} needs healing ({healthPercentage:P}) - choosing from {healActions.Count} available heal actions");
-                    return healActions[Random.Range(0, healActions.Count)];
                 }
-                else if (showDebugInfo)
-                {
-                    Debug.Log($"[EnemyManager] {gameObject.name} needs healing but no heal actions are available");
-                }
+                return healActions[Random.Range(0, healActions.Count)];
             }
         }
         
-        // Look for buff opportunities (low priority unless no attacks available)
-        var buffActions = availableActions.Where(a => a.actionType == Action.ActionType.Buff).ToList();
-        var debuffActions = availableActions.Where(a => a.actionType == Action.ActionType.Debuff).ToList();
-        var attackActions = availableActions.Where(a => a.actionType == Action.ActionType.Attack).ToList();
-        
-        // Decision weights
+        // Calculate weights for each action type
         List<(Action action, float weight)> actionWeights = new List<(Action, float)>();
         
-        // Weight attacks highly if preferAttacks is enabled
-        foreach (var attack in attackActions)
+        foreach (var action in availableActions)
         {
-            float weight = preferAttacks ? 0.7f : 0.4f;
-            actionWeights.Add((attack, weight));
-        }
-        
-        // Weight buffs and debuffs lower
-        foreach (var buff in buffActions)
-        {
-            actionWeights.Add((buff, 0.15f));
-        }
-        
-        foreach (var debuff in debuffActions)
-        {
-            actionWeights.Add((debuff, 0.2f));
-        }
-        
-        // If no weighted actions, just pick randomly from available actions
-        if (actionWeights.Count == 0)
-        {
-            var randomAction = availableActions[Random.Range(0, availableActions.Count)];
-            if (showDebugInfo)
+            float baseWeight = GetBaseWeight(action.actionType);
+            
+            // Add some randomness to make AI less predictable
+            float randomModifier = 1f + Random.Range(-enemyData.randomnessAmount, enemyData.randomnessAmount);
+            float finalWeight = baseWeight * randomModifier;
+            
+            actionWeights.Add((action, Mathf.Max(0.01f, finalWeight))); // Ensure minimum weight
+            
+            if (enemyData.showDebugInfo)
             {
-                Debug.Log($"[EnemyManager] {gameObject.name} choosing random available action: {randomAction.actionName}");
+                Debug.Log($"[EnemyManager] {action.actionName} - Base: {baseWeight:F2}, Final: {finalWeight:F2}");
             }
-            return randomAction;
         }
         
         // Choose action based on weights
         return ChooseWeightedAction(actionWeights);
+    }
+    
+    /// <summary>
+    /// Gets the base weight for an action type from the Enemy scriptable object
+    /// </summary>
+    private float GetBaseWeight(Action.ActionType actionType)
+    {
+        if (enemyData == null) return 0.1f;
+        
+        return actionType switch
+        {
+            Action.ActionType.Attack => enemyData.attackWeight,
+            Action.ActionType.Heal => enemyData.healWeight,
+            Action.ActionType.Buff => enemyData.buffWeight,
+            Action.ActionType.Debuff => enemyData.debuffWeight,
+            _ => 0.1f
+        };
     }
     
     /// <summary>

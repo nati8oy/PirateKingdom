@@ -42,12 +42,12 @@ public class PlayerInputHandler : MonoBehaviour
             {
                 // Enter drive mode - you'll need to implement this method in DriveManager
                 driveManager.EnterDriveMode();
-                Debug.Log($"{selectedCharacter.characterData.characterName} entered drive mode!");
+                //Debug.Log($"{selectedCharacter.characterData.characterName} entered drive mode!");
             }
         }
         else
         {
-            Debug.LogWarning("No character selected for drive mode!");
+            //Debug.LogWarning("No character selected for drive mode!");
         }
     }
     
@@ -55,7 +55,7 @@ public class PlayerInputHandler : MonoBehaviour
     public void SetSelectedCharacter(CharacterManager character)
     {
         selectedCharacter = character;
-        Debug.Log($"Selected character: {character.characterData.characterName}");
+        //Debug.Log($"Selected character: {character.characterData.characterName}");
     }
     
     // Method to clear selection

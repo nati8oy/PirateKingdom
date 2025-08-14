@@ -226,7 +226,6 @@ public class Character : ScriptableObject
     
         // Check if the action is currently on cooldown
         bool result = !actionCooldowns.ContainsKey(action);
-        Debug.Log($"  - Result: {result} (not in cooldown dictionary)");
         return result;
     }
 

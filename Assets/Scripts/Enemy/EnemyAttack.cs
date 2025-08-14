@@ -4,7 +4,6 @@ using System.Collections;
 public class EnemyAttack : MonoBehaviour
 {
     [Header("Attack Timing")]
-    [SerializeField] private float attackWindupTime = 1.0f;
     [SerializeField] private float attackHitTime = 0.1f;
     [SerializeField] private float attackRecoveryTime = 0.5f;
     
@@ -23,11 +22,16 @@ public class EnemyAttack : MonoBehaviour
     private ParrySystem targetParrySystem;
     private ParryVisualFeedback targetVisualFeedback;
     
-    public float AttackWindupTime => attackWindupTime;
+    // Current action being executed
+    private Action currentAction;
+    
     public float AttackHitTime => attackHitTime;
     public float AttackRecoveryTime => attackRecoveryTime;
     public float AttackDamage => attackDamage;
     public bool IsAttacking => isAttacking;
+    
+    // Property to get windup time from current action
+    public float AttackWindupTime => currentAction != null ? currentAction.AttackWindupTime : 1.0f;
     
     // Events
     public System.Action OnAttackStart;
@@ -41,9 +45,9 @@ public class EnemyAttack : MonoBehaviour
     }
     
     /// <summary>
-    /// Starts an attack sequence against the specified target
+    /// Starts an attack sequence against the specified target using the given action
     /// </summary>
-    public void StartAttack(GameObject target)
+    public void StartAttack(GameObject target, Action action)
     {
         if (isAttacking)
         {
@@ -53,6 +57,8 @@ public class EnemyAttack : MonoBehaviour
             }
             return;
         }
+        
+        currentAction = action;
         
         // Find target's parry system and visual feedback
         targetParrySystem = target.GetComponent<ParrySystem>();
@@ -66,9 +72,18 @@ public class EnemyAttack : MonoBehaviour
     }
     
     /// <summary>
-    /// Starts an attack sequence (use this when target is determined by other means)
+    /// Starts an attack sequence against the specified target
     /// </summary>
-    public void StartAttack()
+    public void StartAttack(GameObject target)
+    {
+        // Use a default action if none provided
+        StartAttack(target, null);
+    }
+    
+    /// <summary>
+    /// Starts an attack sequence using the given action (use this when target is determined by other means)
+    /// </summary>
+    public void StartAttack(Action action)
     {
         if (isAttacking)
         {
@@ -78,6 +93,8 @@ public class EnemyAttack : MonoBehaviour
             }
             return;
         }
+        
+        currentAction = action;
         
         // Find player target (assuming player has specific tag or component)
         GameObject player = GameObject.FindGameObjectWithTag("Player");
@@ -94,14 +111,26 @@ public class EnemyAttack : MonoBehaviour
         StartCoroutine(ExecuteAttackSequence());
     }
     
+    /// <summary>
+    /// Starts an attack sequence (use this when target is determined by other means)
+    /// </summary>
+    public void StartAttack()
+    {
+        StartAttack((Action)null);
+    }
+    
     private IEnumerator ExecuteAttackSequence()
     {
         isAttacking = true;
         bool wasParried = false;
         
+        // Get the windup time from the current action
+        float windupTime = AttackWindupTime;
+        
         if (showDebugInfo)
         {
-            Debug.Log("[EnemyAttack] Attack started - beginning windup");
+            string actionName = currentAction != null ? currentAction.actionName : "Default Attack";
+            Debug.Log($"[EnemyAttack] {actionName} started - windup time: {windupTime}s");
         }
         
         OnAttackStart?.Invoke();
@@ -109,11 +138,11 @@ public class EnemyAttack : MonoBehaviour
         // Start the visual countdown immediately when attack begins
         if (targetVisualFeedback != null)
         {
-            targetVisualFeedback.StartAttackCountdown(attackWindupTime);
+            targetVisualFeedback.StartAttackCountdown(windupTime);
         }
         
         // Attack windup phase
-        float windupEndTime = attackWindupTime - parryWindowStartOffset;
+        float windupEndTime = windupTime - parryWindowStartOffset;
         yield return new WaitForSeconds(windupEndTime);
         
         // Open parry window for target
@@ -169,6 +198,7 @@ public class EnemyAttack : MonoBehaviour
         
         // Attack complete
         isAttacking = false;
+        currentAction = null; // Clear the current action
         
         if (showDebugInfo)
         {
@@ -183,21 +213,24 @@ public class EnemyAttack : MonoBehaviour
     {
         if (targetParrySystem != null)
         {
+            // Calculate damage from action if available
+            float damage = attackDamage;
+            if (currentAction != null)
+            {
+                damage = Random.Range(currentAction.minDamage, currentAction.maxDamage);
+            }
+            
             // Try to find a HealthManager component on the target
             var healthManager = targetParrySystem.GetComponent<HealthManager>();
             if (healthManager != null)
             {
-                // Assuming HealthManager has a method to take damage
-                // You may need to adjust this based on your HealthManager's API
                 if (showDebugInfo)
                 {
-                    Debug.Log($"[EnemyAttack] Dealing {attackDamage} damage to {targetParrySystem.name}");
+                    Debug.Log($"[EnemyAttack] Dealing {damage} damage to {targetParrySystem.name}");
                 }
                 
                 // If HealthManager has a TakeDamage method, use it:
-                // healthManager.TakeDamage(attackDamage);
-                
-                // Or if it has a different method, adjust accordingly
+                // healthManager.TakeDamage(damage);
             }
             else
             {
@@ -205,10 +238,9 @@ public class EnemyAttack : MonoBehaviour
                 var targetCharacterManager = targetParrySystem.GetComponent<CharacterManager>();
                 if (targetCharacterManager != null)
                 {
-                    // Implement damage dealing through your character system
                     if (showDebugInfo)
                     {
-                        Debug.Log($"[EnemyAttack] Would deal {attackDamage} damage to {targetCharacterManager.name}");
+                        Debug.Log($"[EnemyAttack] Would deal {damage} damage to {targetCharacterManager.name}");
                     }
                 }
             }
@@ -224,6 +256,7 @@ public class EnemyAttack : MonoBehaviour
         
         StopAllCoroutines();
         isAttacking = false;
+        currentAction = null;
         
         // Close any open parry windows
         if (targetParrySystem != null && targetParrySystem.IsParryWindowActive)

@@ -28,6 +28,9 @@ public class Action : ScriptableObject
     public float cooldown;
     public Sprite icon;
 
+    [Header("Attack Timing")]
+    [SerializeField] private float attackWindupTime = 1.0f; // Default 1 second
+    
     [Header("Spell Effects")]
     public float minDamage;
     public float maxDamage;
@@ -42,6 +45,8 @@ public class Action : ScriptableObject
     //public int minimumLevel;
     //public Character.CharacterClass[] allowedClasses;
     
-    
-    
+    /// <summary>
+    /// Get the attack windup time for this action
+    /// </summary>
+    public float AttackWindupTime => attackWindupTime;
 }

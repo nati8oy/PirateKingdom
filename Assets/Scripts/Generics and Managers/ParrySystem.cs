@@ -1,4 +1,3 @@
-
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -74,6 +73,16 @@ public class ParrySystem : MonoBehaviour
     {
         if (isParryWindowActive) return;
         
+        // Don't open parry window if character is dead/inactive
+        if (!IsCharacterAlive())
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[ParrySystem] Cannot open parry window - character is dead on {gameObject.name}");
+            }
+            return;
+        }
+        
         isParryWindowActive = true;
         isActiveParryTarget = true; // Mark this as the active parry target
         parryWindowEndTime = Time.time + parryWindowDuration;
@@ -122,6 +131,16 @@ public class ParrySystem : MonoBehaviour
             return; // Silently ignore input for non-active parry systems
         }
         
+        // Check if character is still alive (using your game's logic)
+        if (!IsCharacterAlive())
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[ParrySystem] Parry input ignored - character is dead on {gameObject.name}");
+            }
+            return;
+        }
+        
         // Only allow parry during active window
         if (!isParryWindowActive)
         {
@@ -135,6 +154,18 @@ public class ParrySystem : MonoBehaviour
         
         // Successful parry
         PerformSuccessfulParry();
+    }
+    
+    /// <summary>
+    /// Checks if the character is alive using the same logic as TurnManager
+    /// In your system, alive = GameObject exists and CharacterManager exists
+    /// </summary>
+    private bool IsCharacterAlive()
+    {
+        // Same logic as your TurnManager uses to check if characters are alive
+        return characterManager != null && 
+               characterManager.gameObject != null && 
+               characterManager.characterData != null;
     }
     
     private void PerformSuccessfulParry()
@@ -179,6 +210,6 @@ public class ParrySystem : MonoBehaviour
     /// </summary>
     public bool CanParryNow()
     {
-        return isParryWindowActive;
+        return isParryWindowActive && IsCharacterAlive();
     }
 }

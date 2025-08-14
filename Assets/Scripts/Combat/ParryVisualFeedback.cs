@@ -134,7 +134,7 @@ public class ParryVisualFeedback : MonoBehaviour
     {
         if (wasMyParryWindowActive)
         {
-            ShowFeedbackMessage("PARRY SUCCESS!", parrySuccessColor);
+            ShowFeedbackMessage("PARRY!", parrySuccessColor);
             Debug.Log($"[ParryVisualFeedback] Showing PARRY SUCCESS on {gameObject.name}");
         }
         else
@@ -147,7 +147,7 @@ public class ParryVisualFeedback : MonoBehaviour
     {
         if (wasMyParryWindowActive)
         {
-            ShowFeedbackMessage("PARRY FAILED", parryFailedColor);
+            ShowFeedbackMessage("FAILED", parryFailedColor);
             Debug.Log($"[ParryVisualFeedback] Showing PARRY FAILED on {gameObject.name}");
         }
         else

@@ -144,6 +144,17 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""2c352d49-dee3-4c75-923f-f9db06473264"",
+                    ""path"": ""<Keyboard>/a"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Parry"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""a6f0a5d4-584c-47c9-829e-3e4fe15765b6"",
                     ""path"": ""<Keyboard>/p"",
                     ""interactions"": """",

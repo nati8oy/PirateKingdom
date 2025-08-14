@@ -15,8 +15,8 @@ MonoBehaviour:
   characterName: Minion
   actionSlots:
   - {fileID: 11400000, guid: 73a4ecfd977dd472f9765f6ca8453fcf, type: 2}
-  - {fileID: 11400000, guid: 78db0287b308f4a85b69ade23cccb503, type: 2}
-  - {fileID: 11400000, guid: 1553474a3508b43d4a454c6e3c39ef33, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}

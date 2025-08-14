@@ -11,7 +11,7 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Scriptable object containing the character's base stats and information")]
     public Character characterData;
     [Tooltip("Current health value of the character")]
-    private float CurrentHealth;
+    public float CurrentHealth;
     [Tooltip("Maximum health value the character can have")]
     public float MaxHealth;
     [Tooltip("Character's attack power used for damage calculations")]
@@ -306,5 +306,10 @@ public class CharacterManager : MonoBehaviour
     public DriveManager GetDriveManager()
     {
         return driveManager;
+    }
+    // Add this method to access current health
+    public float GetCurrentHealth() 
+    { 
+        return CurrentHealth; 
     }
 }

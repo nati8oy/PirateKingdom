@@ -1,4 +1,3 @@
-
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -12,10 +11,16 @@ public class EnemyManager : MonoBehaviour
     [Header("Attack System")]
     [SerializeField] private bool useParrySystem = true;
     
+    [Header("AI Behavior")]
+    [SerializeField] private float healThreshold = 0.3f; // Heal when health is below 30%
+    [SerializeField] private bool preferAttacks = true; // Prioritize attacks over other actions
+    [SerializeField] private bool showDebugInfo = false; // Show AI decision making in console
+    
     private readonly List<GameObject> _playerCharacters = new List<GameObject>();
     private Action _selectedAction;
     private TurnManager _turnManager;
     private EnemyAttack _enemyAttack;
+    private CharacterManager _characterManager;
 
     private void Awake()
     {
@@ -23,6 +28,12 @@ public class EnemyManager : MonoBehaviour
         if (_turnManager == null)
         {
             Debug.LogError("No _turnManager found in the scene!");
+        }
+        
+        _characterManager = GetComponent<CharacterManager>();
+        if (_characterManager == null)
+        {
+            Debug.LogError("No CharacterManager found on this GameObject!");
         }
         
         // Get or add EnemyAttack component
@@ -49,7 +60,6 @@ public class EnemyManager : MonoBehaviour
         }
     }
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         mainCharacterData = GetComponent<CharacterManager>().characterData;
@@ -58,7 +68,6 @@ public class EnemyManager : MonoBehaviour
 
     public void RefreshTargetList()
     {
-        _selectedAction = mainCharacterData.actionSlots[0];
         _playerCharacters.Clear();
         GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
         
@@ -82,15 +91,202 @@ public class EnemyManager : MonoBehaviour
         // Refresh the target list to remove any destroyed characters
         RefreshTargetList();
         
-        if (_playerCharacters.Count > 0 && _playerCharacters[0] != null)
+        // Choose the best action for this turn
+        _selectedAction = ChooseBestAction();
+        
+        if (_selectedAction == null)
         {
-            PerformAction(_playerCharacters[0].GetComponent<CharacterManager>());
+            Debug.LogWarning($"[EnemyManager] No valid actions available for {gameObject.name}, skipping turn...");
+            _turnManager.CompleteTurn();
+            return;
+        }
+        
+        Debug.Log($"[EnemyManager] {gameObject.name} chose action: {_selectedAction.actionName}");
+        
+        // Execute the chosen action
+        CharacterManager target = SelectTarget(_selectedAction);
+        if (target != null)
+        {
+            PerformAction(target);
         }
         else
         {
-            Debug.Log("No valid player targets found, completing turn...");
+            Debug.LogWarning($"[EnemyManager] No valid target found for action {_selectedAction.actionName}, completing turn...");
             _turnManager.CompleteTurn();
         }
+    }
+    
+    /// <summary>
+    /// Chooses the best action based on current battle conditions and AI preferences
+    /// </summary>
+    private Action ChooseBestAction()
+    {
+        if (mainCharacterData == null) return null;
+        
+        // Get all available actions (non-null action slots that are NOT on cooldown)
+        List<Action> availableActions = new List<Action>();
+        
+        // Get actions from action slots
+        if (mainCharacterData.actionSlots != null)
+        {
+            foreach (Action action in mainCharacterData.actionSlots)
+            {
+                if (action != null && mainCharacterData.IsActionAvailable(action))
+                {
+                    availableActions.Add(action);
+                }
+                else if (action != null)
+                {
+                    // Debug log for actions on cooldown
+                    int cooldownRemaining = mainCharacterData.GetActionCooldownRemaining(action);
+                    if (showDebugInfo)
+                    {
+                        Debug.Log($"[EnemyManager] {gameObject.name} - {action.actionName} on cooldown ({cooldownRemaining} turns remaining)");
+                    }
+                }
+            }
+        }
+        
+        // Also get actions from Character.GetActions() if available
+        if (mainCharacterData.GetActions() != null)
+        {
+            foreach (Action action in mainCharacterData.GetActions())
+            {
+                if (action != null && 
+                    !availableActions.Contains(action) && 
+                    mainCharacterData.IsActionAvailable(action))
+                {
+                    availableActions.Add(action);
+                }
+            }
+        }
+        
+        if (availableActions.Count == 0)
+        {
+            Debug.LogWarning($"[EnemyManager] No available actions for {gameObject.name} (all on cooldown or null)!");
+            return null;
+        }
+        
+        if (showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} has {availableActions.Count} available actions: {string.Join(", ", availableActions.ConvertAll(a => a.actionName))}");
+        }
+        
+        // Check if we need healing
+        if (_characterManager != null)
+        {
+            float healthPercentage = _characterManager.GetCurrentHealth() / _characterManager.MaxHealth;
+            if (healthPercentage <= healThreshold)
+            {
+                // Look for heal actions that are available (not on cooldown)
+                var healActions = availableActions.Where(a => a.actionType == Action.ActionType.Heal).ToList();
+                if (healActions.Count > 0)
+                {
+                    Debug.Log($"[EnemyManager] {gameObject.name} needs healing ({healthPercentage:P}) - choosing from {healActions.Count} available heal actions");
+                    return healActions[Random.Range(0, healActions.Count)];
+                }
+                else if (showDebugInfo)
+                {
+                    Debug.Log($"[EnemyManager] {gameObject.name} needs healing but no heal actions are available");
+                }
+            }
+        }
+        
+        // Look for buff opportunities (low priority unless no attacks available)
+        var buffActions = availableActions.Where(a => a.actionType == Action.ActionType.Buff).ToList();
+        var debuffActions = availableActions.Where(a => a.actionType == Action.ActionType.Debuff).ToList();
+        var attackActions = availableActions.Where(a => a.actionType == Action.ActionType.Attack).ToList();
+        
+        // Decision weights
+        List<(Action action, float weight)> actionWeights = new List<(Action, float)>();
+        
+        // Weight attacks highly if preferAttacks is enabled
+        foreach (var attack in attackActions)
+        {
+            float weight = preferAttacks ? 0.7f : 0.4f;
+            actionWeights.Add((attack, weight));
+        }
+        
+        // Weight buffs and debuffs lower
+        foreach (var buff in buffActions)
+        {
+            actionWeights.Add((buff, 0.15f));
+        }
+        
+        foreach (var debuff in debuffActions)
+        {
+            actionWeights.Add((debuff, 0.2f));
+        }
+        
+        // If no weighted actions, just pick randomly from available actions
+        if (actionWeights.Count == 0)
+        {
+            var randomAction = availableActions[Random.Range(0, availableActions.Count)];
+            if (showDebugInfo)
+            {
+                Debug.Log($"[EnemyManager] {gameObject.name} choosing random available action: {randomAction.actionName}");
+            }
+            return randomAction;
+        }
+        
+        // Choose action based on weights
+        return ChooseWeightedAction(actionWeights);
+    }
+    
+    /// <summary>
+    /// Chooses an action based on weighted probabilities
+    /// </summary>
+    private Action ChooseWeightedAction(List<(Action action, float weight)> actionWeights)
+    {
+        float totalWeight = actionWeights.Sum(aw => aw.weight);
+        float randomValue = Random.Range(0f, totalWeight);
+        float currentWeight = 0f;
+        
+        foreach (var (action, weight) in actionWeights)
+        {
+            currentWeight += weight;
+            if (randomValue <= currentWeight)
+            {
+                return action;
+            }
+        }
+        
+        // Fallback to first action
+        return actionWeights[0].action;
+    }
+    
+    /// <summary>
+    /// Selects the appropriate target based on the action type
+    /// </summary>
+    private CharacterManager SelectTarget(Action action)
+    {
+        switch (action.targetType)
+        {
+            case Action.TargetType.SingleEnemy:
+                // Target random player
+                RefreshTargetList();
+                if (_playerCharacters.Count > 0)
+                {
+                    var validTargets = _playerCharacters.Where(p => p != null && p.GetComponent<CharacterManager>() != null).ToList();
+                    if (validTargets.Count > 0)
+                    {
+                        return validTargets[Random.Range(0, validTargets.Count)].GetComponent<CharacterManager>();
+                    }
+                }
+                break;
+                
+            case Action.TargetType.SingleAlly:
+                // Target self or ally (for now just target self)
+                return _characterManager;
+                
+            case Action.TargetType.AllAllies:
+            case Action.TargetType.AllEnemies:
+                // For AoE actions, we can still return the primary target
+                // The action execution logic can handle multiple targets
+                return _characterManager; // or a primary enemy target
+        }
+        
+        return null;
     }
 
     private void PerformAction(CharacterManager targetManager)
@@ -156,7 +352,7 @@ public class EnemyManager : MonoBehaviour
         int attackRoll = RollForCritical();
         if (attackRoll == 1)
         {
-            //Debug.Log("Critical Fail! Attack missed.");
+            Debug.Log($"[EnemyManager] {gameObject.name}'s attack missed!");
             _turnManager.CompleteTurn();
             return;
         }
@@ -167,20 +363,16 @@ public class EnemyManager : MonoBehaviour
         
         if (attackRoll == 20)
         {
-            //Debug.Log("Critical Hit! Double damage!");
+            Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
             modifiedDamage *= 2;
         }
         
-        // Set the damage amount on the EnemyAttack component
-        // Note: You may need to add a SetDamage method to EnemyAttack or make attackDamage public
-        // For now, we'll store it and apply it in the completion callback
+        // Store damage and target for completion callback
         _pendingDamage = modifiedDamage;
         _pendingTarget = targetManager;
         
-        // Start the parryable attack sequence
-        _enemyAttack.StartAttack(targetManager.gameObject);
-        
-        // Note: Don't call _turnManager.CompleteTurn() here - it will be called in OnAttackComplete
+        // Start the parryable attack sequence with the selected action
+        _enemyAttack.StartAttack(targetManager.gameObject, _selectedAction);
     }
     
     private void PerformDirectAttack(CharacterManager targetManager)
@@ -198,7 +390,7 @@ public class EnemyManager : MonoBehaviour
         
         // Use modified attack power for damage calculation
         float baseDamage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
-        float modifiedDamage = baseDamage + (currentCharacter.AttackPower * 0.1f); // Add 10% of attack power
+        float modifiedDamage = baseDamage + (currentCharacter.AttackPower * 0.1f);
         
         if (attackRoll == 20)
         {
@@ -206,24 +398,7 @@ public class EnemyManager : MonoBehaviour
             modifiedDamage *= 2;
         }
         
-        // Refresh target list and filter out destroyed objects
-        RefreshTargetList();
-        var validTargets = _playerCharacters.Where(p => p != null && p.GetComponent<CharacterManager>() != null).ToList();
-        
-        if (validTargets.Count > 0)
-        {
-            int randomIndex = Random.Range(0, validTargets.Count);
-            var targetCharacter = validTargets[randomIndex].GetComponent<CharacterManager>();
-            if (targetCharacter != null)
-            {
-                targetCharacter.TakeDamage(modifiedDamage);
-            }
-        }
-        else
-        {
-            Debug.Log("No valid targets for attack!");
-        }
-        
+        targetManager.TakeDamage(modifiedDamage);
         _turnManager.CompleteTurn();
     }
     
@@ -238,12 +413,12 @@ public class EnemyManager : MonoBehaviour
     {
         if (wasParried)
         {
-            Debug.Log($"[EnemyManager] Attack was parried by {_pendingTarget.name}!");
+            Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried by {_pendingTarget.name}!");
             // No damage dealt
         }
         else
         {
-            Debug.Log($"[EnemyManager] Attack hit {_pendingTarget.name} for {_pendingDamage} damage!");
+            Debug.Log($"[EnemyManager] {gameObject.name}'s attack hit {_pendingTarget.name} for {_pendingDamage} damage!");
             // Apply the calculated damage
             if (_pendingTarget != null)
             {

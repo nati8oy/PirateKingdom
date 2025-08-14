@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -16,6 +17,9 @@ public class ParrySystem : MonoBehaviour
     private CharacterManager characterManager;
     private bool isParryWindowActive = false;
     private float parryWindowEndTime = 0f;
+    
+    // Add this to track if this parry system should respond to input
+    private bool isActiveParryTarget = false;
     
     public float ParryWindowDuration => parryWindowDuration;
     public float ParryDriveBonus => parryDriveBonus;
@@ -71,11 +75,12 @@ public class ParrySystem : MonoBehaviour
         if (isParryWindowActive) return;
         
         isParryWindowActive = true;
+        isActiveParryTarget = true; // Mark this as the active parry target
         parryWindowEndTime = Time.time + parryWindowDuration;
         
         if (showDebugInfo)
         {
-            Debug.Log($"[ParrySystem] Parry window opened for {parryWindowDuration}s");
+            Debug.Log($"[ParrySystem] Parry window opened for {parryWindowDuration}s on {gameObject.name}");
         }
         
         OnParryWindowOpened?.Invoke();
@@ -89,10 +94,11 @@ public class ParrySystem : MonoBehaviour
         if (!isParryWindowActive) return;
         
         isParryWindowActive = false;
+        isActiveParryTarget = false; // No longer the active target
         
         if (showDebugInfo)
         {
-            Debug.Log("[ParrySystem] Parry window closed");
+            Debug.Log($"[ParrySystem] Parry window closed on {gameObject.name}");
         }
         
         OnParryWindowClosed?.Invoke();
@@ -104,17 +110,24 @@ public class ParrySystem : MonoBehaviour
     public void ForceCloseParryWindow()
     {
         isParryWindowActive = false;
+        isActiveParryTarget = false; // No longer the active target
         OnParryWindowClosed?.Invoke();
     }
     
     private void OnParryInput(InputAction.CallbackContext context)
     {
+        // Only respond to input if this ParrySystem is the active target
+        if (!isActiveParryTarget)
+        {
+            return; // Silently ignore input for non-active parry systems
+        }
+        
         // Only allow parry during active window
         if (!isParryWindowActive)
         {
             if (showDebugInfo)
             {
-                Debug.Log("[ParrySystem] Parry attempted outside window - failed");
+                Debug.Log($"[ParrySystem] Parry attempted outside window - failed on {gameObject.name}");
             }
             OnParryFailed?.Invoke();
             return;
@@ -128,7 +141,7 @@ public class ParrySystem : MonoBehaviour
     {
         if (showDebugInfo)
         {
-            Debug.Log("[ParrySystem] Successful parry!");
+            Debug.Log($"[ParrySystem] Successful parry on {gameObject.name}!");
         }
         
         // Close parry window immediately
@@ -144,7 +157,7 @@ public class ParrySystem : MonoBehaviour
                 
                 if (showDebugInfo)
                 {
-                    Debug.Log($"[ParrySystem] Added {parryDriveBonus} drive for successful parry");
+                    Debug.Log($"[ParrySystem] Added {parryDriveBonus} drive for successful parry on {gameObject.name}");
                 }
             }
         }

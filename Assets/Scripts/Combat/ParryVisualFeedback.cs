@@ -16,14 +16,29 @@ public class ParryVisualFeedback : MonoBehaviour
     
     private ParrySystem parrySystem;
     private Coroutine feedbackCoroutine;
+    private bool wasMyParryWindowActive = false;
+    
+    // Attack countdown tracking
+    private bool isTrackingAttack = false;
+    private float attackStartTime;
+    private float totalAttackTime;
     
     private void Awake()
     {
-        parrySystem = FindObjectOfType<ParrySystem>();
+        // Find ParrySystem on the same GameObject or its parent/children
+        parrySystem = GetComponent<ParrySystem>();
+        if (parrySystem == null)
+        {
+            parrySystem = GetComponentInParent<ParrySystem>();
+        }
+        if (parrySystem == null)
+        {
+            parrySystem = GetComponentInChildren<ParrySystem>();
+        }
         
         if (parrySystem == null)
         {
-            Debug.LogWarning("[ParryVisualFeedback] No ParrySystem found in scene!");
+            Debug.LogWarning($"[ParryVisualFeedback] No ParrySystem found on {gameObject.name} or its hierarchy!");
             return;
         }
         
@@ -54,16 +69,29 @@ public class ParryVisualFeedback : MonoBehaviour
     
     private void Update()
     {
-        if (parrySystem != null && parrySystem.IsParryWindowActive && parryTimerBar != null)
+        if (parryTimerBar != null)
         {
-            float remainingTime = parrySystem.GetRemainingParryTime();
-            float normalizedTime = remainingTime / parrySystem.ParryWindowDuration;
-            parryTimerBar.fillAmount = normalizedTime;
+            if (isTrackingAttack)
+            {
+                // Show countdown for the entire attack duration
+                float elapsedTime = Time.time - attackStartTime;
+                float normalizedTime = 1f - (elapsedTime / totalAttackTime);
+                parryTimerBar.fillAmount = Mathf.Clamp01(normalizedTime);
+            }
+            else if (parrySystem != null && parrySystem.IsParryWindowActive)
+            {
+                // Show parry window countdown (backup in case attack tracking fails)
+                float remainingTime = parrySystem.GetRemainingParryTime();
+                float normalizedTime = remainingTime / parrySystem.ParryWindowDuration;
+                parryTimerBar.fillAmount = normalizedTime;
+            }
         }
     }
     
     private void OnParryWindowOpened()
     {
+        wasMyParryWindowActive = true;
+        
         if (parryWindowIndicator != null)
         {
             parryWindowIndicator.SetActive(true);
@@ -72,12 +100,16 @@ public class ParryVisualFeedback : MonoBehaviour
         if (parryTimerBar != null)
         {
             parryTimerBar.color = parryActiveColor;
-            parryTimerBar.fillAmount = 1.0f;
+            // Don't set fillAmount to 1.0f here anymore since we're tracking the full attack
         }
     }
     
     private void OnParryWindowClosed()
     {
+        // Don't immediately set wasMyParryWindowActive to false here
+        // Let the success/failed events handle it first
+        isTrackingAttack = false;
+        
         if (parryWindowIndicator != null)
         {
             parryWindowIndicator.SetActive(false);
@@ -87,16 +119,62 @@ public class ParryVisualFeedback : MonoBehaviour
         {
             parryTimerBar.fillAmount = 0.0f;
         }
+        
+        // Delay clearing the flag to allow success/failed events to process
+        StartCoroutine(ClearParryWindowFlagDelayed());
+    }
+    
+    private System.Collections.IEnumerator ClearParryWindowFlagDelayed()
+    {
+        yield return new WaitForEndOfFrame(); // Wait one frame
+        wasMyParryWindowActive = false;
     }
     
     private void OnParrySuccess()
     {
-        ShowFeedbackMessage("PARRY SUCCESS!", parrySuccessColor);
+        if (wasMyParryWindowActive)
+        {
+            ShowFeedbackMessage("PARRY SUCCESS!", parrySuccessColor);
+            Debug.Log($"[ParryVisualFeedback] Showing PARRY SUCCESS on {gameObject.name}");
+        }
+        else
+        {
+            Debug.Log($"[ParryVisualFeedback] Not showing PARRY SUCCESS on {gameObject.name} - wasMyParryWindowActive: {wasMyParryWindowActive}");
+        }
     }
     
     private void OnParryFailed()
     {
-        ShowFeedbackMessage("PARRY FAILED", parryFailedColor);
+        if (wasMyParryWindowActive)
+        {
+            ShowFeedbackMessage("PARRY FAILED", parryFailedColor);
+            Debug.Log($"[ParryVisualFeedback] Showing PARRY FAILED on {gameObject.name}");
+        }
+        else
+        {
+            Debug.Log($"[ParryVisualFeedback] Not showing PARRY FAILED on {gameObject.name} - wasMyParryWindowActive: {wasMyParryWindowActive}");
+        }
+    }
+    
+    /// <summary>
+    /// Call this when an enemy starts attacking this character
+    /// </summary>
+    public void StartAttackCountdown(float attackDuration)
+    {
+        isTrackingAttack = true;
+        attackStartTime = Time.time;
+        totalAttackTime = attackDuration;
+        
+        if (parryTimerBar != null)
+        {
+            parryTimerBar.fillAmount = 1.0f;
+            parryTimerBar.color = parryActiveColor;
+        }
+        
+        if (parryWindowIndicator != null)
+        {
+            parryWindowIndicator.SetActive(true);
+        }
     }
     
     private void ShowFeedbackMessage(string message, Color color)
@@ -110,6 +188,10 @@ public class ParryVisualFeedback : MonoBehaviour
             
             feedbackCoroutine = StartCoroutine(DisplayFeedbackCoroutine(message, color));
         }
+        else
+        {
+            Debug.LogWarning($"[ParryVisualFeedback] parryStatusText is null on {gameObject.name}!");
+        }
     }
     
     private System.Collections.IEnumerator DisplayFeedbackCoroutine(string message, Color color)
@@ -117,8 +199,11 @@ public class ParryVisualFeedback : MonoBehaviour
         parryStatusText.text = message;
         parryStatusText.color = color;
         
+        Debug.Log($"[ParryVisualFeedback] Displaying '{message}' for {feedbackDisplayTime}s on {gameObject.name}");
+        
         yield return new WaitForSeconds(feedbackDisplayTime);
         
         parryStatusText.text = "";
+        Debug.Log($"[ParryVisualFeedback] Cleared text on {gameObject.name}");
     }
 }

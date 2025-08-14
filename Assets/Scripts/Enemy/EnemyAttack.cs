@@ -1,4 +1,3 @@
-
 using UnityEngine;
 using System.Collections;
 
@@ -22,6 +21,7 @@ public class EnemyAttack : MonoBehaviour
     private CharacterManager characterManager;
     private bool isAttacking = false;
     private ParrySystem targetParrySystem;
+    private ParryVisualFeedback targetVisualFeedback;
     
     public float AttackWindupTime => attackWindupTime;
     public float AttackHitTime => attackHitTime;
@@ -54,8 +54,13 @@ public class EnemyAttack : MonoBehaviour
             return;
         }
         
-        // Find target's parry system
+        // Find target's parry system and visual feedback
         targetParrySystem = target.GetComponent<ParrySystem>();
+        targetVisualFeedback = target.GetComponent<ParryVisualFeedback>();
+        if (targetVisualFeedback == null)
+        {
+            targetVisualFeedback = target.GetComponentInChildren<ParryVisualFeedback>();
+        }
         
         StartCoroutine(ExecuteAttackSequence());
     }
@@ -79,6 +84,11 @@ public class EnemyAttack : MonoBehaviour
         if (player != null)
         {
             targetParrySystem = player.GetComponent<ParrySystem>();
+            targetVisualFeedback = player.GetComponent<ParryVisualFeedback>();
+            if (targetVisualFeedback == null)
+            {
+                targetVisualFeedback = player.GetComponentInChildren<ParryVisualFeedback>();
+            }
         }
         
         StartCoroutine(ExecuteAttackSequence());
@@ -95,6 +105,12 @@ public class EnemyAttack : MonoBehaviour
         }
         
         OnAttackStart?.Invoke();
+        
+        // Start the visual countdown immediately when attack begins
+        if (targetVisualFeedback != null)
+        {
+            targetVisualFeedback.StartAttackCountdown(attackWindupTime);
+        }
         
         // Attack windup phase
         float windupEndTime = attackWindupTime - parryWindowStartOffset;

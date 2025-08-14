@@ -156,7 +156,7 @@ public class EnemyManager : MonoBehaviour
         int attackRoll = RollForCritical();
         if (attackRoll == 1)
         {
-            Debug.Log("Critical Fail! Attack missed.");
+            //Debug.Log("Critical Fail! Attack missed.");
             _turnManager.CompleteTurn();
             return;
         }
@@ -167,7 +167,7 @@ public class EnemyManager : MonoBehaviour
         
         if (attackRoll == 20)
         {
-            Debug.Log("Critical Hit! Double damage!");
+            //Debug.Log("Critical Hit! Double damage!");
             modifiedDamage *= 2;
         }
         

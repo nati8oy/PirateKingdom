@@ -5,8 +5,8 @@ using UnityEngine;
 public class DriveMeter
 {
     [Header("Drive Meter Settings")]
-    [SerializeField] private float maxDriveValue = 600f;
-    [SerializeField] private int totalSegments = 6;
+    [SerializeField] private float maxDriveValue = 400f;
+    [SerializeField] private int totalSegments = 4;
     [SerializeField] private float regenerationPerTurn = 50f;
     
     [Header("Current State")]

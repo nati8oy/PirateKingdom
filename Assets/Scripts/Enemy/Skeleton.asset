@@ -28,7 +28,7 @@ MonoBehaviour:
   maxHealth: 20
   attackPower: 2
   defenseValue: 3
-  speed: 2
+  speed: 4
   healThreshold: 0.3
   showDebugInfo: 0
   targetingStrategy: 1

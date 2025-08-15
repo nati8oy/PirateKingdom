@@ -990,7 +990,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 843558128197254641}
-  - component: {fileID: 3633731903919248797}
+  - component: {fileID: 5083863441337818260}
   m_Layer: 5
   m_Name: Drive Segments
   m_TagString: Untagged
@@ -1017,7 +1017,7 @@ RectTransform:
   m_AnchoredPosition: {x: 4.0382, y: -357}
   m_SizeDelta: {x: 192.68, y: 13.719}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &3633731903919248797
+--- !u!114 &5083863441337818260
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1026,7 +1026,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 686371566887458474}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
+  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
@@ -1035,12 +1035,14 @@ MonoBehaviour:
     m_Top: 0
     m_Bottom: 0
   m_ChildAlignment: 0
-  m_StartCorner: 0
-  m_StartAxis: 0
-  m_CellSize: {x: 20, y: 10}
-  m_Spacing: {x: 1, y: 0}
-  m_Constraint: 1
-  m_ConstraintCount: 6
+  m_Spacing: 3
+  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandHeight: 1
+  m_ChildControlWidth: 1
+  m_ChildControlHeight: 1
+  m_ChildScaleWidth: 0
+  m_ChildScaleHeight: 0
+  m_ReverseArrangement: 0
 --- !u!1 &750316561285093620
 GameObject:
   m_ObjectHideFlags: 0
@@ -3976,9 +3978,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   driveMeter:
-    maxDriveValue: 600
-    totalSegments: 6
-    regenerationPerTurn: 25
+    maxDriveValue: 400
+    totalSegments: 4
+    regenerationPerTurn: 32
     currentDrive: 0
     availableSegments: 0
   requiredSegments: 1
@@ -3986,7 +3988,7 @@ MonoBehaviour:
   healSelfCost: 2
   removeDebuffCost: 1
   reduceCooldownCost: 3
-  buffAttackMultiplier: 1.5
+  buffAttackMultiplier: 2
   healAmount: 100
   cooldownReduction: 1
 --- !u!114 &7376868785119859701

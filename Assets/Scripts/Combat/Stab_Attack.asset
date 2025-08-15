@@ -19,7 +19,7 @@ MonoBehaviour:
   icon: {fileID: 0}
   attackWindupTime: 1
   minDamage: 1
-  maxDamage: 2
+  maxDamage: 3
   minHeal: 0
   maxHeal: 0
   buffValue: 0

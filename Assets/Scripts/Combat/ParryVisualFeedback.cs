@@ -15,6 +15,7 @@ public class ParryVisualFeedback : MonoBehaviour
     [SerializeField] private float feedbackDisplayTime = 1.0f;
     
     private ParrySystem parrySystem;
+    private CharacterManager characterManager;
     private Coroutine feedbackCoroutine;
     private bool wasMyParryWindowActive = false;
     
@@ -40,6 +41,12 @@ public class ParryVisualFeedback : MonoBehaviour
         {
             Debug.LogWarning($"[ParryVisualFeedback] No ParrySystem found on {gameObject.name} or its hierarchy!");
             return;
+        }
+
+        characterManager = GetComponentInParent<CharacterManager>();
+        if (characterManager == null)
+        {
+            Debug.LogWarning($"[ParryVisualFeedback] No ActionsManager found in parent of {gameObject.name}!");
         }
         
         // Subscribe to parry system events
@@ -134,7 +141,9 @@ public class ParryVisualFeedback : MonoBehaviour
     {
         if (wasMyParryWindowActive)
         {
-            ShowFeedbackMessage("PARRY!", parrySuccessColor);
+            //ShowFeedbackMessage("PARRY!", parrySuccessColor);
+            characterManager.Parry();
+            
             Debug.Log($"[ParryVisualFeedback] Showing PARRY SUCCESS on {gameObject.name}");
         }
         else

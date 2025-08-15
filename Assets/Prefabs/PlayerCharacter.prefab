@@ -3548,7 +3548,7 @@ MonoBehaviour:
   healthBar: {fileID: 6854843975597813551}
   characterName: {fileID: 628673213663764507}
   hp: {fileID: 5313392326203973815}
-  healthModifier: {fileID: 1656511942984017652}
+  actionStatusText: {fileID: 1656511942984017652}
   turnMarker: {fileID: 5687122472208313648}
   damageFeedback: {fileID: 885933774631715721}
   healFeedback: {fileID: 4983943415798328104}
@@ -3978,7 +3978,7 @@ MonoBehaviour:
   driveMeter:
     maxDriveValue: 600
     totalSegments: 6
-    regenerationPerTurn: 50
+    regenerationPerTurn: 25
     currentDrive: 0
     availableSegments: 0
   requiredSegments: 1
@@ -4049,7 +4049,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03a7b999cb195472badc68ed1a9e94ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  parryWindowDuration: 0.4
+  parryWindowDuration: 0.3
   parryDriveBonus: 50
   parryInputAction: {fileID: -8579836174245486989, guid: c0cae3b66c01c490783d28589588060b, type: 3}
   showDebugInfo: 0

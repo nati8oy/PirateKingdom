@@ -10,6 +10,17 @@ public class Enemy : Character
     [SerializeField] 
     public bool showDebugInfo = false;
     
+    public enum TargetingStrategy
+    {
+        Random,
+        LowestHealth,
+        HighestHealth,
+        ClosestToDefeating
+    }
+
+    [Header("AI Targeting")]
+    public TargetingStrategy targetingStrategy = TargetingStrategy.Random;
+    
     [Header("Action Weights (Higher = More Likely)")]
     [SerializeField, Range(0f, 1f)] 
     public float attackWeight = 0.7f;

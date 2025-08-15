@@ -17,8 +17,9 @@ MonoBehaviour:
   targetType: 0
   cooldown: 0
   icon: {fileID: 0}
-  minDamage: 5
-  maxDamage: 5
+  attackWindupTime: 1
+  minDamage: 1
+  maxDamage: 2
   minHeal: 0
   maxHeal: 0
   buffValue: 0

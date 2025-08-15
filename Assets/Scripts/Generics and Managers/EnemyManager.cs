@@ -253,37 +253,153 @@ public class EnemyManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Selects the appropriate target based on the action type
+    /// Selects the appropriate target based on the action type and strategic considerations
     /// </summary>
     private CharacterManager SelectTarget(Action action)
     {
         switch (action.targetType)
         {
             case Action.TargetType.SingleEnemy:
-                // Target random player
+                // Target player based on strategy
                 RefreshTargetList();
                 if (_playerCharacters.Count > 0)
                 {
-                    var validTargets = _playerCharacters.Where(p => p != null && p.GetComponent<CharacterManager>() != null).ToList();
+                    var validTargets = _playerCharacters
+                        .Where(p => p != null && p.GetComponent<CharacterManager>() != null)
+                        .Select(p => p.GetComponent<CharacterManager>())
+                        .ToList();
+                
                     if (validTargets.Count > 0)
                     {
-                        return validTargets[Random.Range(0, validTargets.Count)].GetComponent<CharacterManager>();
+                        return SelectPlayerTarget(validTargets);
                     }
                 }
                 break;
-                
+            
             case Action.TargetType.SingleAlly:
                 // Target self or ally (for now just target self)
                 return _characterManager;
-                
+            
             case Action.TargetType.AllAllies:
             case Action.TargetType.AllEnemies:
                 // For AoE actions, we can still return the primary target
                 // The action execution logic can handle multiple targets
                 return _characterManager; // or a primary enemy target
         }
-        
+    
         return null;
+    }
+
+    /// <summary>
+    /// Selects a player target based on strategic AI behavior
+    /// </summary>
+    private CharacterManager SelectPlayerTarget(List<CharacterManager> validTargets)
+    {
+        if (validTargets.Count == 0) return null;
+        if (validTargets.Count == 1) return validTargets[0];
+    
+        // If enemyData has targeting preferences, use them
+        if (enemyData != null && enemyData.targetingStrategy != null)
+        {
+            switch (enemyData.targetingStrategy)
+            {
+                case Enemy.TargetingStrategy.LowestHealth:
+                    return GetLowestHealthTarget(validTargets);
+                
+                case Enemy.TargetingStrategy.HighestHealth:
+                    return GetHighestHealthTarget(validTargets);
+                
+                case Enemy.TargetingStrategy.Random:
+                    return validTargets[Random.Range(0, validTargets.Count)];
+                
+                case Enemy.TargetingStrategy.ClosestToDefeating:
+                    return GetClosestToDefeatingTarget(validTargets);
+                
+                default:
+                    return validTargets[Random.Range(0, validTargets.Count)];
+            }
+        }
+    
+        // Default to random if no strategy specified
+        return validTargets[Random.Range(0, validTargets.Count)];
+    }
+
+    /// <summary>
+    /// Gets the player with the lowest current health
+    /// </summary>
+    private CharacterManager GetLowestHealthTarget(List<CharacterManager> targets)
+    {
+        CharacterManager lowestHealthTarget = targets[0];
+        float lowestHealth = lowestHealthTarget.GetCurrentHealth();
+    
+        foreach (var target in targets)
+        {
+            float currentHealth = target.GetCurrentHealth();
+            if (currentHealth < lowestHealth)
+            {
+                lowestHealth = currentHealth;
+                lowestHealthTarget = target;
+            }
+        }
+    
+        if (enemyData != null && enemyData.showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} targeting {lowestHealthTarget.name} with lowest health: {lowestHealth}");
+        }
+    
+        return lowestHealthTarget;
+    }
+
+    /// <summary>
+    /// Gets the player with the highest current health
+    /// </summary>
+    private CharacterManager GetHighestHealthTarget(List<CharacterManager> targets)
+    {
+        CharacterManager highestHealthTarget = targets[0];
+        float highestHealth = highestHealthTarget.GetCurrentHealth();
+    
+        foreach (var target in targets)
+        {
+            float currentHealth = target.GetCurrentHealth();
+            if (currentHealth > highestHealth)
+            {
+                highestHealth = currentHealth;
+                highestHealthTarget = target;
+            }
+        }
+    
+        if (enemyData != null && enemyData.showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} targeting {highestHealthTarget.name} with highest health: {highestHealth}");
+        }
+    
+        return highestHealthTarget;
+    }
+
+    /// <summary>
+    /// Gets the player who is closest to being defeated (lowest health percentage)
+    /// </summary>
+    private CharacterManager GetClosestToDefeatingTarget(List<CharacterManager> targets)
+    {
+        CharacterManager closestToDeathTarget = targets[0];
+        float lowestHealthPercentage = closestToDeathTarget.GetCurrentHealth() / closestToDeathTarget.MaxHealth;
+    
+        foreach (var target in targets)
+        {
+            float healthPercentage = target.GetCurrentHealth() / target.MaxHealth;
+            if (healthPercentage < lowestHealthPercentage)
+            {
+                lowestHealthPercentage = healthPercentage;
+                closestToDeathTarget = target;
+            }
+        }
+    
+        if (enemyData != null && enemyData.showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} targeting {closestToDeathTarget.name} closest to defeat: {lowestHealthPercentage:P}");
+        }
+    
+        return closestToDeathTarget;
     }
 
     private void PerformAction(CharacterManager targetManager)

@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
   m_Name: Skeleton
   m_EditorClassIdentifier: 
-  characterName: Minion
+  characterName: Skeleton
   actionSlots:
-  - {fileID: 11400000, guid: 73a4ecfd977dd472f9765f6ca8453fcf, type: 2}
-  - {fileID: 11400000, guid: 78db0287b308f4a85b69ade23cccb503, type: 2}
-  - {fileID: 11400000, guid: 1553474a3508b43d4a454c6e3c39ef33, type: 2}
+  - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
@@ -25,13 +25,15 @@ MonoBehaviour:
   reputation: 0
   characterClass: 0
   allegiance: 1
-  maxHealth: 75
-  attackPower: 5
+  maxHealth: 20
+  attackPower: 2
   defenseValue: 3
-  speed: 3
-  enemyType: 0
-  difficulty: 1
-  commonDropRate: 0.6
-  rareDropRate: 0.3
-  uniqueDropRate: 0.1
-  targetingStrategy: 0
+  speed: 4
+  healThreshold: 0.3
+  showDebugInfo: 0
+  targetingStrategy: 1
+  attackWeight: 0.7
+  healWeight: 0
+  buffWeight: 0.15
+  debuffWeight: 0.2
+  randomnessAmount: 0.1

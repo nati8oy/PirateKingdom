@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MoreMountains.Feedbacks;
+using UnityEngine.Serialization;
 
 public class CharacterManager : MonoBehaviour
 {
@@ -11,7 +12,7 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Scriptable object containing the character's base stats and information")]
     public Character characterData;
     [Tooltip("Current health value of the character")]
-    private float CurrentHealth;
+    public float CurrentHealth;
     [Tooltip("Maximum health value the character can have")]
     public float MaxHealth;
     [Tooltip("Character's attack power used for damage calculations")]
@@ -29,7 +30,8 @@ public class CharacterManager : MonoBehaviour
     [SerializeField] private Slider healthBar;
     [SerializeField] TMP_Text characterName;
     [SerializeField] private TMP_Text hp;
-    [SerializeField] private TMP_Text healthModifier;
+    [FormerlySerializedAs("healthModifier")] [SerializeField] private TMP_Text actionStatusText;
+    
     public Image turnMarker;
 
     [Header("Feedback Players")]
@@ -39,6 +41,7 @@ public class CharacterManager : MonoBehaviour
     public MMF_Player healFeedback;
     [Tooltip("Feeback player for missing or dodges")]
     public MMF_Player missFeedback;
+    [SerializeField] private MMF_Player parryFeedback;
     public MMF_Player feedbackPlayer;
     
     public delegate void OnDeathHandler();
@@ -60,7 +63,7 @@ public class CharacterManager : MonoBehaviour
     {
         driveManager = GetComponent<DriveManager>();
         
-        healthModifier.enabled = false;
+        actionStatusText.enabled = false;
         characterName.text = characterData.characterName;
         
         if (characterData != null)
@@ -130,8 +133,8 @@ public class CharacterManager : MonoBehaviour
 
     public void TakeDamage(float damage)
     {
-        healthModifier.enabled = true;
-        healthModifier.text = "-" + Mathf.Round(damage);
+        actionStatusText.enabled = true;
+        actionStatusText.text = "-" + Mathf.Round(damage);
         damageFeedback.PlayFeedbacks();
     
         float roundedDamage = Mathf.Round(damage);
@@ -213,8 +216,8 @@ public class CharacterManager : MonoBehaviour
             }
         }
         
-        healthModifier.enabled = true;
-        healthModifier.text = "+" + Mathf.Round(amount);
+        actionStatusText.enabled = true;
+        actionStatusText.text = "+" + Mathf.Round(amount);
         healFeedback.PlayFeedbacks();
         
         float roundedHeal = Mathf.Round(amount);
@@ -235,9 +238,16 @@ public class CharacterManager : MonoBehaviour
 
     public void Miss()
     {
-        healthModifier.enabled = true;
-        healthModifier.text = "Missed!";
+        actionStatusText.enabled = true;
+        actionStatusText.text = "Missed!";
         missFeedback.PlayFeedbacks();
+    }
+    
+    public void Parry()
+    {
+        actionStatusText.enabled = true;
+        actionStatusText.text = "Parry!";
+        parryFeedback.PlayFeedbacks();
     }
 
     private void UpdateHealthBar()
@@ -262,7 +272,7 @@ public class CharacterManager : MonoBehaviour
 
     public void HideHealthUI()
     {
-        healthModifier.enabled = false;
+        actionStatusText.enabled = false;
     }
     
     
@@ -306,5 +316,10 @@ public class CharacterManager : MonoBehaviour
     public DriveManager GetDriveManager()
     {
         return driveManager;
+    }
+    // Add this method to access current health
+    public float GetCurrentHealth() 
+    { 
+        return CurrentHealth; 
     }
 }

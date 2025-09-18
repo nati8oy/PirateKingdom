@@ -26,7 +26,7 @@ public class Action : ScriptableObject
     public ActionType actionType;
     public TargetType targetType;
     public float cooldown;
-    public Sprite icon;
+    public Sprite actionIcon;
 
     [Header("Attack Timing")]
     [SerializeField] private float attackWindupTime = 1.0f; // Default 1 second

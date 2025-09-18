@@ -36,6 +36,10 @@ public class ActionsManager : MonoBehaviour
             Button button = actionSlot.GetComponent<Button>();
             TMP_Text actionText = actionSlot.GetComponentInChildren<TMP_Text>();
             
+            // Find the specific image component named "img_icon"
+            Transform iconTransform = actionSlot.transform.Find("img_icon");
+            Image actionIconImage = iconTransform?.GetComponent<Image>();
+            
             // Check if action is available (not on cooldown)
             bool isAvailable = character.IsActionAvailable(action);
             int cooldownRemaining = character.GetActionCooldownRemaining(action);
@@ -53,6 +57,33 @@ public class ActionsManager : MonoBehaviour
             else
             {
                 Debug.LogWarning($"No Button component found on actionSlotPrefab!");
+            }
+            
+            // Set the action icon
+            if (actionIconImage != null && action.actionIcon != null)
+            {
+                actionIconImage.sprite = action.actionIcon;
+                
+                // If action is on cooldown, gray out the icon
+                if (!isAvailable)
+                {
+                    actionIconImage.color = Color.gray;
+                }
+                else
+                {
+                    actionIconImage.color = Color.white; // Reset to normal color
+                }
+            }
+            else
+            {
+                if (actionIconImage == null)
+                {
+                    Debug.LogWarning($"No Image component found on 'img_icon' in actionSlotPrefab for {action.actionName}!");
+                }
+                if (action.actionIcon == null)
+                {
+                    Debug.LogWarning($"Action {action.actionName} has no actionIcon sprite assigned!");
+                }
             }
             
             if (actionText != null)

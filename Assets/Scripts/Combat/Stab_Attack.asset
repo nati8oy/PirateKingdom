@@ -16,7 +16,7 @@ MonoBehaviour:
   actionType: 0
   targetType: 0
   cooldown: 0
-  icon: {fileID: 0}
+  actionIcon: {fileID: 0}
   attackWindupTime: 1
   minDamage: 1
   maxDamage: 3

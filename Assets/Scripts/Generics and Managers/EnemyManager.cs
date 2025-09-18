@@ -67,30 +67,26 @@ public class EnemyManager : MonoBehaviour
         RefreshTargetList();
     }
 
-    public void RefreshTargetList()
-    {
-        _playerCharacters.Clear();
-        GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
-        
-        // Filter out null/destroyed objects
-        foreach (GameObject player in players)
-        {
-            if (player != null && player.GetComponent<CharacterManager>() != null)
-            {
-                _playerCharacters.Add(player);
-            }
-        }
-    }
-    
-    public void EnemyTurnAction()
-    {
-        Invoke(nameof(ExecuteEnemyAction), enemyActionDelay);
-    }
-
     private void ExecuteEnemyAction()
     {
+        // Check if this enemy is still alive before executing action
+        if (_characterManager == null || _characterManager.gameObject == null)
+        {
+            Debug.Log($"[EnemyManager] Enemy {gameObject.name} is dead, skipping turn...");
+            _turnManager.CompleteTurn();
+            return;
+        }
+        
         // Refresh the target list to remove any destroyed characters
         RefreshTargetList();
+        
+        // Check if there are any valid targets left
+        if (_playerCharacters.Count == 0)
+        {
+            Debug.Log($"[EnemyManager] No valid targets for {gameObject.name}, completing turn...");
+            _turnManager.CompleteTurn();
+            return;
+        }
         
         // Choose the best action for this turn
         _selectedAction = ChooseBestAction();
@@ -119,6 +115,44 @@ public class EnemyManager : MonoBehaviour
             _turnManager.CompleteTurn();
         }
     }
+
+    public void RefreshTargetList()
+    {
+        _playerCharacters.Clear();
+        GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
+        
+        // Filter out null/destroyed objects and ensure they have valid CharacterManager components
+        foreach (GameObject player in players)
+        {
+            if (player != null && 
+                player.GetComponent<CharacterManager>() != null &&
+                player.GetComponent<CharacterManager>().gameObject != null &&
+                player.GetComponent<CharacterManager>().characterData != null)
+            {
+                _playerCharacters.Add(player);
+            }
+        }
+        
+        if (enemyData != null && enemyData.showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} found {_playerCharacters.Count} valid player targets");
+        }
+    }
+    
+    public void EnemyTurnAction()
+    {
+        // Check if this enemy is still alive before starting turn actions
+        if (_characterManager == null || _characterManager.gameObject == null)
+        {
+            Debug.Log($"[EnemyManager] Enemy {gameObject.name} is dead, cannot take turn");
+            _turnManager.CompleteTurn();
+            return;
+        }
+        
+        Invoke(nameof(ExecuteEnemyAction), enemyActionDelay);
+    }
+
+    
     
     /// <summary>
     /// Chooses the best action based on current battle conditions and Enemy scriptable object settings
@@ -261,11 +295,14 @@ public class EnemyManager : MonoBehaviour
         {
             case Action.TargetType.SingleEnemy:
                 // Target player based on strategy
-                RefreshTargetList();
+                RefreshTargetList(); // Refresh again to be extra sure
                 if (_playerCharacters.Count > 0)
                 {
                     var validTargets = _playerCharacters
-                        .Where(p => p != null && p.GetComponent<CharacterManager>() != null)
+                        .Where(p => p != null && 
+                                   p.GetComponent<CharacterManager>() != null &&
+                                   p.GetComponent<CharacterManager>().gameObject != null &&
+                                   p.GetComponent<CharacterManager>().characterData != null)
                         .Select(p => p.GetComponent<CharacterManager>())
                         .ToList();
                 
@@ -273,18 +310,26 @@ public class EnemyManager : MonoBehaviour
                     {
                         return SelectPlayerTarget(validTargets);
                     }
+                    else
+                    {
+                        Debug.LogWarning($"[EnemyManager] No valid player targets found for {gameObject.name}");
+                    }
                 }
                 break;
             
             case Action.TargetType.SingleAlly:
                 // Target self or ally (for now just target self)
-                return _characterManager;
+                if (_characterManager != null && _characterManager.gameObject != null)
+                {
+                    return _characterManager;
+                }
+                break;
             
             case Action.TargetType.AllAllies:
             case Action.TargetType.AllEnemies:
                 // For AoE actions, we can still return the primary target
                 // The action execution logic can handle multiple targets
-                return _characterManager; // or a primary enemy target
+                return _characterManager;
         }
     
         return null;
@@ -299,7 +344,7 @@ public class EnemyManager : MonoBehaviour
         if (validTargets.Count == 1) return validTargets[0];
     
         // If enemyData has targeting preferences, use them
-        if (enemyData != null && enemyData.targetingStrategy != null)
+        if (enemyData != null)
         {
             switch (enemyData.targetingStrategy)
             {

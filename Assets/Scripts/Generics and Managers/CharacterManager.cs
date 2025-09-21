@@ -36,11 +36,13 @@ public class CharacterManager : MonoBehaviour
 
     [Header("Feedback Players")]
     [Tooltip("Feeback player for damage")]
-    public MMF_Player damageFeedback;
-    [Tooltip("Feeback player for healing")]
+    public MMF_Player dealDamageFeedback;
+    [Tooltip("Feedback player for healing")]
     public MMF_Player healFeedback;
-    [Tooltip("Feeback player for missing or dodges")]
+    [Tooltip("Feedback player for missing or dodges")]
     public MMF_Player missFeedback;
+     [Tooltip("Feedback player for dying")]
+    public MMF_Player deathFeedback;
     [SerializeField] private MMF_Player parryFeedback;
     public MMF_Player feedbackPlayer;
     
@@ -135,7 +137,7 @@ public class CharacterManager : MonoBehaviour
     {
         actionStatusText.enabled = true;
         actionStatusText.text = "-" + Mathf.Round(damage);
-        damageFeedback.PlayFeedbacks();
+        dealDamageFeedback.PlayFeedbacks();
     
         float roundedDamage = Mathf.Round(damage);
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
@@ -145,7 +147,9 @@ public class CharacterManager : MonoBehaviour
 
         if (CurrentHealth <= 0)
         {
+            deathFeedback.PlayFeedbacks();
             OnDeath?.Invoke();
+            
         }
     
         // Add damage taken to drive meter through DriveManager

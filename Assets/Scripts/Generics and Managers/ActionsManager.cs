@@ -37,7 +37,7 @@ public class ActionsManager : MonoBehaviour
             TMP_Text actionText = actionSlot.GetComponentInChildren<TMP_Text>();
             
             // Find the specific image component named "img_icon"
-            Transform iconTransform = actionSlot.transform.Find("img_icon");
+            Transform iconTransform = actionSlot.transform.Find("action_icon/img_icon");
             Image actionIconImage = iconTransform?.GetComponent<Image>();
             
             // Check if action is available (not on cooldown)

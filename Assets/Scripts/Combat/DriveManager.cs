@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MoreMountains.Feedbacks;
+
 
 public enum DriveAction
 {
@@ -26,6 +28,9 @@ public class DriveManager : MonoBehaviour
     [SerializeField] private float buffAttackMultiplier = 1.5f;
     [SerializeField] private float healAmount = 100f;
     [SerializeField] private int cooldownReduction = 1;
+    
+    [Tooltip("Feeback player for using drive")]
+    public MMF_Player driveFeedbacks;
     
     private CharacterManager characterManager;
     private bool nextAttackBuffed;
@@ -86,6 +91,7 @@ public class DriveManager : MonoBehaviour
             driveMeter.UseSegments(cost);
             OnDriveActionAttempted?.Invoke(action, true);
             Debug.Log($"{characterManager?.characterData?.characterName ?? gameObject.name} used {action} for {cost} segments");
+            
             return true;
         }
         
@@ -291,6 +297,8 @@ public class DriveManager : MonoBehaviour
         // Check if character has enough drive segments to enter drive mode (e.g., 3 segments)
         if (Drive.CanUseSegments(requiredSegments))
         {
+            driveFeedbacks.PlayFeedbacks();
+            
             Drive.UseSegments(requiredSegments); // Consume the segments
             isDriveMode = true;
         

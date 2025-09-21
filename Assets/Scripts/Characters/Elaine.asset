@@ -15,7 +15,7 @@ MonoBehaviour:
   characterName: Elaine
   actionSlots:
   - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}

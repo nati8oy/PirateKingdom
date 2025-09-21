@@ -145,6 +145,8 @@ public class CombatController : MonoBehaviour
     {
         case Action.ActionType.Attack:
             int attackRoll = HitChanceRoll();
+            
+            
             if (attackRoll == 1)
             {
                 Debug.Log("Critical Fail! Attack missed.");

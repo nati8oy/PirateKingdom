@@ -7,6 +7,10 @@ public class ParrySystem : MonoBehaviour
     [SerializeField] private float parryWindowDuration = 0.3f;
     [SerializeField] private float parryDriveBonus = 50f;
     
+    [Header("Audio")]
+    [SerializeField] private AudioClip parrySuccessSound;
+    [SerializeField] private AudioSource audioSource;
+    
     [Header("Input")]
     [SerializeField] private InputActionReference parryInputAction;
     
@@ -36,6 +40,16 @@ public class ParrySystem : MonoBehaviour
         if (characterManager == null)
         {
             Debug.LogError("[ParrySystem] No CharacterManager found on this GameObject!");
+        }
+        
+        // Get or create AudioSource component
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
         }
     }
     
@@ -175,6 +189,9 @@ public class ParrySystem : MonoBehaviour
             Debug.Log($"[ParrySystem] Successful parry on {gameObject.name}!");
         }
         
+        // Play parry success sound
+        PlayParrySound();
+        
         // Close parry window immediately
         ForceCloseParryWindow();
         
@@ -194,6 +211,21 @@ public class ParrySystem : MonoBehaviour
         }
         
         OnParrySuccess?.Invoke();
+    }
+    
+    /// <summary>
+    /// Plays the parry success sound effect
+    /// </summary>
+    private void PlayParrySound()
+    {
+        if (parrySuccessSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(parrySuccessSound);
+        }
+        else if (showDebugInfo)
+        {
+            Debug.Log($"[ParrySystem] Parry sound not configured on {gameObject.name}");
+        }
     }
     
     /// <summary>

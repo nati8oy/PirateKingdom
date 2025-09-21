@@ -14,9 +14,6 @@ public class Character : ScriptableObject
     [SerializeField] public float reputation = 0f;
     
     [Header("Audio")]
-    [Tooltip("Sound effect played when this character attacks")]
-    public AudioClip attackSoundEffect;
-    
     [Tooltip("Sound effect played when this character dies")]
     public AudioClip deathSoundEffect;
 

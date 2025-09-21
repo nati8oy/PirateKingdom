@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -29,12 +30,17 @@ public class DriveManager : MonoBehaviour
     [SerializeField] private float healAmount = 100f;
     [SerializeField] private int cooldownReduction = 1;
     
+    [Header("Audio")]
+    [SerializeField] private AudioClip driveSegmentUnlockedSound;
+    [SerializeField] private AudioSource audioSource;
+    
     [Tooltip("Feeback player for using drive")]
     public MMF_Player driveFeedbacks;
     
     private CharacterManager characterManager;
     private bool nextAttackBuffed;
     private bool isDriveMode = false;
+    private int previousSegmentCount = 0; // Track previous segments for audio
     
     public DriveMeter Drive => driveMeter;
     public bool NextAttackBuffed => nextAttackBuffed;
@@ -49,6 +55,20 @@ public class DriveManager : MonoBehaviour
     {
         characterManager = GetComponent<CharacterManager>();
         driveMeter.Initialize();
+        previousSegmentCount = driveMeter.AvailableSegments;
+        
+        // Get or create AudioSource component
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+        
+        // Subscribe to drive meter events
+        driveMeter.OnSegmentsChanged += OnSegmentsChanged;
     }
     
     void Start()
@@ -56,6 +76,46 @@ public class DriveManager : MonoBehaviour
         if (characterManager == null)
         {
             Debug.LogError($"DriveManager on {gameObject.name} requires a CharacterManager component!");
+        }
+    }
+    
+    void OnDestroy()
+    {
+        // Unsubscribe from events to prevent memory leaks
+        if (driveMeter != null)
+        {
+            driveMeter.OnSegmentsChanged -= OnSegmentsChanged;
+        }
+    }
+    
+    private void OnSegmentsChanged(int newSegmentCount)
+    {
+        // Only play sound if segments increased (not decreased) and this is a player character
+        if (newSegmentCount > previousSegmentCount && IsPlayerCharacter())
+        {
+            PlayDriveSegmentUnlockedSound();
+        }
+        
+        previousSegmentCount = newSegmentCount;
+    }
+    
+    private bool IsPlayerCharacter()
+    {
+        // Check if this character is a player character (not an enemy)
+        if (characterManager?.characterData != null)
+        {
+            return characterManager.characterData.allegiance == Character.Allegiance.Player;
+        }
+        
+        return false; // Default to false if we can't determine
+    }
+    
+    private void PlayDriveSegmentUnlockedSound()
+    {
+        if (driveSegmentUnlockedSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(driveSegmentUnlockedSound);
+            Debug.Log($"Drive segment unlocked sound played for {characterManager?.characterData?.characterName ?? gameObject.name}");
         }
     }
     

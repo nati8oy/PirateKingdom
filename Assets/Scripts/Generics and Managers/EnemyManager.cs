@@ -572,15 +572,21 @@ public class EnemyManager : MonoBehaviour
         if (wasParried)
         {
             Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried by {_pendingTarget.name}!");
-            // No damage dealt
+            
+            // Call the parry method instead of TakeDamage
+            if (_pendingTarget != null)
+            {
+                _pendingTarget.OnAttackParried();
+            }
         }
         else
         {
             Debug.Log($"[EnemyManager] {gameObject.name}'s attack hit {_pendingTarget.name} for {_pendingDamage} damage!");
-            // Apply the calculated damage
+            
+            // Apply the calculated damage with wasParried = false (default)
             if (_pendingTarget != null)
             {
-                _pendingTarget.TakeDamage(_pendingDamage);
+                _pendingTarget.TakeDamage(_pendingDamage, false);
             }
         }
         

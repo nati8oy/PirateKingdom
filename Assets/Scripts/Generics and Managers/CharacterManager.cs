@@ -94,14 +94,42 @@ public class CharacterManager : MonoBehaviour
         {
             isDead = true;
             
-            // Play character-specific death audio
-            if (deathAudioFeedback != null)
-            {
-                deathAudioFeedback.PlayFeedbacks();
-            }
+            // Play character-specific death audio from scriptable object
+            PlayDeathAudio();
             
             OnDeath?.Invoke();
             Destroy(gameObject);
+        }
+    }
+    
+    /// <summary>
+    /// Plays the death audio from the character's scriptable object data
+    /// Falls back to the MMF_Player if no AudioClip is assigned in the scriptable object
+    /// </summary>
+    private void PlayDeathAudio()
+    {
+        // First try to use the AudioClip from the Character scriptable object
+        if (characterData != null && characterData.deathSoundEffect != null)
+        {
+            // Get or create an AudioSource component
+            AudioSource audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
+            
+            audioSource.PlayOneShot(characterData.deathSoundEffect);
+            Debug.Log($"Playing death sound from scriptable object for {characterData.characterName}");
+        }
+        // Fallback to MMF_Player if no AudioClip is set in scriptable object
+        else if (deathAudioFeedback != null)
+        {
+            deathAudioFeedback.PlayFeedbacks();
+            Debug.Log($"Playing death sound from MMF_Player for {characterData?.characterName ?? gameObject.name}");
+        }
+        else
+        {
+            Debug.LogWarning($"No death sound configured for {characterData?.characterName ?? gameObject.name}");
         }
     }
 
@@ -143,29 +171,25 @@ public class CharacterManager : MonoBehaviour
         Debug.LogWarning($"OnRoundComplete() is deprecated for {characterData.characterName}. Buffs are now updated per turn.");
     }
 
-    public void TakeDamage(float damage)
+    public void TakeDamage(float damage, bool wasParried = false)
     {
         actionStatusText.enabled = true;
         actionStatusText.text = "-" + Mathf.Round(damage);
-        dealDamageFeedback.PlayFeedbacks();
+        
+        // Only play damage feedback if it wasn't a parry
+        if (!wasParried)
+        {
+            dealDamageFeedback.PlayFeedbacks();
+            feedbackPlayer.PlayFeedbacks();
+        }
     
         float roundedDamage = Mathf.Round(damage);
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
         UpdateHealthBar();
 
-        feedbackPlayer.PlayFeedbacks();
-
         if (CurrentHealth <= 0)
         {
-            
-            // Remove the duplicate death audio call here since it's handled in Update()
-            // if (deathAudioFeedback != null)
-            // {
-            //     deathAudioFeedback.PlayFeedbacks();
-            // }
-            
             OnDeath?.Invoke();
-            
         }
     
         // Add damage taken to drive meter through DriveManager
@@ -173,6 +197,24 @@ public class CharacterManager : MonoBehaviour
         {
             driveManager.Drive.AddDrive(damage);
         }
+    }
+    
+    /// <summary>
+    /// Handles when an attack is successfully parried
+    /// </summary>
+    public void OnAttackParried()
+    {
+        actionStatusText.enabled = true;
+        actionStatusText.text = "Parry!";
+        
+        // Play parry feedback instead of damage feedback
+        if (parryFeedback != null)
+        {
+            parryFeedback.PlayFeedbacks();
+        }
+        
+        // Add drive bonus for successful parry (already handled in ParrySystem)
+        // No health reduction since attack was parried
     }
 
     public void DealDamage(CharacterManager target, float damage)

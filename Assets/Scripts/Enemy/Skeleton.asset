@@ -23,6 +23,8 @@ MonoBehaviour:
   availableActions: []
   level: 1
   reputation: 0
+  attackSoundEffect: {fileID: 0}
+  deathSoundEffect: {fileID: 0}
   characterClass: 0
   allegiance: 1
   maxHealth: 20

@@ -144,8 +144,10 @@ public class CombatController : MonoBehaviour
     switch (selectedAction.actionType)
     {
         case Action.ActionType.Attack:
-            int attackRoll = HitChanceRoll();
+            // Play attack audio immediately when attack action starts
+            currentCharacter.PlayAttackAudio();
             
+            int attackRoll = HitChanceRoll();
             
             if (attackRoll == 1)
             {
@@ -211,7 +213,6 @@ public class CombatController : MonoBehaviour
             }
             break;
 
-// Example in your combat handler
         case Action.ActionType.Heal:
             int healRoll = HitChanceRoll();
             float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);

@@ -1,4 +1,3 @@
-
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -41,10 +40,14 @@ public class CharacterManager : MonoBehaviour
     public MMF_Player healFeedback;
     [Tooltip("Feedback player for missing or dodges")]
     public MMF_Player missFeedback;
-     [Tooltip("Feedback player for dying")]
-    public MMF_Player deathFeedback;
     [SerializeField] private MMF_Player parryFeedback;
     public MMF_Player feedbackPlayer;
+    
+    [Header("Character-Specific Audio")]
+    [Tooltip("MMF_Player for this character's attack audio (configure with MMF_AudioSource)")]
+    public MMF_Player attackAudioFeedback;
+    [Tooltip("MMF_Player for this character's death audio (configure with MMF_AudioSource)")]
+    public MMF_Player deathAudioFeedback;
     
     public delegate void OnDeathHandler();
     public event OnDeathHandler OnDeath;
@@ -90,6 +93,13 @@ public class CharacterManager : MonoBehaviour
         if (!isDead && CurrentHealth <= 0)
         {
             isDead = true;
+            
+            // Play character-specific death audio
+            if (deathAudioFeedback != null)
+            {
+                deathAudioFeedback.PlayFeedbacks();
+            }
+            
             OnDeath?.Invoke();
             Destroy(gameObject);
         }
@@ -147,7 +157,13 @@ public class CharacterManager : MonoBehaviour
 
         if (CurrentHealth <= 0)
         {
-            deathFeedback.PlayFeedbacks();
+            
+            // Remove the duplicate death audio call here since it's handled in Update()
+            // if (deathAudioFeedback != null)
+            // {
+            //     deathAudioFeedback.PlayFeedbacks();
+            // }
+            
             OnDeath?.Invoke();
             
         }
@@ -195,7 +211,16 @@ public class CharacterManager : MonoBehaviour
         return baseAttack;
     }
     
-    // Single method that handles all action types (attack, heal, etc.)
+    // Separate method for just playing attack audio without drive effects
+    public void PlayAttackAudio()
+    {
+        if (attackAudioFeedback != null)
+        {
+            attackAudioFeedback.PlayFeedbacks();
+        }
+    }
+
+    // Method that handles drive mode consumption and buffs (no audio)
     public void OnAttackPerformed()
     {
         driveManager?.ConsumeAttackBuff();

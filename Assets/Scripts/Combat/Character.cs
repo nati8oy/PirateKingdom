@@ -12,6 +12,14 @@ public class Character : ScriptableObject
     [SerializeField] private List<Action> availableActions = new List<Action>();
     public int level = 1;
     [SerializeField] public float reputation = 0f;
+    
+    [Header("Audio")]
+    [Tooltip("Sound effect played when this character attacks")]
+    public AudioClip attackSoundEffect;
+    
+    [Tooltip("Sound effect played when this character dies")]
+    public AudioClip deathSoundEffect;
+
     public enum CharacterClass
     {
         Duelist,

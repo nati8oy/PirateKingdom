@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -62,10 +63,10 @@ public class ActionsManager : MonoBehaviour
                     Debug.Log($"Button clicked for action: {action.actionName}");
                     FindObjectOfType<CombatController>().SelectAction(action);
                     
-                    // Update tooltip to show action selected state
+                    // Update tooltip to show action info without the "selected" text
                     if (TooltipUI.Instance != null)
                     {
-                        TooltipUI.Instance.ShowCustomText($"<b>{action.actionName}</b> selected\nHover over a target to see combat details");
+                        TooltipUI.Instance.ShowActionTooltip(action);
                     }
                 });
             }

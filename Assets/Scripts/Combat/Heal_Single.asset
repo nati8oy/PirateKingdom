@@ -20,7 +20,7 @@ MonoBehaviour:
   attackWindupTime: 1
   minDamage: 0
   maxDamage: 0
-  minHeal: 5
+  minHeal: 3
   maxHeal: 5
   buffValue: 0
   duration: 0

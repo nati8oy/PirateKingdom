@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using TMPro;
 
@@ -71,7 +72,15 @@ public class TooltipUI : MonoBehaviour
             return;
         }
         
-        string tooltipContent = $"<b>Target: {target.characterData.characterName}</b>\n";
+        // Check if this is a valid target for the selected action
+        if (!IsValidTarget(selectedAction, target))
+        {
+            // Show just the character name and HP without combat details
+            tooltipText.text = $"<b>{target.characterData.characterName} ({target.CurrentHealth:F0}/{target.MaxHealth:F0} HP)</b>";
+            return;
+        }
+        
+        string tooltipContent = $"<b>{target.characterData.characterName} ({target.CurrentHealth:F0}/{target.MaxHealth:F0} HP)</b>\n";
         
         switch (selectedAction.actionType)
         {
@@ -147,6 +156,26 @@ public class TooltipUI : MonoBehaviour
         }
         
         tooltipText.text = tooltipContent;
+    }
+    
+    private bool IsValidTarget(Action action, CharacterManager target)
+    {
+        if (action == null || target == null)
+            return false;
+
+        switch (action.targetType)
+        {
+            case Action.TargetType.SingleEnemy:
+                return target.gameObject.CompareTag("Enemy");
+            case Action.TargetType.SingleAlly:
+                return target.gameObject.CompareTag("Player");
+            case Action.TargetType.AllAllies:
+                return target.gameObject.CompareTag("Player");
+            case Action.TargetType.AllEnemies:
+                return target.gameObject.CompareTag("Enemy");
+            default:
+                return false;
+        }
     }
     
     private int CalculateHitChance(CharacterManager attacker, CharacterManager target)

@@ -1,4 +1,5 @@
 
+
 using UnityEngine;
 using TMPro;
 
@@ -140,6 +141,70 @@ public class TooltipUI : MonoBehaviour
         }
        
         
+        tooltipText.text = tooltipContent;
+    }
+    
+    /// <summary>
+    /// Shows enemy action information during their turn
+    /// </summary>
+    public void ShowEnemyActionTooltip(Action action, string enemyName)
+    {
+        if (action == null) 
+        {
+            ShowDefaultText();
+            return;
+        }
+        
+        string tooltipContent = $"<color=red>{enemyName}</color>";
+        
+        // Add action type information with more details
+        switch (action.actionType)
+        {
+            case Action.ActionType.Attack:
+                tooltipContent += $"\n<color=orange>Attack</color>";
+                tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
+                break;
+            case Action.ActionType.Heal:
+                tooltipContent += $"\n<color=green>Heal</color>";
+                tooltipContent += $"\nHealing: {action.minHeal:F0}-{action.maxHeal:F0}";
+                break;
+            case Action.ActionType.Buff:
+                tooltipContent += $"\n<color=cyan>Buff</color>";
+                tooltipContent += $"\nEffect: {action.buffType} +{action.buffValue:F0}";
+                tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
+                break;
+            case Action.ActionType.Debuff:
+                tooltipContent += $"\n<color=red>Debuff</color>";
+                tooltipContent += $"\nEffect: {action.buffType} -{action.buffValue:F0}";
+                tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
+                break;
+        }
+        
+        /*
+        // Add target type information
+        switch (action.targetType)
+        {
+            case Action.TargetType.SingleEnemy:
+                tooltipContent += $"\nTargeting: Single Player";
+                break;
+            case Action.TargetType.SingleAlly:
+                tooltipContent += $"\nTargeting: Single Ally";
+                break;
+            case Action.TargetType.AllAllies:
+                tooltipContent += $"\nTargeting: All Allies";
+                break;
+            case Action.TargetType.AllEnemies:
+                tooltipContent += $"\nTargeting: All Players";
+                break;
+        }
+        
+        
+        // Add wind-up time if it's an attack
+        if (action.actionType == Action.ActionType.Attack && action.AttackWindupTime != 1.0f)
+        {
+            tooltipContent += $"\nWind-up Time: {action.AttackWindupTime:F1}s";
+        }
+        */
         tooltipText.text = tooltipContent;
     }
     

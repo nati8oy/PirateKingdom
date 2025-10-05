@@ -1,3 +1,4 @@
+
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
@@ -106,6 +107,12 @@ public class TurnManager : MonoBehaviour
         if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
         {
             currentCharacterTurn.turnMarker.gameObject.SetActive(false);
+        }
+        
+        // Clear tooltip when battle ends
+        if (TooltipUI.Instance != null)
+        {
+            TooltipUI.Instance.ShowDefaultText();
         }
         
         // SHOW THE UI FIRST, BEFORE DISABLING OTHER THINGS
@@ -232,6 +239,12 @@ public class TurnManager : MonoBehaviour
                     {
                         inputHandler.SetSelectedCharacter(currentCharacterTurn);
                     }
+                    
+                    // Clear tooltip when it's player turn (they'll select actions manually)
+                    if (TooltipUI.Instance != null)
+                    {
+                        TooltipUI.Instance.ShowDefaultText();
+                    }
                 }
                 else
                 {
@@ -288,6 +301,12 @@ public class TurnManager : MonoBehaviour
             currentCharacterTurn.turnMarker.gameObject.SetActive(false);
         }
         
+        // Clear tooltip when turn ends
+        if (TooltipUI.Instance != null)
+        {
+            TooltipUI.Instance.ShowDefaultText();
+        }
+        
         currentTurnIndex++;
         
         // Check if we've completed a full round
@@ -325,5 +344,4 @@ public class TurnManager : MonoBehaviour
         // For example: UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
         Debug.Log("Return to Main Menu - Implement scene loading here");
     }
-    
 }

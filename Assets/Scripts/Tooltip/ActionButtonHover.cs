@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -31,6 +32,12 @@ public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerEx
     
     public void OnPointerEnter(PointerEventData eventData)
     {
+        // Don't show hover tooltip if an enemy is currently showing their action
+        if (IsEnemyShowingTooltip())
+        {
+            return;
+        }
+        
         if (associatedAction != null && TooltipUI.Instance != null)
         {
             // Show detailed action tooltip with cooldown information
@@ -40,6 +47,12 @@ public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerEx
     
     public void OnPointerExit(PointerEventData eventData)
     {
+        // Don't change tooltip if an enemy is currently showing their action
+        if (IsEnemyShowingTooltip())
+        {
+            return;
+        }
+        
         // Check if we should show target info or default text
         CombatController combatController = FindObjectOfType<CombatController>();
         if (combatController != null && combatController.selectedAction != null)
@@ -55,9 +68,23 @@ public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerEx
         }
     }
     
+    private bool IsEnemyShowingTooltip()
+    {
+        // Check if any enemy is currently showing their tooltip
+        EnemyManager[] enemies = FindObjectsOfType<EnemyManager>();
+        foreach (var enemy in enemies)
+        {
+            if (enemy.IsShowingEnemyTooltip())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     void OnDestroy()
     {
-        if (TooltipUI.Instance != null)
+        if (TooltipUI.Instance != null && !IsEnemyShowingTooltip())
         {
             TooltipUI.Instance.ShowDefaultText();
         }

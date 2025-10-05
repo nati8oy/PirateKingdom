@@ -1,4 +1,5 @@
 
+
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -15,6 +16,12 @@ public class TargetHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerE
 
     public void OnPointerEnter(PointerEventData eventData)
     {
+        // Don't show hover tooltip if an enemy is currently showing their action
+        if (IsEnemyShowingTooltip())
+        {
+            return;
+        }
+        
         if (TooltipUI.Instance != null && combatController != null)
         {
             Action selectedAction = combatController.GetSelectedAction();
@@ -35,6 +42,12 @@ public class TargetHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerE
 
     public void OnPointerExit(PointerEventData eventData)
     {
+        // Don't change tooltip if an enemy is currently showing their action
+        if (IsEnemyShowingTooltip())
+        {
+            return;
+        }
+        
         if (TooltipUI.Instance != null)
         {
             Action selectedAction = combatController?.GetSelectedAction();
@@ -51,5 +64,19 @@ public class TargetHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerE
                 TooltipUI.Instance.ShowDefaultText();
             }
         }
+    }
+    
+    private bool IsEnemyShowingTooltip()
+    {
+        // Check if any enemy is currently showing their tooltip
+        EnemyManager[] enemies = FindObjectsOfType<EnemyManager>();
+        foreach (var enemy in enemies)
+        {
+            if (enemy.IsShowingEnemyTooltip())
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

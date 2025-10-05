@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -39,8 +40,10 @@ public class TargetHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerE
             Action selectedAction = combatController?.GetSelectedAction();
             if (selectedAction != null)
             {
-                // Return to showing selected action info
-                TooltipUI.Instance.ShowActionTooltip(selectedAction);
+                // Return to showing detailed selected action info (same as hover)
+                CharacterManager currentCharacter = combatController.GetCurrentCharacter();
+                Character currentCharacterData = currentCharacter != null ? currentCharacter.characterData : null;
+                TooltipUI.Instance.ShowActionTooltipWithCharacter(selectedAction, currentCharacterData);
             }
             else
             {

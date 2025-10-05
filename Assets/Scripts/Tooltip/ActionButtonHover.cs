@@ -44,8 +44,10 @@ public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerEx
         CombatController combatController = FindObjectOfType<CombatController>();
         if (combatController != null && combatController.selectedAction != null)
         {
-            // If an action is selected, show that info instead of default
-            TooltipUI.Instance.ShowCustomText($"<b>{combatController.selectedAction.actionName} selected");
+            // If an action is selected, show the same detailed info as when hovering
+            CharacterManager currentCharacter = combatController.GetCurrentCharacter();
+            Character currentCharacterData = currentCharacter != null ? currentCharacter.characterData : null;
+            TooltipUI.Instance.ShowActionTooltipWithCharacter(combatController.selectedAction, currentCharacterData);
         }
         else if (TooltipUI.Instance != null)
         {

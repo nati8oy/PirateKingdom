@@ -64,10 +64,10 @@ public class ActionsManager : MonoBehaviour
                     Debug.Log($"Button clicked for action: {action.actionName}");
                     FindObjectOfType<CombatController>().SelectAction(action);
                     
-                    // Update tooltip to show action info without the "selected" text
+                    // Show the same detailed tooltip that was shown on hover
                     if (TooltipUI.Instance != null)
                     {
-                        TooltipUI.Instance.ShowActionTooltip(action);
+                        TooltipUI.Instance.ShowActionTooltipWithCharacter(action, character);
                     }
                 });
             }

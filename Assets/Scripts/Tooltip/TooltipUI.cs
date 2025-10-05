@@ -105,16 +105,16 @@ public class TooltipUI : MonoBehaviour
         switch (action.targetType)
         {
             case Action.TargetType.SingleEnemy:
-                tooltipContent += $"\n Single Enemy";
+                tooltipContent += $" / Single";
                 break;
             case Action.TargetType.SingleAlly:
-                tooltipContent += $"\n Single Ally";
+                tooltipContent += $" / Single";
                 break;
             case Action.TargetType.AllAllies:
-                tooltipContent += $"\n All Allies";
+                tooltipContent += $" / Multiple";
                 break;
             case Action.TargetType.AllEnemies:
-                tooltipContent += $"\n All Enemies";
+                tooltipContent += $" / Multiple";
                 break;
         }
         
@@ -138,13 +138,7 @@ public class TooltipUI : MonoBehaviour
                 }
             }
         }
-        else
-        {
-            if (character != null && character.IsActionAvailable(action))
-            {
-                tooltipContent += $"\n<color=green>Ready</color>";
-            }
-        }
+       
         
         tooltipText.text = tooltipContent;
     }
@@ -161,7 +155,7 @@ public class TooltipUI : MonoBehaviour
         if (!IsValidTarget(selectedAction, target))
         {
             // Show just the character name and HP without combat details
-            tooltipText.text = $"<b>{target.characterData.characterName} ({target.CurrentHealth:F0}/{target.MaxHealth:F0} HP)</b>";
+            tooltipText.text = $"<b>{target.characterData.characterName} \n({target.CurrentHealth:F0}/{target.MaxHealth:F0} HP)</b>";
             return;
         }
         

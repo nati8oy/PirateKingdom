@@ -1,55 +1,51 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
-using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
-public partial class ActionButtonHover : MonoBehaviour
+public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     private Action associatedAction;
-    private bool isHovering = false;
+    private Character ownerCharacter; // Reference to the character who owns this action
     
     public void SetAction(Action action)
     {
         associatedAction = action;
+        
+        // Try to find the character that owns this action
+        // This could be from ActionsManager context or current character
+        CombatController combatController = FindObjectOfType<CombatController>();
+        if (combatController != null)
+        {
+            CharacterManager currentCharacter = combatController.GetCurrentCharacter();
+            if (currentCharacter != null && currentCharacter.characterData != null)
+            {
+                ownerCharacter = currentCharacter.characterData;
+            }
+        }
     }
     
-    void Update()
+    public void SetActionWithCharacter(Action action, Character character)
     {
-        // Check if mouse is over this UI element using new Input System
-        Vector2 mousePosition = Mouse.current.position.ReadValue();
-        
-        RectTransform rectTransform = GetComponent<RectTransform>();
-        bool isMouseOver = RectTransformUtility.RectangleContainsScreenPoint(rectTransform, mousePosition);
-        
-        // Handle hover enter
-        if (isMouseOver && !isHovering)
-        {
-            isHovering = true;
-            OnHoverEnter();
-        }
-        // Handle hover exit
-        else if (!isMouseOver && isHovering)
-        {
-            isHovering = false;
-            OnHoverExit();
-        }
+        associatedAction = action;
+        ownerCharacter = character;
     }
     
-    private void OnHoverEnter()
+    public void OnPointerEnter(PointerEventData eventData)
     {
         if (associatedAction != null && TooltipUI.Instance != null)
         {
-            TooltipUI.Instance.ShowActionTooltip(associatedAction);
+            // Show detailed action tooltip with cooldown information
+            TooltipUI.Instance.ShowActionTooltipWithCharacter(associatedAction, ownerCharacter);
         }
     }
     
-    private void OnHoverExit()
+    public void OnPointerExit(PointerEventData eventData)
     {
         // Check if we should show target info or default text
         CombatController combatController = FindObjectOfType<CombatController>();
         if (combatController != null && combatController.selectedAction != null)
         {
             // If an action is selected, show that info instead of default
-            TooltipUI.Instance.ShowCustomText($"<b>{combatController.selectedAction.actionName}</b> selected\nHover over a target to see combat details");
+            TooltipUI.Instance.ShowCustomText($"<b>{combatController.selectedAction.actionName} selected");
         }
         else if (TooltipUI.Instance != null)
         {
@@ -59,7 +55,7 @@ public partial class ActionButtonHover : MonoBehaviour
     
     void OnDestroy()
     {
-        if (isHovering && TooltipUI.Instance != null)
+        if (TooltipUI.Instance != null)
         {
             TooltipUI.Instance.ShowDefaultText();
         }

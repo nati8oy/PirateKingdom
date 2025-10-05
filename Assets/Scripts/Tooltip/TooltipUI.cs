@@ -64,6 +64,91 @@ public class TooltipUI : MonoBehaviour
         tooltipText.text = tooltipContent;
     }
     
+    /// <summary>
+    /// Shows detailed action tooltip with cooldown status from specific character
+    /// </summary>
+    public void ShowActionTooltipWithCharacter(Action action, Character character)
+    {
+        if (action == null) 
+        {
+            ShowDefaultText();
+            return;
+        }
+        
+        string tooltipContent = $"{action.actionName}";
+        
+        // Add action type information with more details
+        switch (action.actionType)
+        {
+            case Action.ActionType.Attack:
+                tooltipContent += $"\n<color=orange>Attack</color>";
+                tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
+             
+                break;
+            case Action.ActionType.Heal:
+                tooltipContent += $"\n<color=green>Heal</color>";
+                tooltipContent += $"\nHealing: {action.minHeal:F0}-{action.maxHeal:F0}";
+                break;
+            case Action.ActionType.Buff:
+                tooltipContent += $"\n<color=cyan>Buff</color>";
+                tooltipContent += $"\nEffect: {action.buffType} +{action.buffValue:F0}";
+                tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
+                break;
+            case Action.ActionType.Debuff:
+                tooltipContent += $"\n<color=red>Debuff</color>";
+                tooltipContent += $"\nEffect: {action.buffType} -{action.buffValue:F0}";
+                tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
+                break;
+        }
+        
+        // Add target type information
+        switch (action.targetType)
+        {
+            case Action.TargetType.SingleEnemy:
+                tooltipContent += $"\n Single Enemy";
+                break;
+            case Action.TargetType.SingleAlly:
+                tooltipContent += $"\n Single Ally";
+                break;
+            case Action.TargetType.AllAllies:
+                tooltipContent += $"\n All Allies";
+                break;
+            case Action.TargetType.AllEnemies:
+                tooltipContent += $"\n All Enemies";
+                break;
+        }
+        
+        // Show cooldown information with character-specific status
+        if (action.cooldown > 0)
+        {
+            tooltipContent += $"\nCooldown: {Mathf.RoundToInt(action.cooldown)} turns";
+            
+            // Show current cooldown status if character is provided
+            if (character != null)
+            {
+                bool isAvailable = character.IsActionAvailable(action);
+                if (!isAvailable)
+                {
+                    int cooldownRemaining = character.GetActionCooldownRemaining(action);
+                    tooltipContent += $"\n<color=red>Cooldown: {cooldownRemaining} turns remaining</color>";
+                }
+                else
+                {
+                    tooltipContent += $" ";
+                }
+            }
+        }
+        else
+        {
+            if (character != null && character.IsActionAvailable(action))
+            {
+                tooltipContent += $"\n<color=green>Ready</color>";
+            }
+        }
+        
+        tooltipText.text = tooltipContent;
+    }
+    
     public void ShowTargetTooltip(Action selectedAction, CharacterManager attacker, CharacterManager target)
     {
         if (selectedAction == null || attacker == null || target == null) 

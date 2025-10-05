@@ -27,7 +27,7 @@ public class TargetHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerE
             else if (characterManager != null)
             {
                 // Show basic character info if no action is selected
-                TooltipUI.Instance.ShowCustomText($"<b>{characterManager.characterData.characterName}</b>\nHP: {characterManager.CurrentHealth}/{characterManager.MaxHealth}");
+                TooltipUI.Instance.ShowCustomText($"{characterManager.characterData.characterName}\nHP: {characterManager.CurrentHealth}/{characterManager.MaxHealth}");
             }
         }
     }

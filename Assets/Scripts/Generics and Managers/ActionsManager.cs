@@ -42,13 +42,14 @@ public class ActionsManager : MonoBehaviour
             Transform iconTransform = actionSlot.transform.Find("action_icon/img_icon");
             Image actionIconImage = iconTransform?.GetComponent<Image>();
             
-            // Add hover handler for tooltip
+            // Add hover handler for tooltip with character context
             ActionButtonHover hoverHandler = actionSlot.GetComponent<ActionButtonHover>();
             if (hoverHandler == null)
             {
                 hoverHandler = actionSlot.AddComponent<ActionButtonHover>();
             }
-            hoverHandler.SetAction(action);
+            // Pass both action and character so hover can show cooldown status
+            hoverHandler.SetActionWithCharacter(action, character);
             
             // Check if action is available (not on cooldown)
             bool isAvailable = character.IsActionAvailable(action);

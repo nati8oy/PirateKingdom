@@ -12,15 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5389001eb578f43918865af7cc0f8a4e, type: 3}
   m_Name: Heal_Single
   m_EditorClassIdentifier: 
-  actionName: Heal
+  actionName: Nourish
   actionType: 1
   targetType: 1
-  cooldown: 0
+  cooldown: 2
   actionIcon: {fileID: 21300000, guid: fbcccc6b3744549e1a9ed8a47d42de8f, type: 3}
   attackWindupTime: 1
   minDamage: 0
   maxDamage: 0
-  minHeal: 5
+  minHeal: 3
   maxHeal: 5
   buffValue: 0
   duration: 0

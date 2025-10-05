@@ -28,7 +28,7 @@ public class CharacterManager : MonoBehaviour
     [Header("UI Elements")]
     [SerializeField] private Slider healthBar;
     [SerializeField] TMP_Text characterName;
-    [SerializeField] private TMP_Text hp;
+    //[SerializeField] private TMP_Text hp;
     [FormerlySerializedAs("healthModifier")] [SerializeField] private TMP_Text actionStatusText;
     
     public Image turnMarker;
@@ -82,12 +82,12 @@ public class CharacterManager : MonoBehaviour
             Debug.LogError("Character Data is missing!");
         }
         
-        hp.text = CurrentHealth + "/" + MaxHealth;
+        //hp.text = CurrentHealth + "/" + MaxHealth;
     }
 
     void Update()
     {
-        hp.text = CurrentHealth + "/" + MaxHealth;
+        //hp.text = CurrentHealth + "/" + MaxHealth;
         CurrentHealth = Mathf.Clamp(CurrentHealth, 0, MaxHealth);
         
         if (!isDead && CurrentHealth <= 0)

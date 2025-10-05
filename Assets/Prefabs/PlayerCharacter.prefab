@@ -862,7 +862,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &867999588638621158
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1014,7 +1014,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 4.0382, y: -357}
+  m_AnchoredPosition: {x: 4.0382, y: -328}
   m_SizeDelta: {x: 192.68, y: 13.719}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &5083863441337818260
@@ -4659,6 +4659,7 @@ GameObject:
   - component: {fileID: 208602327425384990}
   - component: {fileID: 630707009799980374}
   - component: {fileID: 3715197237033342345}
+  - component: {fileID: 3324879031307064525}
   m_Layer: 5
   m_Name: PlayerCharacter
   m_TagString: Untagged
@@ -4727,7 +4728,6 @@ MonoBehaviour:
   buffEffectText: {fileID: 8366886830506347054}
   healthBar: {fileID: 6854843975597813551}
   characterName: {fileID: 628673213663764507}
-  hp: {fileID: 5313392326203973815}
   actionStatusText: {fileID: 1656511942984017652}
   turnMarker: {fileID: 5687122472208313648}
   dealDamageFeedback: {fileID: 885933774631715721}
@@ -5356,6 +5356,18 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &3324879031307064525
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4879667956975031156}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ecb5072b81b51430e81ff99a78a2d4f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &5075039692128659118
 GameObject:
   m_ObjectHideFlags: 0
@@ -6298,7 +6310,7 @@ MonoBehaviour:
           ButtonText: Automatic Shaker Setup
         Owner: {fileID: 5538178216688167945}
         DebugActive: 0
-        Sfx: {fileID: 8300000, guid: 257d1ab29247449ca95378fcfbd023fe, type: 3}
+        Sfx: {fileID: 8300000, guid: 1ca0ebf5c7fd94b9893f676cae3bb8a0, type: 3}
         RandomSfx: []
         TestPlayButton:
           ButtonText: Debug Play Sound
@@ -6310,8 +6322,8 @@ MonoBehaviour:
         StopSoundOnFeedbackStop: 1
         MinVolume: 1
         MaxVolume: 1
-        MinPitch: 0.9
-        MaxPitch: 1.1
+        MinPitch: 1
+        MaxPitch: 1
         SfxAudioMixerGroup: {fileID: 0}
         Priority: 128
         PanStereo: 0
@@ -6612,8 +6624,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -322}
-  m_SizeDelta: {x: 192.35, y: 42.807}
+  m_AnchoredPosition: {x: 2.1016, y: -287.9}
+  m_SizeDelta: {x: 196.55, y: 42.807}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &124886788893426999
 MonoBehaviour:

@@ -251,6 +251,19 @@ public class CombatController : MonoBehaviour
     
     turnManager.CompleteTurn();
 }
-    
+    // Add these methods to your CombatController class
+    public Action GetSelectedAction()
+    {
+        return selectedAction; // assuming you have a selectedAction field
+    }
+
+    public CharacterManager GetCurrentCharacter()
+    {
+        if (turnManager != null)
+        {
+            return turnManager.currentCharacterTurn;
+        }
+        return null;
+    }
     
 }

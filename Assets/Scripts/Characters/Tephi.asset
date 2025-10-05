@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
-  m_Name: Elaine
+  m_Name: Tephi
   m_EditorClassIdentifier: 
   characterName: Elaine
   actionSlots:

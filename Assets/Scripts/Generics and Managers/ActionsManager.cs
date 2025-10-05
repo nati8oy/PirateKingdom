@@ -1,12 +1,14 @@
+
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.EventSystems;
 
 public class ActionsManager : MonoBehaviour
 {
     [SerializeField] private GameObject actionsGrid;
     [SerializeField] private GameObject actionSlotPrefab;
-
+    
     public void LoadCharacterActions(Character character)
     {
         // Clear existing actions
@@ -40,6 +42,15 @@ public class ActionsManager : MonoBehaviour
             Transform iconTransform = actionSlot.transform.Find("action_icon/img_icon");
             Image actionIconImage = iconTransform?.GetComponent<Image>();
             
+            // Add hover handler for tooltip with character context
+            ActionButtonHover hoverHandler = actionSlot.GetComponent<ActionButtonHover>();
+            if (hoverHandler == null)
+            {
+                hoverHandler = actionSlot.AddComponent<ActionButtonHover>();
+            }
+            // Pass both action and character so hover can show cooldown status
+            hoverHandler.SetActionWithCharacter(action, character);
+            
             // Check if action is available (not on cooldown)
             bool isAvailable = character.IsActionAvailable(action);
             int cooldownRemaining = character.GetActionCooldownRemaining(action);
@@ -52,6 +63,12 @@ public class ActionsManager : MonoBehaviour
                 button.onClick.AddListener(() => {
                     Debug.Log($"Button clicked for action: {action.actionName}");
                     FindObjectOfType<CombatController>().SelectAction(action);
+                    
+                    // Show the same detailed tooltip that was shown on hover
+                    if (TooltipUI.Instance != null)
+                    {
+                        TooltipUI.Instance.ShowActionTooltipWithCharacter(action, character);
+                    }
                 });
             }
             else

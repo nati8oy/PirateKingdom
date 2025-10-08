@@ -58,7 +58,23 @@ public class EnemyAttack : MonoBehaviour
             return;
         }
         
+        // CLEAR previous target references to prevent issues
+        targetParrySystem = null;
+        targetVisualFeedback = null;
+        
         currentAction = action;
+        
+        // Add debug logging to track targeting
+        if (showDebugInfo)
+        {
+            Debug.Log($"[EnemyAttack] Starting attack against target: {target?.name}");
+        }
+        
+        if (target == null)
+        {
+            Debug.LogError("[EnemyAttack] Target is null!");
+            return;
+        }
         
         // Find target's parry system and visual feedback
         targetParrySystem = target.GetComponent<ParrySystem>();
@@ -66,6 +82,24 @@ public class EnemyAttack : MonoBehaviour
         if (targetVisualFeedback == null)
         {
             targetVisualFeedback = target.GetComponentInChildren<ParryVisualFeedback>();
+        }
+        
+        // Add more debug logging
+        if (showDebugInfo)
+        {
+            Debug.Log($"[EnemyAttack] Target ParrySystem: {targetParrySystem?.name}");
+            Debug.Log($"[EnemyAttack] Target VisualFeedback: {targetVisualFeedback?.name}");
+        }
+        
+        // Verify we found the correct components
+        if (targetParrySystem == null)
+        {
+            Debug.LogWarning($"[EnemyAttack] No ParrySystem found on target {target.name}!");
+        }
+        
+        if (targetVisualFeedback == null)
+        {
+            Debug.LogWarning($"[EnemyAttack] No ParryVisualFeedback found on target {target.name}!");
         }
         
         StartCoroutine(ExecuteAttackSequence());
@@ -81,10 +115,19 @@ public class EnemyAttack : MonoBehaviour
     }
     
     /// <summary>
-    /// Starts an attack sequence using the given action (use this when target is determined by other means)
+    /// DEPRECATED: Use StartAttack(GameObject target, Action action) instead
+    /// This method should not be used as it doesn't specify which player to target
     /// </summary>
+    [System.Obsolete("Use StartAttack(GameObject target, Action action) to specify the exact target")]
     public void StartAttack(Action action)
     {
+        Debug.LogError("[EnemyAttack] StartAttack(Action) is deprecated and should not be used! Use StartAttack(GameObject target, Action action) instead.");
+        
+        // Don't execute the attack to force proper usage
+        return;
+        
+        // The old problematic code is commented out:
+        /*
         if (isAttacking)
         {
             if (showDebugInfo)
@@ -98,6 +141,7 @@ public class EnemyAttack : MonoBehaviour
         
         // Find player target (assuming player has specific tag or component)
         GameObject player = GameObject.FindGameObjectWithTag("Player");
+        
         if (player != null)
         {
             targetParrySystem = player.GetComponent<ParrySystem>();
@@ -109,14 +153,17 @@ public class EnemyAttack : MonoBehaviour
         }
         
         StartCoroutine(ExecuteAttackSequence());
+        */
     }
     
     /// <summary>
-    /// Starts an attack sequence (use this when target is determined by other means)
+    /// DEPRECATED: Use StartAttack(GameObject target, Action action) instead
     /// </summary>
+    [System.Obsolete("Use StartAttack(GameObject target, Action action) to specify the exact target")]
     public void StartAttack()
     {
-        StartAttack((Action)null);
+        Debug.LogError("[EnemyAttack] StartAttack() is deprecated and should not be used! Use StartAttack(GameObject target, Action action) instead.");
+        return;
     }
     
     private IEnumerator ExecuteAttackSequence()
@@ -131,6 +178,7 @@ public class EnemyAttack : MonoBehaviour
         {
             string actionName = currentAction != null ? currentAction.actionName : "Default Attack";
             Debug.Log($"[EnemyAttack] {actionName} started - windup time: {windupTime}s");
+            Debug.Log($"[EnemyAttack] Calling StartAttackCountdown on: {targetVisualFeedback?.name}");
         }
         
         OnAttackStart?.Invoke();
@@ -139,6 +187,10 @@ public class EnemyAttack : MonoBehaviour
         if (targetVisualFeedback != null)
         {
             targetVisualFeedback.StartAttackCountdown(windupTime);
+        }
+        else
+        {
+            Debug.LogWarning("[EnemyAttack] targetVisualFeedback is null, cannot start countdown!");
         }
         
         // Attack windup phase
@@ -196,13 +248,18 @@ public class EnemyAttack : MonoBehaviour
         // Recovery phase
         yield return new WaitForSeconds(attackRecoveryTime);
         
-        // Attack complete
+        // Attack complete - CLEAR target references
         isAttacking = false;
-        currentAction = null; // Clear the current action
+        currentAction = null;
+        
+        // IMPORTANT: Clear target references to prevent reuse
+        targetParrySystem = null;
+        targetVisualFeedback = null;
         
         if (showDebugInfo)
         {
             Debug.Log($"[EnemyAttack] Attack complete - Was parried: {wasParried}");
+            Debug.Log("[EnemyAttack] Cleared target references");
         }
         
         OnAttackEnd?.Invoke();

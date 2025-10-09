@@ -1,4 +1,3 @@
-
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -362,9 +361,32 @@ public class EnemyManager : MonoBehaviour
     private CharacterManager SelectPlayerTarget(List<CharacterManager> validTargets)
     {
         if (validTargets.Count == 0) return null;
+        if (validTargets.Count == 1) return validTargets[0];
         
-        // Use random targeting as fallback since we don't know the exact property name
-        // This can be updated once we see the actual Enemy class structure
+        // Check if we have Enemy data with targeting strategy
+        if (enemyData is Enemy enemy)
+        {
+            // Use the Enemy's targeting strategy
+            switch (enemy.targetingStrategy)
+            {
+                case Enemy.TargetingStrategy.LowestHealth:
+                    return GetLowestHealthTarget(validTargets);
+                    
+                case Enemy.TargetingStrategy.HighestHealth:
+                    return GetHighestHealthTarget(validTargets);
+                    
+                case Enemy.TargetingStrategy.Random:
+                    return validTargets[Random.Range(0, validTargets.Count)];
+                    
+                case Enemy.TargetingStrategy.ClosestToDefeating:
+                    return GetClosestToDefeatingTarget(validTargets);
+                    
+                default:
+                    return validTargets[Random.Range(0, validTargets.Count)];
+            }
+        }
+        
+        // Fallback to random if no Enemy data or targeting strategy
         return validTargets[Random.Range(0, validTargets.Count)];
     }
     
@@ -399,6 +421,9 @@ public class EnemyManager : MonoBehaviour
         }
     }
     
+    
+    
+    
     private void PerformParryableAttack(CharacterManager targetManager)
     {
         if (_enemyAttack == null)
@@ -407,10 +432,10 @@ public class EnemyManager : MonoBehaviour
             PerformDirectAttack(targetManager);
             return;
         }
-        
+    
         // Calculate damage first (before potential parry)
         float damage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
-        
+    
         // Check for critical hit
         int critRoll = RollForCritical();
         if (critRoll == 20) // Natural 20 is a crit
@@ -418,20 +443,24 @@ public class EnemyManager : MonoBehaviour
             damage *= 2;
             Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
         }
-        
+    
         // Store damage and target for after parry resolution
         _pendingDamage = damage;
         _pendingTarget = targetManager;
+    
+        // FIXED: Use the targetManager's gameObject directly instead of selecting a new target
+        if (targetManager != null && targetManager.gameObject != null)
+        {
+            if (enemyData != null && enemyData.showDebugInfo)
+            {
+                Debug.Log($"[EnemyManager] {gameObject.name} attacking {targetManager.characterData?.characterName} with parry system");
+            }
         
-        // Use the correct method name from EnemyAttack
-        try
-        {
-            _enemyAttack.StartAttack(_selectedAction);
+            _enemyAttack.StartAttack(targetManager.gameObject, _selectedAction);
         }
-        catch
+        else
         {
-            // Fallback to direct attack if any error occurs
-            Debug.LogWarning("[EnemyManager] Error starting parryable attack, falling back to direct attack");
+            Debug.LogWarning("[EnemyManager] Target manager or gameObject is null!");
             PerformDirectAttack(targetManager);
         }
     }
@@ -531,8 +560,8 @@ public class EnemyManager : MonoBehaviour
         }
         else
         {
-            // Attack was parried, apply reduced damage
-            float reducedDamage = _pendingDamage * 0.5f;
+            // Attack was parried, apply reduced damage... in this case it's 0 for testing purposes
+            float reducedDamage = _pendingDamage * 0f;
             _pendingTarget.TakeDamage(reducedDamage);
             Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried! Reduced damage: {reducedDamage:F1}");
         }

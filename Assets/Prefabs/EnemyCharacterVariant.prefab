@@ -26,15 +26,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2963772058983199491, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Color.b
-      value: 0
+      value: 0.754717
       objectReference: {fileID: 0}
     - target: {fileID: 2963772058983199491, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Color.g
-      value: 0
+      value: 0.69576216
       objectReference: {fileID: 0}
     - target: {fileID: 2963772058983199491, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Color.r
-      value: 1
+      value: 0.3951584
       objectReference: {fileID: 0}
     - target: {fileID: 3825582818541846883, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: m_Pivot.x
@@ -124,6 +124,18 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Enemy
       objectReference: {fileID: 0}
+    - target: {fileID: 5210877598875070198, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_Colors.m_HighlightedColor.b
+      value: 0.23156919
+      objectReference: {fileID: 0}
+    - target: {fileID: 5210877598875070198, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_Colors.m_HighlightedColor.g
+      value: 0.16660735
+      objectReference: {fileID: 0}
+    - target: {fileID: 5210877598875070198, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
+      propertyPath: m_Colors.m_HighlightedColor.r
+      value: 0.9056604
+      objectReference: {fileID: 0}
     - target: {fileID: 5705306982772367693, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: characterData
       value: 
@@ -153,6 +165,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c31d67ef95f2d4ffc919cf019ed334cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainCharacterData: {fileID: 0}
+  enemyData: {fileID: 0}
   enemyActionDelay: 2
   useParrySystem: 1

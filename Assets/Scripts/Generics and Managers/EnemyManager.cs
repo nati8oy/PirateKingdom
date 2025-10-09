@@ -560,8 +560,8 @@ public class EnemyManager : MonoBehaviour
         }
         else
         {
-            // Attack was parried, apply reduced damage
-            float reducedDamage = _pendingDamage * 0.5f;
+            // Attack was parried, apply reduced damage... in this case it's 0 for testing purposes
+            float reducedDamage = _pendingDamage * 0f;
             _pendingTarget.TakeDamage(reducedDamage);
             Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried! Reduced damage: {reducedDamage:F1}");
         }

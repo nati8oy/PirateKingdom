@@ -588,7 +588,7 @@ PrefabInstance:
     - target: {fileID: 5705306982772367693, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: characterData
       value: 
-      objectReference: {fileID: 11400000, guid: 1cd54e50bd6bb479e91e790ec6562aab, type: 2}
+      objectReference: {fileID: 11400000, guid: 18e8e45ffb6224195a106df36a1b5e5d, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -709,7 +709,7 @@ PrefabInstance:
     - target: {fileID: 5705306982772367693, guid: 6c09c058576e245bf96d373ab0a0cac7, type: 3}
       propertyPath: characterData
       value: 
-      objectReference: {fileID: 11400000, guid: 1cd54e50bd6bb479e91e790ec6562aab, type: 2}
+      objectReference: {fileID: 11400000, guid: 2f096fa7f3fa04cc4945a2ff99c4b3bf, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1194,7 +1194,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 374.175, y: -308.9215}
-  m_SizeDelta: {x: 200, y: 155.3417}
+  m_SizeDelta: {x: 0, y: 155.3417}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1002256130
 MonoBehaviour:

@@ -15,8 +15,8 @@ MonoBehaviour:
   actionName: Slash
   actionType: 0
   targetType: 0
-  cooldown: 2
-  actionIcon: {fileID: 21300000, guid: 5a14c5b6bb2d843f1aea3c9db69634f2, type: 3}
+  cooldown: 0
+  actionIcon: {fileID: 21300000, guid: c16d2c3bcdc724eccb3f5e8dc5def861, type: 3}
   attackWindupTime: 0.5
   minDamage: 2
   maxDamage: 3

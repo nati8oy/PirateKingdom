@@ -1,10 +1,20 @@
 using UnityEngine;
+using System.Collections.Generic;
+
+public enum TargetingMode
+{
+    Automatic,
+    Manual
+}
 
 public class CombatController : MonoBehaviour
 {
     private TurnManager turnManager;
     public CharacterManager currentTargetManager;
     public Action selectedAction;
+    
+    [Header("Targeting System")]
+    [SerializeField] private bool useManualTargeting = true;
 
     void Awake()
     {
@@ -28,22 +38,124 @@ public class CombatController : MonoBehaviour
         }
     }
 
-    
     public void SelectAction(Action action)
     {
-        // Check if the action is available before selecting it
-        if (turnManager.currentCharacterTurn != null && 
-            turnManager.currentCharacterTurn.characterData != null &&
-            !turnManager.currentCharacterTurn.characterData.IsActionAvailable(action))
+        // Set the selected action
+        selectedAction = action;
+
+        if (!useManualTargeting)
         {
-            int cooldownRemaining = turnManager.currentCharacterTurn.characterData.GetActionCooldownRemaining(action);
-            Debug.LogWarning($"Cannot use {action.actionName} - on cooldown for {cooldownRemaining} more turns");
-            return;
+            // Automatic targeting mode - find and execute on a random target immediately
+            CharacterManager randomTarget = FindRandomValidTarget(action);
+    
+            if (randomTarget != null)
+            {
+                // Execute the action immediately on the random target
+                bool success = TryExecuteActionOnTarget(randomTarget);
+        
+                if (success)
+                {
+                    Debug.Log($"Action {action.actionName} automatically executed on random target {randomTarget.characterData.characterName}");
+                    OnPlayerActionComplete();
+                }
+                else
+                {
+                    Debug.Log($"Failed to execute {action.actionName} on random target {randomTarget.characterData.characterName}");
+                }
+            }
+            else
+            {
+                Debug.Log($"No valid targets found for action {action.actionName}");
+            }
+    
+            // Clear the selected action since we've used it
+            selectedAction = null;
+        }
+        else
+        {
+            // Manual targeting mode - just store the action and wait for target selection
+            Debug.Log($"Action {action.actionName} selected. Click on a target to execute.");
+        }
+    }
+
+    private CharacterManager FindRandomValidTarget(Action action)
+    {
+        List<CharacterManager> validTargets = new List<CharacterManager>();
+    
+        // Use GameManager to get character lists if available
+        GameManager.Instance.FindCharacters();
+    
+        switch (action.targetType)
+        {
+            case Action.TargetType.SingleEnemy:
+                // Target enemies - get from GameManager's enemy list
+                foreach (GameObject enemy in GameManager.EnemyCharacters)
+                {
+                    if (enemy != null)
+                    {
+                        CharacterManager enemyManager = enemy.GetComponent<CharacterManager>();
+                        if (enemyManager != null && enemyManager.GetCurrentHealth() > 0)
+                        {
+                            validTargets.Add(enemyManager);
+                        }
+                    }
+                }
+                break;
+            
+            case Action.TargetType.SingleAlly:
+                // Target player allies - get from GameManager's player list
+                foreach (GameObject player in GameManager.PlayerCharacters)
+                {
+                    if (player != null)
+                    {
+                        CharacterManager playerManager = player.GetComponent<CharacterManager>();
+                        if (playerManager != null && playerManager.GetCurrentHealth() > 0)
+                        {
+                            validTargets.Add(playerManager);
+                        }
+                    }
+                }
+                break;
+            
+            case Action.TargetType.AllEnemies:
+                // For AoE enemy targeting, return any valid enemy (the action system will handle hitting all)
+                foreach (GameObject enemy in GameManager.EnemyCharacters)
+                {
+                    if (enemy != null)
+                    {
+                        CharacterManager enemyManager = enemy.GetComponent<CharacterManager>();
+                        if (enemyManager != null && enemyManager.GetCurrentHealth() > 0)
+                        {
+                            return enemyManager; // Return first valid enemy for AoE
+                        }
+                    }
+                }
+                break;
+            
+            case Action.TargetType.AllAllies:
+                // For AoE ally targeting, return any valid ally (the action system will handle hitting all)
+                foreach (GameObject player in GameManager.PlayerCharacters)
+                {
+                    if (player != null)
+                    {
+                        CharacterManager playerManager = player.GetComponent<CharacterManager>();
+                        if (playerManager != null && playerManager.GetCurrentHealth() > 0)
+                        {
+                            return playerManager; // Return first valid ally for AoE
+                        }
+                    }
+                }
+                break;
         }
     
-        selectedAction = action;
+        // Return random target from valid targets
+        if (validTargets.Count > 0)
+        {
+            int randomIndex = Random.Range(0, validTargets.Count);
+            return validTargets[randomIndex];
+        }
     
-        // Don't call UseAction here - it should be called after the action is successfully performed
+        return null;
     }
 
     public void SetCurrentTarget(CharacterManager targetManager)

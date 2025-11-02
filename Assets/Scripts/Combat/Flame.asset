@@ -12,14 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5389001eb578f43918865af7cc0f8a4e, type: 3}
   m_Name: Flame
   m_EditorClassIdentifier: 
-  actionName: Skelly Slash
+  actionName: Flame
   actionType: 0
   targetType: 0
-  cooldown: 0
-  icon: {fileID: 0}
+  cooldown: 2
+  actionIcon: {fileID: 21300000, guid: 7e9224dcc57124f9f877f37d9b1d679c, type: 3}
   attackWindupTime: 2
-  minDamage: 10
-  maxDamage: 20
+  minDamage: 2
+  maxDamage: 5
   minHeal: 0
   maxHeal: 0
   buffValue: 0

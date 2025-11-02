@@ -1,3 +1,4 @@
+
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -6,34 +7,29 @@ public class ParrySystem : MonoBehaviour
     [Header("Parry Settings")]
     [SerializeField] private float parryWindowDuration = 0.3f;
     [SerializeField] private float parryDriveBonus = 50f;
-    
+
     [Header("Audio")]
     [SerializeField] private AudioClip parrySuccessSound;
     [SerializeField] private AudioSource audioSource;
-    
-    [Header("Input")]
-    [SerializeField] private InputActionReference parryInputAction;
-    
+
     [Header("Debug")]
     [SerializeField] private bool showDebugInfo = false;
-    
+
     private CharacterManager characterManager;
     private bool isParryWindowActive = false;
     private float parryWindowEndTime = 0f;
-    
-    // Add this to track if this parry system should respond to input
     private bool isActiveParryTarget = false;
-    
+
     public float ParryWindowDuration => parryWindowDuration;
     public float ParryDriveBonus => parryDriveBonus;
     public bool IsParryWindowActive => isParryWindowActive;
-    
+
     // Events
     public System.Action OnParryWindowOpened;
     public System.Action OnParryWindowClosed;
     public System.Action OnParrySuccess;
     public System.Action OnParryFailed;
-    
+
     private void Awake()
     {
         characterManager = GetComponent<CharacterManager>();
@@ -41,7 +37,7 @@ public class ParrySystem : MonoBehaviour
         {
             Debug.LogError("[ParrySystem] No CharacterManager found on this GameObject!");
         }
-        
+
         // Get or create AudioSource component
         if (audioSource == null)
         {
@@ -52,25 +48,38 @@ public class ParrySystem : MonoBehaviour
             }
         }
     }
-    
+
     private void OnEnable()
     {
-        if (parryInputAction != null)
+        // Register with ParryInputManager instead of directly subscribing to input
+        if (ParryInputManager.Instance != null)
         {
-            parryInputAction.action.performed += OnParryInput;
-            parryInputAction.action.Enable();
+            ParryInputManager.Instance.RegisterParrySystem(this);
+        }
+        else if (showDebugInfo)
+        {
+            Debug.LogWarning("[ParrySystem] ParryInputManager not found!");
         }
     }
-    
+
     private void OnDisable()
     {
-        if (parryInputAction != null)
+        // Unregister from ParryInputManager
+        if (ParryInputManager.Instance != null)
         {
-            parryInputAction.action.performed -= OnParryInput;
-            parryInputAction.action.Disable();
+            ParryInputManager.Instance.UnregisterParrySystem(this);
         }
     }
-    
+
+    private void OnDestroy()
+    {
+        // Ensure cleanup when destroyed
+        if (ParryInputManager.Instance != null)
+        {
+            ParryInputManager.Instance.UnregisterParrySystem(this);
+        }
+    }
+
     private void Update()
     {
         // Check if parry window should close
@@ -79,14 +88,14 @@ public class ParrySystem : MonoBehaviour
             CloseParryWindow();
         }
     }
-    
+
     /// <summary>
     /// Opens the parry window for the specified duration
     /// </summary>
     public void OpenParryWindow()
     {
         if (isParryWindowActive) return;
-        
+
         // Don't open parry window if character is dead/inactive
         if (!IsCharacterAlive())
         {
@@ -96,56 +105,82 @@ public class ParrySystem : MonoBehaviour
             }
             return;
         }
-        
+
         isParryWindowActive = true;
-        isActiveParryTarget = true; // Mark this as the active parry target
         parryWindowEndTime = Time.time + parryWindowDuration;
-        
+
+        // Register as active parry target with the manager
+        if (ParryInputManager.Instance != null)
+        {
+            ParryInputManager.Instance.SetActiveParrySystem(this);
+        }
+
         if (showDebugInfo)
         {
             Debug.Log($"[ParrySystem] Parry window opened for {parryWindowDuration}s on {gameObject.name}");
         }
-        
+
         OnParryWindowOpened?.Invoke();
     }
-    
+
     /// <summary>
     /// Closes the parry window
     /// </summary>
     public void CloseParryWindow()
     {
         if (!isParryWindowActive) return;
-        
+
         isParryWindowActive = false;
-        isActiveParryTarget = false; // No longer the active target
-        
+
+        // Clear active target if this was the active system
+        if (isActiveParryTarget && ParryInputManager.Instance != null)
+        {
+            ParryInputManager.Instance.ClearActiveParrySystem();
+        }
+
         if (showDebugInfo)
         {
             Debug.Log($"[ParrySystem] Parry window closed on {gameObject.name}");
         }
-        
+
         OnParryWindowClosed?.Invoke();
     }
-    
+
     /// <summary>
     /// Forces a parry window to close immediately (for successful parries)
     /// </summary>
     public void ForceCloseParryWindow()
     {
         isParryWindowActive = false;
-        isActiveParryTarget = false; // No longer the active target
-        OnParryWindowClosed?.Invoke();
-    }
-    
-    private void OnParryInput(InputAction.CallbackContext context)
-    {
-        // Only respond to input if this ParrySystem is the active target
-        if (!isActiveParryTarget)
+        
+        if (isActiveParryTarget && ParryInputManager.Instance != null)
         {
-            return; // Silently ignore input for non-active parry systems
+            ParryInputManager.Instance.ClearActiveParrySystem();
         }
         
-        // Check if character is still alive (using your game's logic)
+        OnParryWindowClosed?.Invoke();
+    }
+
+    /// <summary>
+    /// Called by ParryInputManager when this system is set as active target
+    /// </summary>
+    public void SetActiveTarget(bool active)
+    {
+        isActiveParryTarget = active;
+    }
+
+    /// <summary>
+    /// Handle parry input forwarded from ParryInputManager
+    /// </summary>
+    public void HandleParryInput(InputAction.CallbackContext context)
+    {
+        // Early safety checks
+        if (this == null || gameObject == null || !isActiveParryTarget)
+        {
+            return;
+        }
+
+        // Check if character is still alive
         if (!IsCharacterAlive())
         {
             if (showDebugInfo)
@@ -154,7 +189,7 @@ public class ParrySystem : MonoBehaviour
             }
             return;
         }
-        
+
         // Only allow parry during active window
         if (!isParryWindowActive)
         {
@@ -165,36 +200,35 @@ public class ParrySystem : MonoBehaviour
             OnParryFailed?.Invoke();
             return;
         }
-        
+
         // Successful parry
         PerformSuccessfulParry();
     }
-    
+
     /// <summary>
     /// Checks if the character is alive using the same logic as TurnManager
-    /// In your system, alive = GameObject exists and CharacterManager exists
     /// </summary>
-    private bool IsCharacterAlive()
+    public bool IsCharacterAlive()
     {
-        // Same logic as your TurnManager uses to check if characters are alive
         return characterManager != null && 
                characterManager.gameObject != null && 
-               characterManager.characterData != null;
+               characterManager.characterData != null &&
+               characterManager.GetCurrentHealth() > 0;
     }
-    
+
     private void PerformSuccessfulParry()
     {
         if (showDebugInfo)
         {
             Debug.Log($"[ParrySystem] Successful parry on {gameObject.name}!");
         }
-        
+
         // Play parry success sound
         PlayParrySound();
-        
+
         // Close parry window immediately
         ForceCloseParryWindow();
-        
+
         // Grant drive bonus
         if (characterManager != null)
         {
@@ -202,17 +236,17 @@ public class ParrySystem : MonoBehaviour
             if (driveManager?.Drive != null)
             {
                 driveManager.Drive.AddDrive(parryDriveBonus);
-                
+
                 if (showDebugInfo)
                 {
                     Debug.Log($"[ParrySystem] Added {parryDriveBonus} drive for successful parry on {gameObject.name}");
                 }
             }
         }
-        
+
         OnParrySuccess?.Invoke();
     }
-    
+
     /// <summary>
     /// Plays the parry success sound effect
     /// </summary>
@@ -227,7 +261,7 @@ public class ParrySystem : MonoBehaviour
             Debug.Log($"[ParrySystem] Parry sound not configured on {gameObject.name}");
         }
     }
-    
+
     /// <summary>
     /// Get the remaining time in the parry window
     /// </summary>
@@ -236,7 +270,7 @@ public class ParrySystem : MonoBehaviour
         if (!isParryWindowActive) return 0f;
         return Mathf.Max(0f, parryWindowEndTime - Time.time);
     }
-    
+
     /// <summary>
     /// Check if a parry attempt would be successful at this moment
     /// </summary>

@@ -304,7 +304,7 @@ public class CharacterManager : MonoBehaviour
         RefreshStats(); // Immediately update stats to reflect the new buff
         
         string buffName = amount > 0 ? "Buff" : "Debuff";
-        Debug.Log($"{buffName} applied to {characterData.characterName}: {type} {amount:+0;-0} for {turns} turns");
+        //Debug.Log($"{buffName} applied to {characterData.characterName}: {type} {amount:+0;-0} for {turns} turns");
     }
 
     public void Miss()

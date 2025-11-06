@@ -325,7 +325,9 @@ public class TurnManager : MonoBehaviour
         if (battleEnded) return;
         
         roundCounterInt += 1;
-        Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
+        //Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
+        currentCharacterTurn.characterData?.UpdateActionCooldowns(); 
+        
         
         // Note: We no longer update buffs here since they're now turn-based
         // Buffs are updated individually when each character completes their turn

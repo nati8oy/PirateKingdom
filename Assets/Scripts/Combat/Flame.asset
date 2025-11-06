@@ -16,10 +16,10 @@ MonoBehaviour:
   actionType: 0
   targetType: 0
   cooldown: 2
-  actionIcon: {fileID: 21300000, guid: 7e9224dcc57124f9f877f37d9b1d679c, type: 3}
+  actionIcon: {fileID: 21300000, guid: a4ad6c43d45024d48964c0cc29d3e1dd, type: 3}
   attackWindupTime: 2
-  minDamage: 2
-  maxDamage: 5
+  minDamage: 6
+  maxDamage: 8
   minHeal: 0
   maxHeal: 0
   buffValue: 0

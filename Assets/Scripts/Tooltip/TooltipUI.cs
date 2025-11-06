@@ -59,7 +59,7 @@ public class TooltipUI : MonoBehaviour
         // Add cooldown information if applicable
         if (action.cooldown > 0)
         {
-            tooltipContent += $"\nCooldown: {Mathf.RoundToInt(action.cooldown)} turns";
+            tooltipContent += $"\nCooldown: {Mathf.RoundToInt(action.cooldown)} rounds";
         }
         
         tooltipText.text = tooltipContent;
@@ -122,7 +122,7 @@ public class TooltipUI : MonoBehaviour
         // Show cooldown information with character-specific status
         if (action.cooldown > 0)
         {
-            tooltipContent += $"\nCooldown: {Mathf.RoundToInt(action.cooldown)} turns";
+            tooltipContent += $"\nCooldown: {Mathf.RoundToInt(action.cooldown)} rounds";
             
             // Show current cooldown status if character is provided
             if (character != null)
@@ -131,7 +131,7 @@ public class TooltipUI : MonoBehaviour
                 if (!isAvailable)
                 {
                     int cooldownRemaining = character.GetActionCooldownRemaining(action);
-                    tooltipContent += $"\n<color=red>Cooldown: {cooldownRemaining} turns remaining</color>";
+                    tooltipContent += $"\n<color=red> Active in {cooldownRemaining} rounds</color>";
                 }
                 else
                 {

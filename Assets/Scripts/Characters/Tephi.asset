@@ -29,4 +29,4 @@ MonoBehaviour:
   maxHealth: 20
   attackPower: 5
   defenseValue: 5
-  speed: 5
+  speed: 6

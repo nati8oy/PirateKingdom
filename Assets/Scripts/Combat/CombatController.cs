@@ -276,6 +276,8 @@ public class CombatController : MonoBehaviour
             if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
             {
                 float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
+                
+                
                 Debug.Log($"Base damage before multipliers: {damage}");
                 
                 // Apply drive mode multiplier if the attacker is in drive mode

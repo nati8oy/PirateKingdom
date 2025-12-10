@@ -1,8 +1,10 @@
+using AssetKits.ParticleImage;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MoreMountains.Feedbacks;
 using UnityEngine.Serialization;
+using static AssetKits.ParticleImage.ParticleImage;
 
 public class CharacterManager : MonoBehaviour
 {
@@ -42,6 +44,9 @@ public class CharacterManager : MonoBehaviour
     public MMF_Player missFeedback;
     [SerializeField] private MMF_Player parryFeedback;
     public MMF_Player feedbackPlayer;
+
+    
+    public ParticleImage driveParticles;
     
     [Header("Character-Specific Audio")]
     [Tooltip("MMF_Player for this character's attack audio (configure with MMF_AudioSource)")]

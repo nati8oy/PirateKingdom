@@ -294,6 +294,7 @@ public class DriveManager : MonoBehaviour
         if (isDriveMode)
         {
             Debug.Log($"Action performed with drive mode active. Deactivating drive mode for {characterManager?.characterData?.characterName ?? gameObject.name}");
+            characterManager.driveParticles.Stop();
             ExitDriveMode();
         }
         

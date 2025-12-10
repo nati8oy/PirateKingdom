@@ -55,7 +55,7 @@ public class CrewManager : MonoBehaviour
         crewStats[index] = new CharacterStats
         {
             maxHealth = crewMembers[index].maxHealth,
-            attackPower = crewMembers[index].attackPower,
+            attackPower = crewMembers[index].extraAttackPower,
             defenseValue = crewMembers[index].defenseValue,
             //currentHealth = crewMembers[index].currentHealth
         };

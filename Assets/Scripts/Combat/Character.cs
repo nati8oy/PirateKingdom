@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine.Serialization;
 
 [CreateAssetMenu(fileName = "Character", menuName = "Scriptable Objects/Character")]
 public class Character : ScriptableObject
@@ -36,7 +37,7 @@ public class Character : ScriptableObject
     
     [Header("Stats")]
     [SerializeField] public float maxHealth = 100f;
-    [SerializeField] public float attackPower = 10f;
+    [FormerlySerializedAs("attackPower")] [SerializeField] public float extraAttackPower = 10f;
     [SerializeField] public float defenseValue = 5f;
     [SerializeField] public float speed = 5f;
     
@@ -254,7 +255,7 @@ public class Character : ScriptableObject
     // Get modified stats with buffs applied
     public float GetModifiedAttackPower()
     {
-        float totalAttack = attackPower;
+        float totalAttack = extraAttackPower;
         foreach (var buff in activeBuffs)
         {
             if (buff.Type == BuffType.Attack)

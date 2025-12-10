@@ -27,10 +27,16 @@ MonoBehaviour:
   characterClass: 0
   allegiance: 1
   maxHealth: 20
-  attackPower: 2
+  extraAttackPower: 2
   defenseValue: 5
   speed: 4
   healThreshold: 0.3
+  driveConfig:
+    strategy: 1
+    healthThreshold: 0.5
+    usageChance: 1
+    preferredAction: 0
+    minimumSegmentsToUse: 1
   showDebugInfo: 0
   targetingStrategy: 0
   attackWeight: 0.7

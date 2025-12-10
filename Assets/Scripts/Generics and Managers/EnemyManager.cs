@@ -13,12 +13,23 @@ public class EnemyManager : MonoBehaviour
     private TurnManager _turnManager;
     private EnemyAttack _enemyAttack;
     private CharacterManager _characterManager;
-    
+
     // Add flag to track if we're currently showing enemy tooltip
     private bool _isShowingEnemyTooltip = false;
     
+    // Add this field at the top of the EnemyManager class
+    private EnemyDriveManager enemyDriveManager;
+    
     private void Awake()
     {
+        // Initialize drive manager as early as possible
+        CharacterManager characterManager = GetComponent<CharacterManager>();
+        if (characterManager != null)
+        {
+            InitializeEnemyDriveManager(characterManager);
+        }
+        
+        
         _turnManager = FindObjectOfType<TurnManager>();
         if (_turnManager == null)
         {
@@ -59,6 +70,14 @@ public class EnemyManager : MonoBehaviour
     
     void Start()
     {
+        enemyDriveManager = GetComponent<EnemyDriveManager>();
+    
+        // Initialize with the config from enemy data
+        if (enemyData != null)
+        {
+            enemyDriveManager.Initialize(enemyData.driveConfig);
+        }
+        
         // Get enemy data from CharacterManager
         enemyData = GetComponent<CharacterManager>().characterData as Enemy;
         if (enemyData == null)
@@ -69,8 +88,36 @@ public class EnemyManager : MonoBehaviour
         RefreshTargetList();
     }
 
+    public void EnemyTurnAction()
+    {
+        // Check if this enemy is still alive before starting turn actions
+        if (_characterManager == null || _characterManager.gameObject == null)
+        {
+            Debug.Log($"[EnemyManager] Enemy {gameObject.name} is dead, cannot take turn");
+            _turnManager.CompleteTurn();
+            return;
+        }
+    
+        // Start the enemy turn process
+        Debug.Log($"[EnemyManager] Starting turn for {gameObject.name}");
+        Invoke(nameof(ExecuteEnemyAction), enemyActionDelay);
+    }
+
     private void ExecuteEnemyAction()
     {
+        Debug.Log($"[EnemyManager] ExecuteEnemyAction called for {_characterManager.characterData.characterName}");
+    
+        // Evaluate drive usage AFTER turn buffs have been updated
+        if (enemyDriveManager != null)
+        {
+            Debug.Log($"[EnemyManager] About to call EvaluateDriveUsage, enemyDriveManager is not null");
+            enemyDriveManager.EvaluateDriveUsage();
+        }
+        else
+        {
+            Debug.LogWarning($"[EnemyManager] enemyDriveManager is NULL in ExecuteEnemyAction!");
+        }
+        
         // Check if this enemy is still alive before executing action
         if (_characterManager == null || _characterManager.gameObject == null)
         {
@@ -116,6 +163,8 @@ public class EnemyManager : MonoBehaviour
             Debug.Log($"[EnemyManager] {gameObject.name} chose action: {_selectedAction.actionName}");
         }
         
+        
+        
         // Execute the chosen action
         CharacterManager target = SelectTarget(_selectedAction);
         if (target != null)
@@ -153,20 +202,7 @@ public class EnemyManager : MonoBehaviour
         }
     }
     
-    public void EnemyTurnAction()
-    {
-        // Check if this enemy is still alive before starting turn actions
-        if (_characterManager == null || _characterManager.gameObject == null)
-        {
-            Debug.Log($"[EnemyManager] Enemy {gameObject.name} is dead, cannot take turn");
-            _turnManager.CompleteTurn();
-            return;
-        }
-        
-        // Start the enemy turn process
-        Debug.Log($"[EnemyManager] Starting turn for {gameObject.name}");
-        Invoke(nameof(ExecuteEnemyAction), enemyActionDelay);
-    }
+    
     
     // Public method to check if this enemy is currently showing tooltip
     public bool IsShowingEnemyTooltip()
@@ -578,5 +614,40 @@ public class EnemyManager : MonoBehaviour
     private int RollForCritical()
     {
         return Random.Range(1, 21); // d20 roll
+    }
+    
+    // Add this method to initialize the drive manager (call it in Awake or Start)
+    
+    
+    private void InitializeEnemyDriveManager(CharacterManager characterManager)
+    {
+        Debug.Log($"[EnemyManager] InitializeEnemyDriveManager called for {characterManager.characterData.characterName}");
+    
+        enemyDriveManager = characterManager.GetComponent<EnemyDriveManager>();
+        Debug.Log($"[EnemyManager] GetComponent<EnemyDriveManager> returned: {enemyDriveManager}");
+
+        if (enemyDriveManager == null)
+        {
+            Debug.Log($"[EnemyManager] EnemyDriveManager not found, adding component");
+            enemyDriveManager = characterManager.gameObject.AddComponent<EnemyDriveManager>();
+            Debug.Log($"[EnemyManager] AddComponent returned: {enemyDriveManager}");
+        }
+
+        // Get the enemy data
+        Enemy enemyData = characterManager.characterData as Enemy;
+        Debug.Log($"[EnemyManager] Cast to Enemy returned: {enemyData}");
+    
+        if (enemyData != null && enemyData.driveConfig != null)
+        {
+            Debug.Log($"[EnemyManager] Found Enemy scriptable object, initializing with driveConfig");
+            enemyDriveManager.Initialize(enemyData.driveConfig);
+        }
+        else
+        {
+            Debug.LogWarning($"[EnemyManager] {characterManager.characterData.characterName} has no driveConfig, using default");
+            enemyDriveManager.Initialize(new EnemyDriveConfig());
+        }
+    
+        Debug.Log($"[EnemyManager] InitializeEnemyDriveManager complete. enemyDriveManager is now: {enemyDriveManager}");
     }
 }

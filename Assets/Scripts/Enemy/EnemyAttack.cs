@@ -49,6 +49,8 @@ public class EnemyAttack : MonoBehaviour
     /// </summary>
     public void StartAttack(GameObject target, Action action)
     {
+        
+        
         if (isAttacking)
         {
             if (showDebugInfo)

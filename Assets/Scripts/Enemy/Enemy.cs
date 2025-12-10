@@ -3,10 +3,17 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "Enemy", menuName = "Scriptable Objects/Enemy")]
 public class Enemy : Character
 {
+    
+    private EnemyDriveManager enemyDriveManager;
+
     [Header("AI Behavior Settings")]
     [SerializeField, Range(0.1f, 1.0f)] 
     public float healThreshold = 0.3f;
     
+    [Header("Drive Usage")]
+    [SerializeField]
+    public EnemyDriveConfig driveConfig = new EnemyDriveConfig();
+   
     [SerializeField] 
     public bool showDebugInfo = false;
     
@@ -37,4 +44,6 @@ public class Enemy : Character
     [Header("Randomization")]
     [SerializeField, Range(0f, 0.5f)] 
     public float randomnessAmount = 0.1f; // Add some unpredictability
+    
+    
 }

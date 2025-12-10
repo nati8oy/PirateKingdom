@@ -23,15 +23,24 @@ MonoBehaviour:
   availableActions: []
   level: 1
   reputation: 0
+  deathSoundEffect: {fileID: 0}
   characterClass: 0
   allegiance: 1
   maxHealth: 40
-  attackPower: 8
+  extraAttackPower: 8
   defenseValue: 4
   speed: 4
-  enemyType: 0
-  difficulty: 1
-  commonDropRate: 0.6
-  rareDropRate: 0.3
-  uniqueDropRate: 0.1
+  healThreshold: 0.3
+  driveConfig:
+    strategy: 1
+    healthThreshold: 0.5
+    usageChance: 0.5
+    preferredAction: 0
+    minimumSegmentsToUse: 1
+  showDebugInfo: 0
   targetingStrategy: 5
+  attackWeight: 0.7
+  healWeight: 0.9
+  buffWeight: 0.15
+  debuffWeight: 0.2
+  randomnessAmount: 0.1

@@ -278,19 +278,16 @@ public class CombatController : MonoBehaviour
                 float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
                 
                 
-                Debug.Log($"Base damage before multipliers: {damage}");
                 
                 // Apply drive mode multiplier if the attacker is in drive mode
                 DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
                 if (attackerDriveManager != null)
                 {
-                    Debug.Log($"Drive manager found for {currentCharacter.characterData.characterName}");
-                    Debug.Log($"Drive mode active: {attackerDriveManager.IsDriveMode}");
+                  
                     
                     float driveMultiplier = attackerDriveManager.GetNextAttackDamageMultiplier();
                     damage *= driveMultiplier;
                     
-                    Debug.Log($"After drive multiplier ({driveMultiplier}x): {damage} damage");
                     
                     if (driveMultiplier > 1f)
                     {
@@ -365,7 +362,6 @@ public class CombatController : MonoBehaviour
     
     turnManager.CompleteTurn();
 }
-    // Add these methods to your CombatController class
     public Action GetSelectedAction()
     {
         return selectedAction; // assuming you have a selectedAction field

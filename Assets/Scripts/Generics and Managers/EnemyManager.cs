@@ -105,7 +105,6 @@ public class EnemyManager : MonoBehaviour
 
     private void ExecuteEnemyAction()
     {
-        Debug.Log($"[EnemyManager] ExecuteEnemyAction called for {_characterManager.characterData.characterName}");
     
         // Evaluate drive usage AFTER turn buffs have been updated
         if (enemyDriveManager != null)
@@ -237,7 +236,8 @@ public class EnemyManager : MonoBehaviour
         {
             foreach (var action in enemyData.actionSlots)
             {
-                if (action != null && enemyData.IsActionAvailable(action))
+                // Use the same availability check as the player UI
+                if (action != null && ActionsManager.IsActionAvailable(action, enemyData))
                 {
                     availableActions.Add(action);
                 }
@@ -249,7 +249,7 @@ public class EnemyManager : MonoBehaviour
         {
             foreach (var action in enemyData.GetActions())
             {
-                if (action != null && enemyData.IsActionAvailable(action) && !availableActions.Contains(action))
+                if (action != null && ActionsManager.IsActionAvailable(action, enemyData) && !availableActions.Contains(action))
                 {
                     availableActions.Add(action);
                 }
@@ -260,11 +260,6 @@ public class EnemyManager : MonoBehaviour
         {
             Debug.LogWarning($"[EnemyManager] No available actions for {gameObject.name}!");
             return null;
-        }
-        
-        if (enemyData.showDebugInfo)
-        {
-            Debug.Log($"[EnemyManager] {gameObject.name} has {availableActions.Count} available actions");
         }
         
         // Get current health percentage

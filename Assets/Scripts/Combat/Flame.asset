@@ -15,7 +15,7 @@ MonoBehaviour:
   actionName: Flame
   actionType: 0
   targetType: 0
-  cooldown: 2
+  cooldown: 3
   actionIcon: {fileID: 21300000, guid: a4ad6c43d45024d48964c0cc29d3e1dd, type: 3}
   attackWindupTime: 2
   minDamage: 6

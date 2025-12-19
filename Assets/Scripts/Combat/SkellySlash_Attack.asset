@@ -16,10 +16,10 @@ MonoBehaviour:
   actionType: 0
   targetType: 0
   cooldown: 0
-  icon: {fileID: 0}
+  actionIcon: {fileID: 0}
   attackWindupTime: 1
-  minDamage: 10
-  maxDamage: 20
+  minDamage: 5
+  maxDamage: 12
   minHeal: 0
   maxHeal: 0
   buffValue: 0

@@ -15,7 +15,7 @@ MonoBehaviour:
   actionName: Nourish
   actionType: 1
   targetType: 1
-  cooldown: 2
+  cooldown: 3
   actionIcon: {fileID: 21300000, guid: fbcccc6b3744549e1a9ed8a47d42de8f, type: 3}
   attackWindupTime: 1
   minDamage: 0

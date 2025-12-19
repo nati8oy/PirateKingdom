@@ -30,3 +30,6 @@ MonoBehaviour:
   attackPower: 10
   defenseValue: 5
   speed: 7
+  buffAttackMultiplier: 1.5
+  damageInflictedDriveMultiplier: 10
+  damageTakenDriveMultiplier: 10

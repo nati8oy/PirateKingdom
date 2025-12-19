@@ -9,6 +9,19 @@ public class ActionsManager : MonoBehaviour
     [SerializeField] private GameObject actionsGrid;
     [SerializeField] private GameObject actionSlotPrefab;
     
+    /// <summary>
+    /// Checks if an action is available and valid for selection
+    /// Returns false if the action is on cooldown
+    /// This method can be used by both player and enemy AI
+    /// </summary>
+    public static bool IsActionAvailable(Action action, Character character)
+    {
+        if (action == null || character == null)
+            return false;
+        
+        return character.IsActionAvailable(action);
+    }
+    
     public void LoadCharacterActions(Character character)
     {
         // Clear existing actions
@@ -52,7 +65,7 @@ public class ActionsManager : MonoBehaviour
             hoverHandler.SetActionWithCharacter(action, character);
             
             // Check if action is available (not on cooldown)
-            bool isAvailable = character.IsActionAvailable(action);
+            bool isAvailable = IsActionAvailable(action, character);
             int cooldownRemaining = character.GetActionCooldownRemaining(action);
             
             if (button != null)

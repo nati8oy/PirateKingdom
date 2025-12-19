@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Xml;
 using UnityEngine;
 using MoreMountains.Feedbacks;
 
@@ -26,7 +27,7 @@ public class DriveManager : MonoBehaviour
     [SerializeField] private int reduceCooldownCost = 3;
     
     [Header("Drive Action Effects")]
-    [SerializeField] private float buffAttackMultiplier = 1.5f;
+    private float buffAttackMultiplier;
     [SerializeField] private float healAmount = 100f;
     [SerializeField] private int cooldownReduction = 1;
     
@@ -53,6 +54,11 @@ public class DriveManager : MonoBehaviour
     
     void Awake()
     {
+        
+        characterManager = GetComponent<CharacterManager>();
+
+        buffAttackMultiplier = characterManager.characterData.buffAttackMultiplier;
+        
         characterManager = GetComponent<CharacterManager>();
         driveMeter.Initialize();
         previousSegmentCount = driveMeter.AvailableSegments;

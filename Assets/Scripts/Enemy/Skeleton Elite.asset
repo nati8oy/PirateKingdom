@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
-  m_Name: Skeleton Boss
+  m_Name: Skeleton Elite
   m_EditorClassIdentifier: 
   characterName: Slayer
   actionSlots:
@@ -26,21 +26,24 @@ MonoBehaviour:
   deathSoundEffect: {fileID: 0}
   characterClass: 0
   allegiance: 1
-  maxHealth: 40
-  extraAttackPower: 8
+  maxHealth: 30
+  attackPower: 10
   defenseValue: 4
-  speed: 4
-  healThreshold: 0.3
+  speed: 8
+  buffAttackMultiplier: 1.5
+  damageInflictedDriveMultiplier: 1.5
+  damageTakenDriveMultiplier: 1.2
+  healThreshold: 0.2
   driveConfig:
     strategy: 1
-    healthThreshold: 0.5
-    usageChance: 0.5
+    healthThreshold: 0.2
+    usageChance: 1
     preferredAction: 0
     minimumSegmentsToUse: 1
   showDebugInfo: 0
-  targetingStrategy: 5
+  targetingStrategy: 1
   attackWeight: 0.7
-  healWeight: 0.9
+  healWeight: 0.35
   buffWeight: 0.15
   debuffWeight: 0.2
   randomnessAmount: 0.1

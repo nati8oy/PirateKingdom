@@ -200,7 +200,10 @@ public class CharacterManager : MonoBehaviour
         // Add damage taken to drive meter through DriveManager
         if (driveManager != null)
         {
-            driveManager.Drive.AddDrive(damage);
+            var driveIncrease = damage * characterData.damageTakenDriveMultiplier;
+            //drive gained is multiplied by the damage in the damageTakenDriveMultiplier character data
+            driveManager.Drive.AddDrive(driveIncrease);
+            Debug.Log($"{characterData.characterName} took {damage} damage, drive increased by {driveIncrease}");
         }
     }
     
@@ -230,7 +233,11 @@ public class CharacterManager : MonoBehaviour
         // Add damage dealt to attacker's drive meter through DriveManager
         if (driveManager != null)
         {
-            driveManager.Drive.AddDrive(damage);
+           var driveIncrease = damage * characterData.damageInflictedDriveMultiplier;
+            
+            //drive gained is multiplied by the damageInflictedDriveMultiplier in the character data
+            driveManager.Drive.AddDrive(driveIncrease);
+            Debug.Log($"{characterData.characterName} inflicted {damage} damage on {target.characterData.characterName}, drive increased by {driveIncrease}");
         }
     }
     
@@ -239,8 +246,10 @@ public class CharacterManager : MonoBehaviour
         // Add damage dealt to drive meter
         if (driveManager != null)
         {
-            driveManager.Drive.AddDrive(damage);
-            Debug.Log($"{characterData.characterName} dealt {damage} damage, drive increased");
+            var driveIncrease = damage * characterData.damageInflictedDriveMultiplier;
+            
+            driveManager.Drive.AddDrive(driveIncrease);
+            Debug.Log($"{characterData.characterName} dealt {damage} damage, drive increased by {driveIncrease}");
         }
     }
 

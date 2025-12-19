@@ -18,8 +18,8 @@ MonoBehaviour:
   cooldown: 0
   actionIcon: {fileID: 0}
   attackWindupTime: 1
-  minDamage: 5
-  maxDamage: 12
+  minDamage: 2
+  maxDamage: 6
   minHeal: 0
   maxHeal: 0
   buffValue: 0

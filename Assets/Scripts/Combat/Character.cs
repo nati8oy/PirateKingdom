@@ -21,8 +21,7 @@ public class Character : ScriptableObject
     public enum CharacterClass
     {
         Duelist,
-        Trader,
-        Doctor,
+        Muscle,
         Musketeer,
         WitchDoctor
     }
@@ -43,8 +42,9 @@ public class Character : ScriptableObject
     [SerializeField] public float buffAttackMultiplier = 1.5f;
     
     [Header("Drvive Generation")]
-    [SerializeField] public float damageInflictedDriveMultiplier = 1.5f; 
-    [SerializeField] public float damageTakenDriveMultiplier = 1.2f;
+    [SerializeField] public float damageInflictedDriveMultiplier = 4f; 
+    [SerializeField] public float damageTakenDriveMultiplier = 4f;
+    [SerializeField] public float parryBonusDriveMultiplier = 40f;
     
     public enum BuffType
     {

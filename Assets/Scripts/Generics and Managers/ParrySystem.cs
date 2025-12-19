@@ -1,4 +1,3 @@
-
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -6,7 +5,7 @@ public class ParrySystem : MonoBehaviour
 {
     [Header("Parry Settings")]
     [SerializeField] private float parryWindowDuration = 0.3f;
-    [SerializeField] private float parryDriveBonus = 50f;
+    private float parryDriveBonus;
 
     [Header("Audio")]
     [SerializeField] private AudioClip parrySuccessSound;
@@ -19,10 +18,12 @@ public class ParrySystem : MonoBehaviour
     private bool isParryWindowActive = false;
     private float parryWindowEndTime = 0f;
     private bool isActiveParryTarget = false;
+    private float incomingDamage = 0f; // NEW: Store the incoming attack damage
 
     public float ParryWindowDuration => parryWindowDuration;
     public float ParryDriveBonus => parryDriveBonus;
     public bool IsParryWindowActive => isParryWindowActive;
+    public float IncomingDamage => incomingDamage; // NEW: Public getter
 
     // Events
     public System.Action OnParryWindowOpened;
@@ -32,6 +33,10 @@ public class ParrySystem : MonoBehaviour
 
     private void Awake()
     {
+        //set the bonus for the parrying of the attack based on the character's stats
+        parryDriveBonus = GetComponent<CharacterManager>().characterData.parryBonusDriveMultiplier;
+        
+        
         characterManager = GetComponent<CharacterManager>();
         if (characterManager == null)
         {
@@ -56,10 +61,7 @@ public class ParrySystem : MonoBehaviour
         {
             ParryInputManager.Instance.RegisterParrySystem(this);
         }
-        else if (showDebugInfo)
-        {
-            Debug.LogWarning("[ParrySystem] ParryInputManager not found!");
-        }
+ 
     }
 
     private void OnDisable()
@@ -90,37 +92,26 @@ public class ParrySystem : MonoBehaviour
     }
 
     /// <summary>
-    /// Opens the parry window for the specified duration
+    /// Called by EnemyAttack to notify of incoming damage when parry window opens
     /// </summary>
-    public void OpenParryWindow()
+    public void SetIncomingDamage(float damage)
     {
-        if (isParryWindowActive) return;
-
-        // Don't open parry window if character is dead/inactive
-        if (!IsCharacterAlive())
-        {
-            if (showDebugInfo)
-            {
-                Debug.Log($"[ParrySystem] Cannot open parry window - character is dead on {gameObject.name}");
-            }
-            return;
-        }
-
-        isParryWindowActive = true;
-        parryWindowEndTime = Time.time + parryWindowDuration;
-
-        // Register as active parry target with the manager
-        if (ParryInputManager.Instance != null)
-        {
-            ParryInputManager.Instance.SetActiveParrySystem(this);
-        }
-
+        incomingDamage = damage;
+        
+        
+        
         if (showDebugInfo)
         {
-            Debug.Log($"[ParrySystem] Parry window opened for {parryWindowDuration}s on {gameObject.name}");
+            Debug.Log($"[ParrySystem] Incoming damage set to: {incomingDamage}");
         }
+    }
 
-        OnParryWindowOpened?.Invoke();
+    /// <summary>
+    /// Clears the stored incoming damage
+    /// </summary>
+    private void ClearIncomingDamage()
+    {
+        incomingDamage = 0f;
     }
 
     /// <summary>
@@ -131,6 +122,7 @@ public class ParrySystem : MonoBehaviour
         if (!isParryWindowActive) return;
 
         isParryWindowActive = false;
+        ClearIncomingDamage(); // NEW: Clear damage when window closes
 
         // Clear active target if this was the active system
         if (isActiveParryTarget && ParryInputManager.Instance != null)
@@ -138,10 +130,6 @@ public class ParrySystem : MonoBehaviour
             ParryInputManager.Instance.ClearActiveParrySystem();
         }
 
-        if (showDebugInfo)
-        {
-            Debug.Log($"[ParrySystem] Parry window closed on {gameObject.name}");
-        }
 
         OnParryWindowClosed?.Invoke();
     }
@@ -152,12 +140,13 @@ public class ParrySystem : MonoBehaviour
     public void ForceCloseParryWindow()
     {
         isParryWindowActive = false;
-        
+        ClearIncomingDamage(); // NEW: Clear damage when forced closed
+    
         if (isActiveParryTarget && ParryInputManager.Instance != null)
         {
             ParryInputManager.Instance.ClearActiveParrySystem();
         }
-        
+    
         OnParryWindowClosed?.Invoke();
     }
 
@@ -183,20 +172,13 @@ public class ParrySystem : MonoBehaviour
         // Check if character is still alive
         if (!IsCharacterAlive())
         {
-            if (showDebugInfo)
-            {
-                Debug.Log($"[ParrySystem] Parry input ignored - character is dead on {gameObject.name}");
-            }
+  
             return;
         }
 
         // Only allow parry during active window
         if (!isParryWindowActive)
         {
-            if (showDebugInfo)
-            {
-                Debug.Log($"[ParrySystem] Parry attempted outside window - failed on {gameObject.name}");
-            }
             OnParryFailed?.Invoke();
             return;
         }
@@ -216,31 +198,30 @@ public class ParrySystem : MonoBehaviour
                characterManager.GetCurrentHealth() > 0;
     }
 
+    
     private void PerformSuccessfulParry()
     {
-        if (showDebugInfo)
-        {
-            Debug.Log($"[ParrySystem] Successful parry on {gameObject.name}!");
-        }
-
         // Play parry success sound
         PlayParrySound();
+
+        // Store the damage BEFORE closing the window (which clears it)
+        float damageParried = incomingDamage;
 
         // Close parry window immediately
         ForceCloseParryWindow();
 
-        // Grant drive bonus
+        // Grant drive bonus based on incoming damage
         if (characterManager != null)
         {
             var driveManager = characterManager.GetDriveManager();
             if (driveManager?.Drive != null)
             {
-                driveManager.Drive.AddDrive(parryDriveBonus);
-
-                if (showDebugInfo)
-                {
-                    Debug.Log($"[ParrySystem] Added {parryDriveBonus} drive for successful parry on {gameObject.name}");
-                }
+                // Calculate drive bonus: incoming damage × parry multiplier
+                var driveIncrease = damageParried * characterManager.characterData.parryBonusDriveMultiplier;
+                driveManager.Drive.AddDrive(driveIncrease);
+                
+                Debug.Log($"[ParrySystem] {characterManager.characterData.characterName} parried incoming damage of {damageParried}! " +
+                          $"Drive increased by {driveIncrease} ({damageParried} × {characterManager.characterData.parryBonusDriveMultiplier})");
             }
         }
 
@@ -256,10 +237,7 @@ public class ParrySystem : MonoBehaviour
         {
             audioSource.PlayOneShot(parrySuccessSound);
         }
-        else if (showDebugInfo)
-        {
-            Debug.Log($"[ParrySystem] Parry sound not configured on {gameObject.name}");
-        }
+        
     }
 
     /// <summary>
@@ -277,5 +255,27 @@ public class ParrySystem : MonoBehaviour
     public bool CanParryNow()
     {
         return isParryWindowActive && IsCharacterAlive();
+    }
+    
+    public void OpenParryWindow()
+    {
+        if (isParryWindowActive) return;
+
+        // Don't open parry window if character is dead/inactive
+        if (!IsCharacterAlive())
+        {
+            return;
+        }
+
+        isParryWindowActive = true;
+        parryWindowEndTime = Time.time + parryWindowDuration;
+
+        // Register as active parry target with the manager
+        if (ParryInputManager.Instance != null)
+        {
+            ParryInputManager.Instance.SetActiveParrySystem(this);
+        }
+
+        OnParryWindowOpened?.Invoke();
     }
 }

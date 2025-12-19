@@ -26,13 +26,14 @@ MonoBehaviour:
   deathSoundEffect: {fileID: 0}
   characterClass: 0
   allegiance: 1
-  maxHealth: 30
+  maxHealth: 40
   attackPower: 10
   defenseValue: 4
   speed: 8
-  buffAttackMultiplier: 1.5
-  damageInflictedDriveMultiplier: 1.5
-  damageTakenDriveMultiplier: 1.2
+  buffAttackMultiplier: 2
+  damageInflictedDriveMultiplier: 5
+  damageTakenDriveMultiplier: 5
+  parryBonusDriveMultiplier: 10
   healThreshold: 0.2
   driveConfig:
     strategy: 1

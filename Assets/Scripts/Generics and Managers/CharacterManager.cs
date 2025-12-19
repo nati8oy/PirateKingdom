@@ -248,6 +248,7 @@ public class CharacterManager : MonoBehaviour
         {
             var driveIncrease = damage * characterData.damageInflictedDriveMultiplier;
             
+            //drive gained is multiplied by the damageInflictedDriveMultiplier in the character data
             driveManager.Drive.AddDrive(driveIncrease);
             Debug.Log($"{characterData.characterName} dealt {damage} damage, drive increased by {driveIncrease}");
         }

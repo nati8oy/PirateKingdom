@@ -173,6 +173,40 @@ public class EnemyAttack : MonoBehaviour
         isAttacking = true;
         bool wasParried = false;
         
+        // Calculate damage early so we can pass it to parry system
+        float damage = attackDamage;
+        if (currentAction != null)
+        {
+            damage = Random.Range(currentAction.minDamage, currentAction.maxDamage);
+            if (showDebugInfo)
+            {
+                Debug.Log($"[EnemyAttack] Damage calculated from action: {damage} (range: {currentAction.minDamage}-{currentAction.maxDamage})");
+            }
+        }
+        else
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[EnemyAttack] currentAction is NULL, using attackDamage: {attackDamage}");
+            }
+        }
+        
+        // Check for critical hit
+        int critRoll = RollForCritical();
+        if (critRoll == 20)
+        {
+            damage *= 2;
+            if (showDebugInfo)
+            {
+                Debug.Log("[EnemyAttack] Critical hit! Damage doubled.");
+            }
+        }
+        
+        if (showDebugInfo)
+        {
+            Debug.Log($"[EnemyAttack] Final damage before parry window: {damage}");
+        }
+        
         // Get the windup time from the current action
         float windupTime = AttackWindupTime;
         
@@ -199,14 +233,19 @@ public class EnemyAttack : MonoBehaviour
         float windupEndTime = windupTime - parryWindowStartOffset;
         yield return new WaitForSeconds(windupEndTime);
         
-        // Open parry window for target
+        // Open parry window for target and inform them of incoming damage
         if (targetParrySystem != null)
         {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[EnemyAttack] Setting incoming damage to: {damage}");
+            }
+            targetParrySystem.SetIncomingDamage(damage); // NEW: Pass the damage amount
             targetParrySystem.OpenParryWindow();
             
             if (showDebugInfo)
             {
-                Debug.Log("[EnemyAttack] Parry window opened for target");
+                Debug.Log($"[EnemyAttack] Parry window opened - incoming damage: {damage}");
             }
         }
         
@@ -305,29 +344,37 @@ public class EnemyAttack : MonoBehaviour
             }
         }
     }
-    
+
     /// <summary>
     /// Cancels the current attack (useful for interruptions)
     /// </summary>
     public void CancelAttack()
     {
         if (!isAttacking) return;
-        
+    
         StopAllCoroutines();
         isAttacking = false;
         currentAction = null;
-        
+    
         // Close any open parry windows
         if (targetParrySystem != null && targetParrySystem.IsParryWindowActive)
         {
             targetParrySystem.CloseParryWindow();
         }
-        
+    
         if (showDebugInfo)
         {
             Debug.Log("[EnemyAttack] Attack cancelled");
         }
-        
+    
         OnAttackEnd?.Invoke();
+    }
+
+    /// <summary>
+    /// Rolls for critical hit using a d20 system
+    /// </summary>
+    private int RollForCritical()
+    {
+        return Random.Range(1, 21); // d20 roll (1-20)
     }
 }

@@ -18,7 +18,7 @@ MonoBehaviour:
   cooldown: 3
   actionIcon: {fileID: 21300000, guid: e57646fa2a8dd4cbe82026f8a05e70b9, type: 3}
   attackWindupTime: 0.75
-  minDamage: 9
+  minDamage: 5
   maxDamage: 12
   minHeal: 0
   maxHeal: 0

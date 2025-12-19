@@ -15,13 +15,13 @@ MonoBehaviour:
   actionName: Nourish
   actionType: 1
   targetType: 1
-  cooldown: 3
+  cooldown: 2
   actionIcon: {fileID: 21300000, guid: fbcccc6b3744549e1a9ed8a47d42de8f, type: 3}
   attackWindupTime: 1
   minDamage: 0
   maxDamage: 0
-  minHeal: 1
-  maxHeal: 3
+  minHeal: 2
+  maxHeal: 6
   buffValue: 0
   duration: 0
   buffType: 2

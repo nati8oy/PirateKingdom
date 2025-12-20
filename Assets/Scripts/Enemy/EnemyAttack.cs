@@ -128,34 +128,7 @@ public class EnemyAttack : MonoBehaviour
         // Don't execute the attack to force proper usage
         return;
         
-        // The old problematic code is commented out:
-        /*
-        if (isAttacking)
-        {
-            if (showDebugInfo)
-            {
-                Debug.LogWarning("[EnemyAttack] Already attacking!");
-            }
-            return;
-        }
-        
-        currentAction = action;
-        
-        // Find player target (assuming player has specific tag or component)
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        
-        if (player != null)
-        {
-            targetParrySystem = player.GetComponent<ParrySystem>();
-            targetVisualFeedback = player.GetComponent<ParryVisualFeedback>();
-            if (targetVisualFeedback == null)
-            {
-                targetVisualFeedback = player.GetComponentInChildren<ParryVisualFeedback>();
-            }
-        }
-        
-        StartCoroutine(ExecuteAttackSequence());
-        */
+       
     }
     
     /// <summary>
@@ -262,26 +235,34 @@ public class EnemyAttack : MonoBehaviour
             {
                 Debug.Log("[EnemyAttack] Attack was parried!");
             }
+            
+            // Early exit - skip all hit feedback and damage
+            isAttacking = false;
+            currentAction = null;
+            targetParrySystem = null;
+            targetVisualFeedback = null;
+            
+            OnAttackEnd?.Invoke();
+            OnAttackComplete?.Invoke(wasParried);
+            yield break;  // <-- EXIT EARLY, skip the rest of the coroutine
         }
-        else
+        
+        // Attack hits (only reached if NOT parried)
+        if (showDebugInfo)
         {
-            // Attack hits
-            if (showDebugInfo)
-            {
-                Debug.Log("[EnemyAttack] Attack hit!");
-            }
-            
-            OnAttackHit?.Invoke();
-            
-            // Close parry window since attack landed
-            if (targetParrySystem != null)
-            {
-                targetParrySystem.CloseParryWindow();
-            }
-            
-            // Deal damage to target
-            DealDamageToTarget();
+            Debug.Log("[EnemyAttack] Attack hit!");
         }
+        
+        OnAttackHit?.Invoke();
+        
+        // Close parry window since attack landed
+        if (targetParrySystem != null)
+        {
+            targetParrySystem.CloseParryWindow();
+        }
+        
+        // Deal damage to target
+        DealDamageToTarget();
         
         // Attack hit duration
         yield return new WaitForSeconds(attackHitTime);
@@ -289,17 +270,15 @@ public class EnemyAttack : MonoBehaviour
         // Recovery phase
         yield return new WaitForSeconds(attackRecoveryTime);
         
-        // Attack complete - CLEAR target references
+        // Attack complete
         isAttacking = false;
         currentAction = null;
-        
-        // IMPORTANT: Clear target references to prevent reuse
         targetParrySystem = null;
         targetVisualFeedback = null;
         
         if (showDebugInfo)
         {
-            Debug.Log($"[EnemyAttack] Attack complete - Was parried: {wasParried}");
+            Debug.Log("[EnemyAttack] Attack complete - Was parried: false");
             Debug.Log("[EnemyAttack] Cleared target references");
         }
         
@@ -361,11 +340,7 @@ public class EnemyAttack : MonoBehaviour
         {
             targetParrySystem.CloseParryWindow();
         }
-    
-        if (showDebugInfo)
-        {
-            Debug.Log("[EnemyAttack] Attack cancelled");
-        }
+
     
         OnAttackEnd?.Invoke();
     }

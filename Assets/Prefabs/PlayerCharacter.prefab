@@ -8210,7 +8210,7 @@ MonoBehaviour:
           ButtonText: Automatic Shaker Setup
         Owner: {fileID: 5538178216688167945}
         DebugActive: 0
-        Sfx: {fileID: 8300000, guid: 1ca0ebf5c7fd94b9893f676cae3bb8a0, type: 3}
+        Sfx: {fileID: 8300000, guid: 8f5eac5246c9047f484d09f329b17699, type: 3}
         RandomSfx: []
         TestPlayButton:
           ButtonText: Debug Play Sound

@@ -474,6 +474,19 @@ public class EnemyManager : MonoBehaviour
             damage *= 2;
             Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
         }
+
+        // Apply drive mode multiplier if active
+        DriveManager enemyDriveManager = _characterManager.GetComponent<DriveManager>();
+        if (enemyDriveManager != null)
+        {
+            float driveMultiplier = enemyDriveManager.GetNextAttackDamageMultiplier();
+            damage *= driveMultiplier;
+            
+            if (driveMultiplier > 1f)
+            {
+                Debug.Log($"[EnemyManager] {gameObject.name} applied {driveMultiplier}x drive multiplier! Damage: {damage}");
+            }
+        }
     
         // Store damage and target for after parry resolution
         _pendingDamage = damage;
@@ -512,12 +525,45 @@ public class EnemyManager : MonoBehaviour
                     damage *= 2;
                     Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
                 }
+
+                // Apply drive mode multiplier if active
+                DriveManager enemyDriveManager = _characterManager.GetComponent<DriveManager>();
+                if (enemyDriveManager != null)
+                {
+                    float driveMultiplier = enemyDriveManager.GetNextAttackDamageMultiplier();
+                    damage *= driveMultiplier;
+                    
+                    if (driveMultiplier > 1f)
+                    {
+                        Debug.Log($"[EnemyManager] {gameObject.name} applied {driveMultiplier}x drive multiplier! Damage: {damage}");
+                    }
+                    
+                    // Consume the drive buff after applying it
+                    enemyDriveManager.OnAttackPerformed();
+                }
                 
                 targetManager.TakeDamage(damage);
                 break;
                 
             case Action.ActionType.Heal:
                 float healing = Random.Range(_selectedAction.minHeal, _selectedAction.maxHeal);
+                
+                // Apply drive mode multiplier to healing if active
+                DriveManager healerDriveManager = _characterManager.GetComponent<DriveManager>();
+                if (healerDriveManager != null)
+                {
+                    float healingMultiplier = healerDriveManager.GetNextHealingMultiplier();
+                    healing *= healingMultiplier;
+                    
+                    if (healingMultiplier > 1f)
+                    {
+                        Debug.Log($"[EnemyManager] {gameObject.name} applied {healingMultiplier}x drive multiplier to healing! Healing: {healing}");
+                    }
+                    
+                    // Consume the drive buff after applying it
+                    healerDriveManager.OnAttackPerformed();
+                }
+                
                 _characterManager.Heal(healing);
                 break;
                 

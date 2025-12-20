@@ -39,7 +39,7 @@ public class Character : ScriptableObject
     [SerializeField] public float attackPower = 10f;
     [SerializeField] public float defenseValue = 5f;
     [SerializeField] public float speed = 5f;
-    [SerializeField] public float buffAttackMultiplier = 1.5f;
+    [FormerlySerializedAs("buffAttackMultiplier")] [SerializeField] public float buffNextActionMultiplier = 1.5f;
     
     [Header("Drvive Generation")]
     [SerializeField] public float damageInflictedDriveMultiplier = 4f; 

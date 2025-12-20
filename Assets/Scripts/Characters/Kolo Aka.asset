@@ -16,7 +16,6 @@ MonoBehaviour:
   actionSlots:
   - {fileID: 11400000, guid: 2089de7ec83b54ca2a33489ee4278325, type: 2}
   - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
-  - {fileID: 11400000, guid: 2089de7ec83b54ca2a33489ee4278325, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
@@ -30,7 +29,7 @@ MonoBehaviour:
   attackPower: 11
   defenseValue: 4
   speed: 10
-  buffAttackMultiplier: 2
+  buffNextActionMultiplier: 2
   damageInflictedDriveMultiplier: 2.5
   damageTakenDriveMultiplier: 10
   parryBonusDriveMultiplier: 5

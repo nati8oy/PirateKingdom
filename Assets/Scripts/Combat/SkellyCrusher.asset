@@ -19,7 +19,7 @@ MonoBehaviour:
   actionIcon: {fileID: 21300000, guid: e57646fa2a8dd4cbe82026f8a05e70b9, type: 3}
   attackWindupTime: 0.75
   minDamage: 5
-  maxDamage: 12
+  maxDamage: 9
   minHeal: 0
   maxHeal: 0
   buffValue: 0

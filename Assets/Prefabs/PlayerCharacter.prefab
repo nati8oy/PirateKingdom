@@ -606,7 +606,7 @@ MonoBehaviour:
           ButtonText: Automatic Shaker Setup
         Owner: {fileID: 4983943415798328104}
         DebugActive: 0
-        Sfx: {fileID: 8300000, guid: 374e4ea91c99741b9a3c70b47109e1da, type: 3}
+        Sfx: {fileID: 8300000, guid: 2c5d1bf0b5546444c8ee7bb432f28431, type: 3}
         RandomSfx: []
         TestPlayButton:
           ButtonText: Debug Play Sound
@@ -5535,7 +5535,6 @@ MonoBehaviour:
   healSelfCost: 2
   removeDebuffCost: 1
   reduceCooldownCost: 3
-  buffAttackMultiplier: 2
   healAmount: 100
   cooldownReduction: 1
   driveSegmentUnlockedSound: {fileID: 8300000, guid: 6abe5e453255e40098cd065f223fd10a, type: 3}
@@ -5602,7 +5601,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   parryWindowDuration: 0.3
-  parryDriveBonus: 50
   parrySuccessSound: {fileID: 8300000, guid: ba4e5d2a901084a069a03b11f702ece2, type: 3}
   audioSource: {fileID: 3715197237033342345}
   showDebugInfo: 0

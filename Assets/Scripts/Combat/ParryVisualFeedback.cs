@@ -215,4 +215,23 @@ public class ParryVisualFeedback : MonoBehaviour
         parryStatusText.text = "";
         Debug.Log($"[ParryVisualFeedback] Cleared text on {gameObject.name}");
     }
+    /// <summary>
+    /// Call this when an attack is parried to stop the visual countdown
+    /// </summary>
+    public void StopAttackCountdown()
+    {
+        isTrackingAttack = false;
+        
+        if (parryTimerBar != null)
+        {
+            parryTimerBar.fillAmount = 0.0f;
+        }
+        
+        if (parryWindowIndicator != null)
+        {
+            parryWindowIndicator.SetActive(false);
+        }
+        
+        Debug.Log($"[ParryVisualFeedback] Stopped attack countdown on {gameObject.name}");
+    }
 }

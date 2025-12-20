@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: Slayer
   actionSlots:
-  - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
   - {fileID: 11400000, guid: 73a4ecfd977dd472f9765f6ca8453fcf, type: 2}
   - {fileID: 11400000, guid: 78db0287b308f4a85b69ade23cccb503, type: 2}
+  - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
@@ -26,13 +26,14 @@ MonoBehaviour:
   deathSoundEffect: {fileID: 0}
   characterClass: 0
   allegiance: 1
-  maxHealth: 30
+  maxHealth: 40
   attackPower: 10
   defenseValue: 4
   speed: 8
-  buffAttackMultiplier: 1.5
-  damageInflictedDriveMultiplier: 1.5
-  damageTakenDriveMultiplier: 1.2
+  buffNextActionMultiplier: 2
+  damageInflictedDriveMultiplier: 5
+  damageTakenDriveMultiplier: 5
+  parryBonusDriveMultiplier: 10
   healThreshold: 0.2
   driveConfig:
     strategy: 1

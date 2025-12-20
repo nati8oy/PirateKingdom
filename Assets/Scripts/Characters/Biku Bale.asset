@@ -10,23 +10,27 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
-  m_Name: Kolo
+  m_Name: Biku Bale
   m_EditorClassIdentifier: 
-  characterName: Kolo
+  characterName: Biku Bale
   actionSlots:
-  - {fileID: 11400000, guid: 2089de7ec83b54ca2a33489ee4278325, type: 2}
-  - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
+  - {fileID: 11400000, guid: 89fc47f842ad44d8dbc509cf011a2095, type: 2}
+  - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   availableActions: []
   level: 1
   reputation: 0
-  deathSoundEffect: {fileID: 8300000, guid: 875d9a7457f5d4337b5ff614ebfeb3fb, type: 3}
-  characterClass: 4
+  deathSoundEffect: {fileID: 0}
+  characterClass: 2
   allegiance: 0
-  maxHealth: 15
+  maxHealth: 20
   attackPower: 11
   defenseValue: 4
-  speed: 5
+  speed: 10
+  buffAttackMultiplier: 2
+  damageInflictedDriveMultiplier: 10
+  damageTakenDriveMultiplier: 5
+  parryBonusDriveMultiplier: 5

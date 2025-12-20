@@ -4,6 +4,8 @@ using UnityEngine;
 
 public class EnemyManager : MonoBehaviour
 {
+    // Dictionary to track action cooldowns - maps action NAME to turns remaining until usable
+    private Dictionary<string, int> actionCooldowns = new Dictionary<string, int>();
     [SerializeField] private Enemy enemyData;
     [SerializeField] private float enemyActionDelay = 1.25f;
     [Header("Attack System")]
@@ -474,6 +476,19 @@ public class EnemyManager : MonoBehaviour
             damage *= 2;
             Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
         }
+
+        // Apply drive mode multiplier if active
+        DriveManager enemyDriveManager = _characterManager.GetComponent<DriveManager>();
+        if (enemyDriveManager != null)
+        {
+            float driveMultiplier = enemyDriveManager.GetNextAttackDamageMultiplier();
+            damage *= driveMultiplier;
+            
+            if (driveMultiplier > 1f)
+            {
+                Debug.Log($"[EnemyManager] {gameObject.name} applied {driveMultiplier}x drive multiplier! Damage: {damage}");
+            }
+        }
     
         // Store damage and target for after parry resolution
         _pendingDamage = damage;
@@ -512,12 +527,45 @@ public class EnemyManager : MonoBehaviour
                     damage *= 2;
                     Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
                 }
+
+                // Apply drive mode multiplier if active
+                DriveManager enemyDriveManager = _characterManager.GetComponent<DriveManager>();
+                if (enemyDriveManager != null)
+                {
+                    float driveMultiplier = enemyDriveManager.GetNextAttackDamageMultiplier();
+                    damage *= driveMultiplier;
+                    
+                    if (driveMultiplier > 1f)
+                    {
+                        Debug.Log($"[EnemyManager] {gameObject.name} applied {driveMultiplier}x drive multiplier! Damage: {damage}");
+                    }
+                    
+                    // Consume the drive buff after applying it
+                    enemyDriveManager.OnAttackPerformed();
+                }
                 
                 targetManager.TakeDamage(damage);
                 break;
                 
             case Action.ActionType.Heal:
                 float healing = Random.Range(_selectedAction.minHeal, _selectedAction.maxHeal);
+                
+                // Apply drive mode multiplier to healing if active
+                DriveManager healerDriveManager = _characterManager.GetComponent<DriveManager>();
+                if (healerDriveManager != null)
+                {
+                    float healingMultiplier = healerDriveManager.GetNextHealingMultiplier();
+                    healing *= healingMultiplier;
+                    
+                    if (healingMultiplier > 1f)
+                    {
+                        Debug.Log($"[EnemyManager] {gameObject.name} applied {healingMultiplier}x drive multiplier to healing! Healing: {healing}");
+                    }
+                    
+                    // Consume the drive buff after applying it
+                    healerDriveManager.OnAttackPerformed();
+                }
+                
                 _characterManager.Heal(healing);
                 break;
                 
@@ -573,6 +621,7 @@ public class EnemyManager : MonoBehaviour
     private float _pendingDamage;
     private CharacterManager _pendingTarget;
     
+    
     private void OnAttackComplete(bool wasParried)
     {
         if (_pendingTarget == null)
@@ -591,12 +640,14 @@ public class EnemyManager : MonoBehaviour
         }
         else
         {
-            // Attack was parried, apply reduced damage... in this case it's 0 for testing purposes
-            float reducedDamage = _pendingDamage * 0f;
-            _pendingTarget.TakeDamage(reducedDamage);
-            Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried! Reduced damage: {reducedDamage:F1}");
+            // Attack was parried, apply reduced damage (adjust multiplier as needed)
+            float parryDamageReduction = 0.25f; // 25% damage gets through on parry
+            
+            float reducedDamage = _pendingDamage * parryDamageReduction;
+            _pendingTarget.TakeDamage(reducedDamage, wasParried: true);  // <-- Pass wasParried = true!
+            Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried! Reduced damage: {reducedDamage:F1} ({parryDamageReduction * 100}% of {_pendingDamage:F1})");
         }
-        
+
         // Clear pending data and tooltip flag
         _pendingDamage = 0f;
         _pendingTarget = null;
@@ -644,5 +695,72 @@ public class EnemyManager : MonoBehaviour
         }
     
         Debug.Log($"[EnemyManager] InitializeEnemyDriveManager complete. enemyDriveManager is now: {enemyDriveManager}");
+    }
+    
+    // Use an action and put it on cooldown
+    public void UseAction(Action action)
+    {
+        if (action.cooldown > 0)
+        {
+            int cooldownTurns = Mathf.RoundToInt(action.cooldown);
+            actionCooldowns[action.actionName] = cooldownTurns;  // Track by name instead of object reference
+        }
+    }
+
+    // Check if an action is available (not on cooldown)
+    public bool IsActionAvailable(Action action)
+    {
+        if (action == null) 
+        {
+            Debug.Log("IsActionAvailable: action is null");
+            return false;
+        }
+
+        // If the action has no cooldown, it's always available
+        if (action.cooldown <= 0) 
+        {
+            return true;
+        }
+
+        // Check if the action is currently on cooldown by name
+        bool result = !actionCooldowns.ContainsKey(action.actionName);
+        return result;
+    }
+
+    // Get the remaining cooldown turns for an action
+    public int GetActionCooldownRemaining(Action action)
+    {
+        if (action == null || !actionCooldowns.ContainsKey(action.actionName))
+            return 0;
+        
+        return actionCooldowns[action.actionName];
+    }
+
+    // Update action cooldowns when the character completes their turn
+    public void UpdateActionCooldowns()
+    {
+        List<string> actionsToRemove = new List<string>();
+        
+        // Create a snapshot of the dictionary to avoid modification during enumeration
+        foreach (var kvp in actionCooldowns.ToList())
+        {
+            string actionName = kvp.Key;
+            int turnsRemaining = kvp.Value - 1;
+            
+            if (turnsRemaining <= 0)
+            {
+                actionsToRemove.Add(actionName);
+            }
+            else
+            {
+                actionCooldowns[actionName] = turnsRemaining;
+            }
+        }
+        
+        // Remove expired actions
+        foreach (string actionName in actionsToRemove)
+        {
+            actionCooldowns.Remove(actionName);
+        }
     }
 }

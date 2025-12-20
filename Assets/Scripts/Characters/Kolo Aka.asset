@@ -10,27 +10,26 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
-  m_Name: Tephi
+  m_Name: Kolo Aka
   m_EditorClassIdentifier: 
-  characterName: Tephi
+  characterName: Kolo Aka
   actionSlots:
+  - {fileID: 11400000, guid: 2089de7ec83b54ca2a33489ee4278325, type: 2}
   - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
-  - {fileID: 11400000, guid: 89fc47f842ad44d8dbc509cf011a2095, type: 2}
-  - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   availableActions: []
   level: 1
   reputation: 0
-  deathSoundEffect: {fileID: 8300000, guid: 9f455b0279dc04bdba72d72013b7ffc1, type: 3}
-  characterClass: 0
+  deathSoundEffect: {fileID: 8300000, guid: 875d9a7457f5d4337b5ff614ebfeb3fb, type: 3}
+  characterClass: 3
   allegiance: 0
   maxHealth: 20
-  attackPower: 5
-  defenseValue: 5
-  speed: 6
-  buffAttackMultiplier: 1.5
-  damageInflictedDriveMultiplier: 4
-  damageTakenDriveMultiplier: 4
-  parryBonusDriveMultiplier: 40
+  attackPower: 11
+  defenseValue: 4
+  speed: 10
+  buffNextActionMultiplier: 2
+  damageInflictedDriveMultiplier: 2.5
+  damageTakenDriveMultiplier: 10
+  parryBonusDriveMultiplier: 5

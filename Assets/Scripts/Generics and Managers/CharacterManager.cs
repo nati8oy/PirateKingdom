@@ -176,14 +176,14 @@ public class CharacterManager : MonoBehaviour
         Debug.LogWarning($"OnRoundComplete() is deprecated for {characterData.characterName}. Buffs are now updated per turn.");
     }
 
+    
     public void TakeDamage(float damage, bool wasParried = false)
     {
-        actionStatusText.enabled = true;
-        actionStatusText.text = "-" + Mathf.Round(damage);
-        
-        // Only play damage feedback if it wasn't a parry
+        // Only update the status text and play feedback if it wasn't a parry
         if (!wasParried)
         {
+            actionStatusText.enabled = true;
+            actionStatusText.text = "-" + Mathf.Round(damage);
             dealDamageFeedback.PlayFeedbacks();
             feedbackPlayer.PlayFeedbacks();
         }
@@ -248,6 +248,7 @@ public class CharacterManager : MonoBehaviour
         {
             var driveIncrease = damage * characterData.damageInflictedDriveMultiplier;
             
+            //drive gained is multiplied by the damageInflictedDriveMultiplier in the character data
             driveManager.Drive.AddDrive(driveIncrease);
             Debug.Log($"{characterData.characterName} dealt {damage} damage, drive increased by {driveIncrease}");
         }

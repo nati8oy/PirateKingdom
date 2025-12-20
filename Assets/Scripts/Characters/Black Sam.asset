@@ -10,13 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
-  m_Name: Lord Botty
+  m_Name: Black Sam
   m_EditorClassIdentifier: 
-  characterName: Lord Botty
+  characterName: Black Sam
   actionSlots:
   - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
+  - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
   - {fileID: 11400000, guid: 89fc47f842ad44d8dbc509cf011a2095, type: 2}
-  - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
@@ -26,10 +26,11 @@ MonoBehaviour:
   deathSoundEffect: {fileID: 8300000, guid: 614d38b7e72914c12b227e2a87b44442, type: 3}
   characterClass: 0
   allegiance: 0
-  maxHealth: 20
+  maxHealth: 40
   attackPower: 10
   defenseValue: 5
-  speed: 7
-  buffAttackMultiplier: 1.5
-  damageInflictedDriveMultiplier: 10
-  damageTakenDriveMultiplier: 10
+  speed: 15
+  buffAttackMultiplier: 1.25
+  damageInflictedDriveMultiplier: 5
+  damageTakenDriveMultiplier: 2.5
+  parryBonusDriveMultiplier: 10

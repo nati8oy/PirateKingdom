@@ -57,7 +57,7 @@ public class DriveManager : MonoBehaviour
         
         characterManager = GetComponent<CharacterManager>();
 
-        buffAttackMultiplier = characterManager.characterData.buffAttackMultiplier;
+        buffAttackMultiplier = characterManager.characterData.buffNextActionMultiplier;
         
         characterManager = GetComponent<CharacterManager>();
         driveMeter.Initialize();
@@ -200,11 +200,13 @@ public class DriveManager : MonoBehaviour
         return true;
     }
     
+   
     private bool ExecuteHealSelf()
     {
         if (characterManager != null)
         {
-            characterManager.Heal(healAmount);
+            float finalHealAmount = healAmount * GetNextHealingMultiplier();
+            characterManager.Heal(finalHealAmount);
             return true;
         }
         return false;

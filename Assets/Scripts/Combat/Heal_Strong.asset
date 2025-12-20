@@ -15,13 +15,13 @@ MonoBehaviour:
   actionName: Strong Heal
   actionType: 1
   targetType: 1
-  cooldown: 2
+  cooldown: 3
   actionIcon: {fileID: 21300000, guid: 180063a838b7f46dab264c80f91378e5, type: 3}
   attackWindupTime: 1
   minDamage: 0
   maxDamage: 0
-  minHeal: 3
-  maxHeal: 6
+  minHeal: 5
+  maxHeal: 10
   buffValue: 0
   duration: 0
   buffType: 2

@@ -26,11 +26,11 @@ MonoBehaviour:
   deathSoundEffect: {fileID: 0}
   characterClass: 2
   allegiance: 0
-  maxHealth: 20
+  maxHealth: 35
   attackPower: 11
   defenseValue: 4
   speed: 10
-  buffAttackMultiplier: 2
+  buffNextActionMultiplier: 2
   damageInflictedDriveMultiplier: 10
   damageTakenDriveMultiplier: 5
   parryBonusDriveMultiplier: 5

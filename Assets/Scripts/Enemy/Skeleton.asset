@@ -30,13 +30,13 @@ MonoBehaviour:
   attackPower: 10
   defenseValue: 5
   speed: 5
-  buffAttackMultiplier: 2
+  buffNextActionMultiplier: 2
   damageInflictedDriveMultiplier: 2.5
   damageTakenDriveMultiplier: 5
   parryBonusDriveMultiplier: 2.5
   healThreshold: 0.3
   driveConfig:
-    strategy: 1
+    strategy: 2
     healthThreshold: 0.5
     usageChance: 1
     preferredAction: 0

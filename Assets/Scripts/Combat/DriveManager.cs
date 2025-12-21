@@ -18,7 +18,7 @@ public class DriveManager : MonoBehaviour
 {
     [Header("Drive Meter")]
     [SerializeField] private DriveMeter driveMeter = new DriveMeter();
-    [SerializeField] private int requiredSegments = 3; // Adjust this value as needed
+    [SerializeField] private int requiredSegments = 3; 
     
     [Header("Drive Action Costs")]
     [SerializeField] private int buffAttackCost = 1;

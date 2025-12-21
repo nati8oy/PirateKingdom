@@ -8303,7 +8303,7 @@ MonoBehaviour:
   driveMeter:
     maxDriveValue: 400
     totalSegments: 4
-    regenerationPerTurn: 32
+    regenerationPerTurn: 24
     currentDrive: 0
     availableSegments: 0
   requiredSegments: 1

@@ -5,6 +5,7 @@ public class ParrySystem : MonoBehaviour
 {
     [Header("Parry Settings")]
     [SerializeField] private float parryWindowDuration = 0.3f;
+    [SerializeField] private bool requireDriveModeToParry = true;
     private float parryDriveBonus;
 
     [Header("Audio")]
@@ -172,8 +173,19 @@ public class ParrySystem : MonoBehaviour
         // Check if character is still alive
         if (!IsCharacterAlive())
         {
-  
             return;
+        }
+
+        // Check drive mode requirement if enabled
+        if (requireDriveModeToParry)
+        {
+            DriveManager driveManager = characterManager?.GetComponent<DriveManager>();
+            if (driveManager == null || !driveManager.IsDriveMode)
+            {
+                Debug.Log($"[ParrySystem] {characterManager?.characterData?.characterName ?? gameObject.name} cannot parry without active drive mode!");
+                OnParryFailed?.Invoke();
+                return;
+            }
         }
 
         // Only allow parry during active window

@@ -42,7 +42,7 @@ public class DriveManager : MonoBehaviour
     private bool nextAttackBuffed;
     private bool isDriveMode = false;
     private int previousSegmentCount = 0; // Track previous segments for audio
-    
+
     public DriveMeter Drive => driveMeter;
     public bool NextAttackBuffed => nextAttackBuffed;
     public float BuffAttackMultiplier => buffAttackMultiplier;
@@ -305,7 +305,7 @@ public class DriveManager : MonoBehaviour
             characterManager.driveParticles.Stop();
             ExitDriveMode();
         }
-        
+
         // Also consume single-use attack buff
         nextAttackBuffed = false;
     }
@@ -390,5 +390,10 @@ public class DriveManager : MonoBehaviour
             OnDriveModeExited?.Invoke();
             Debug.Log($"{gameObject.name} exited drive mode.");
         }
+    }
+    
+    public bool IsDriveModeAvailable()
+    {
+        return isDriveMode;
     }
 }

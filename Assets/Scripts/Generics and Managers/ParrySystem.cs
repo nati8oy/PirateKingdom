@@ -19,12 +19,17 @@ public class ParrySystem : MonoBehaviour
     private bool isParryWindowActive = false;
     private float parryWindowEndTime = 0f;
     private bool isActiveParryTarget = false;
-    private float incomingDamage = 0f; // NEW: Store the incoming attack damage
+    private float incomingDamage = 0f;
+    private CharacterManager incomingAttacker; // NEW: Store who's attacking us
+
+    [Header("Parry Counterattack")]
+    [SerializeField] private float parryCounterattackDamage = 15f;
+    [SerializeField] private bool enableParryCounterattack = true;
 
     public float ParryWindowDuration => parryWindowDuration;
     public float ParryDriveBonus => parryDriveBonus;
     public bool IsParryWindowActive => isParryWindowActive;
-    public float IncomingDamage => incomingDamage; // NEW: Public getter
+    public float IncomingDamage => incomingDamage;
 
     // Events
     public System.Action OnParryWindowOpened;
@@ -237,8 +242,15 @@ public class ParrySystem : MonoBehaviour
             }
         }
 
+        // NEW: Execute parry counterattack if enabled
+        if (enableParryCounterattack)
+        {
+            ExecuteParryCounterattack();
+        }
+
         OnParrySuccess?.Invoke();
     }
+    
 
     /// <summary>
     /// Plays the parry success sound effect
@@ -289,5 +301,78 @@ public class ParrySystem : MonoBehaviour
         }
 
         OnParryWindowOpened?.Invoke();
+    }
+
+    
+    
+    
+    /// <summary>
+    /// Executes a counterattack on the original attacker after a successful parry
+    /// </summary>
+    private void ExecuteParryCounterattack()
+    {
+        if (characterManager == null || incomingAttacker == null)
+        {
+            if (showDebugInfo)
+            {
+                Debug.LogWarning("[ParrySystem] Cannot execute counterattack: CharacterManager or attacker is null!");
+            }
+            return;
+        }
+
+        // Roll for hit chance (same as normal attacks: 1-20 d20 system)
+        int hitRoll = Random.Range(1, 21);
+        
+        if (showDebugInfo)
+        {
+            Debug.Log($"[ParrySystem] Counterattack hit roll: {hitRoll}");
+        }
+
+        // Check if counterattack hits (critical fail on 1, automatic hit on 20, or attack+roll vs defense)
+        if (hitRoll == 1)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[ParrySystem] Counterattack missed! Critical fail!");
+            }
+            incomingAttacker.Miss();
+            return;
+        }
+
+        // Successful hit if natural 20 or (attack roll + character attack >= target defense)
+        if (hitRoll == 20 || (hitRoll + characterManager.AttackPower >= incomingAttacker.DefenseValue))
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[ParrySystem] Counterattack hit! Attack roll: {hitRoll + characterManager.AttackPower} vs Defense: {incomingAttacker.DefenseValue}");
+            }
+
+            // Deal fixed counterattack damage
+            float damage = parryCounterattackDamage;
+            
+            if (hitRoll == 20)
+            {
+                Debug.Log("[ParrySystem] Counterattack Critical Hit! Double damage!");
+                damage *= 2;
+            }
+
+            incomingAttacker.TakeDamage(damage);
+            characterManager.OnDamageDealt(damage);
+            
+            if (showDebugInfo)
+            {
+                Debug.Log($"[ParrySystem] Counterattack dealt {damage} damage to {incomingAttacker.characterData.characterName}");
+            }
+        }
+        else
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[ParrySystem] Counterattack missed! Attack roll: {hitRoll + characterManager.AttackPower} vs Defense: {incomingAttacker.DefenseValue}");
+            }
+            incomingAttacker.Miss();
+        }
+
+        incomingAttacker = null; // Clear the attacker reference
     }
 }

@@ -14,6 +14,13 @@ public class EnemyAttack : MonoBehaviour
     [SerializeField] private float attackDamage = 25f;
     [SerializeField] private LayerMask targetLayers = 1;
     
+    [Header("Parry Counterattack")]
+    [SerializeField] private float parryCounterattackDamage = 15f; // Default damage for parry counterattack
+    [SerializeField] private bool enableParryCounterattack = true;
+    private CharacterManager incomingAttacker; // NEW: Store who's attacking us
+
+    public float ParryCounterattackDamage => parryCounterattackDamage;
+    
     [Header("Debug")]
     [SerializeField] private bool showDebugInfo = false;
     
@@ -43,6 +50,8 @@ public class EnemyAttack : MonoBehaviour
     {
         characterManager = GetComponent<CharacterManager>();
     }
+    
+    
     
     /// <summary>
     /// Starts an attack sequence against the specified target using the given action
@@ -146,8 +155,25 @@ public class EnemyAttack : MonoBehaviour
         isAttacking = true;
         bool wasParried = false;
         
+        
         // Calculate damage early so we can pass it to parry system
         float damage = attackDamage;
+        
+        // Open parry window for target and inform them of incoming damage
+        if (targetParrySystem != null)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"[EnemyAttack] Setting incoming damage to: {damage}");
+            }
+            targetParrySystem.SetIncomingDamage(damage);
+            
+            if (showDebugInfo)
+            {
+                Debug.Log($"[EnemyAttack] Parry window opened - incoming damage: {damage}");
+            }
+        }
+
         if (currentAction != null)
         {
             damage = Random.Range(currentAction.minDamage, currentAction.maxDamage);
@@ -352,4 +378,6 @@ public class EnemyAttack : MonoBehaviour
     {
         return Random.Range(1, 21); // d20 roll (1-20)
     }
+    
+    
 }

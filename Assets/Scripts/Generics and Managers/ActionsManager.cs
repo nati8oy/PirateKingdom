@@ -8,6 +8,7 @@ public class ActionsManager : MonoBehaviour
 {
     [SerializeField] private GameObject actionsGrid;
     [SerializeField] private GameObject actionSlotPrefab;
+    [SerializeField] private GameObject endTurnButtonPrefab; // New field for End Turn button prefab
     
     /// <summary>
     /// Checks if an action is available and valid for selection
@@ -135,5 +136,105 @@ public class ActionsManager : MonoBehaviour
                 Debug.LogWarning($"No TMP_Text component found in children of actionSlotPrefab!");
             }
         }
+        
+        // Add the End Turn button after all action slots
+        CreateEndTurnButton();
+    }
+    
+    private void CreateEndTurnButton()
+    {
+        // If no prefab is assigned, try to create a simple button dynamically
+        if (endTurnButtonPrefab == null)
+        {
+            CreateDynamicEndTurnButton();
+            return;
+        }
+        
+        GameObject endTurnSlot = Instantiate(endTurnButtonPrefab, actionsGrid.transform);
+        if (endTurnSlot == null)
+        {
+            Debug.LogError("Failed to instantiate endTurnButtonPrefab!");
+            return;
+        }
+        
+        Button button = endTurnSlot.GetComponent<Button>();
+        TMP_Text buttonText = endTurnSlot.GetComponentInChildren<TMP_Text>();
+        
+        if (button != null)
+        {
+            button.interactable = true;
+            button.onClick.AddListener(() => {
+                Debug.Log("End Turn button clicked!");
+                TurnManager turnManager = FindObjectOfType<TurnManager>();
+                if (turnManager != null)
+                {
+                    turnManager.CompleteTurn();
+                }
+                else
+                {
+                    Debug.LogError("TurnManager not found in scene!");
+                }
+            });
+        }
+        else
+        {
+            Debug.LogWarning("No Button component found on endTurnButtonPrefab!");
+        }
+        
+        if (buttonText != null)
+        {
+            buttonText.text = "End Turn";
+        }
+    }
+    
+    private void CreateDynamicEndTurnButton()
+    {
+        // Create a simple end turn button if no prefab is assigned
+        GameObject endTurnSlot = new GameObject("EndTurnButton");
+        endTurnSlot.transform.SetParent(actionsGrid.transform, false);
+        
+        // Try to copy the layout from an action slot if one exists
+        if (actionsGrid.transform.childCount > 1)
+        {
+            RectTransform template = actionsGrid.transform.GetChild(0).GetComponent<RectTransform>();
+            if (template != null)
+            {
+                RectTransform rectTransform = endTurnSlot.AddComponent<RectTransform>();
+                rectTransform.sizeDelta = template.sizeDelta;
+            }
+        }
+        
+        Button button = endTurnSlot.AddComponent<Button>();
+        Image image = endTurnSlot.AddComponent<Image>();
+        image.color = new Color(0.8f, 0.2f, 0.2f, 1f); // Red color to distinguish it
+        
+        button.targetGraphic = image;
+        button.interactable = true;
+        button.onClick.AddListener(() => {
+            Debug.Log("End Turn button clicked!");
+            TurnManager turnManager = FindObjectOfType<TurnManager>();
+            if (turnManager != null)
+            {
+                turnManager.CompleteTurn();
+            }
+            else
+            {
+                Debug.LogError("TurnManager not found in scene!");
+            }
+        });
+        
+        // Add text
+        GameObject textObj = new GameObject("Text");
+        textObj.transform.SetParent(endTurnSlot.transform, false);
+        TMP_Text buttonText = textObj.AddComponent<TextMeshProUGUI>();
+        buttonText.text = "End Turn";
+        buttonText.alignment = TextAlignmentOptions.Center;
+        buttonText.fontSize = 36;
+        
+        RectTransform textRect = textObj.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
     }
 }

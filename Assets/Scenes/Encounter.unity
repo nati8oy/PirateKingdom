@@ -1695,6 +1695,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   actionsGrid: {fileID: 1002256127}
   actionSlotPrefab: {fileID: 5071891601881058677, guid: 9ea3d31ff8bb34930b83898eacc68d30, type: 3}
+  endTurnButtonPrefab: {fileID: 5036818114158963892, guid: 8a7df0c4ff5cf47088c0f541d058a592, type: 3}
 --- !u!114 &932110818 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 309832026440642506, guid: 66f36d97f15384b0ba6235820dfd4d0f, type: 3}

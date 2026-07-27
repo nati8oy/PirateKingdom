@@ -40,9 +40,9 @@ public class PlayerInputHandler : MonoBehaviour
             DriveManager driveManager = selectedCharacter.GetDriveManager();
             if (driveManager != null)
             {
-                // Enter drive mode - you'll need to implement this method in DriveManager
-                driveManager.EnterDriveMode();
-                //Debug.Log($"{selectedCharacter.characterData.characterName} entered drive mode!");
+                // Each press commits one drive stack to the selected character's next action.
+                driveManager.TryAddDriveStack();
+                //Debug.Log($"{selectedCharacter.characterData.characterName} added a drive stack!");
             }
         }
         else

@@ -66,6 +66,11 @@ public class EnemyDriveConfig
     [Range(1, 10)]
     [SerializeField]
     public int minimumSegmentsToUse = 1;
+
+    [Tooltip("How many drive stacks the enemy commits when buffing an attack. Diminishing returns apply, so more stacks give progressively less bonus.")]
+    [Range(1, 4)]
+    [SerializeField]
+    public int stacksPerBuff = 2;
 }
 /// 
 public class EnemyDriveManager : MonoBehaviour
@@ -214,12 +219,12 @@ public class EnemyDriveManager : MonoBehaviour
     private void AttemptUseDriveAction(DriveAction preferredAction)
     {
         Debug.Log($"[{characterManager.characterData.characterName}] AttemptUseDriveAction: Attempting {preferredAction}");
-        
-        // If the preferred action is BuffNextAttack, only use it if we're guaranteed to attack this turn
-        if (preferredAction == DriveAction.BuffNextAttack && HasPendingAttackBuff())
+
+        // The attack buff is now the shared stacking mechanic — commit multiple stacks
+        // (diminishing returns) instead of a single one-shot flag.
+        if (preferredAction == DriveAction.BuffNextAttack)
         {
-            // Already have a buffed attack pending, don't waste another segment
-            Debug.Log($"[{characterManager.characterData.characterName}] Already has a buffed attack pending");
+            ApplyAttackStacks();
             return;
         }
 
@@ -262,6 +267,31 @@ public class EnemyDriveManager : MonoBehaviour
             {
                 Debug.LogWarning($"[{characterManager.characterData.characterName}] Failed to use fallback drive action: {availableActions[0]}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Commits drive stacks toward the enemy's next attack, up to the configured stacksPerBuff.
+    /// Uses the same stacking + diminishing-returns system as the player. Bounded by available
+    /// segments and the DriveManager's max-stack cap.
+    /// </summary>
+    private void ApplyAttackStacks()
+    {
+        int target = Mathf.Max(1, driveConfig.stacksPerBuff);
+        int added = 0;
+
+        while (driveManager.DriveStacks < target && driveManager.TryAddDriveStack())
+        {
+            added++;
+        }
+
+        if (added > 0)
+        {
+            Debug.Log($"[{characterManager.characterData.characterName}] Committed {added} drive stack(s), now at {driveManager.DriveStacks}");
+        }
+        else
+        {
+            Debug.Log($"[{characterManager.characterData.characterName}] Could not add drive stacks (not enough segments or already at max)");
         }
     }
 

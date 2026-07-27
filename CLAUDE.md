@@ -101,6 +101,17 @@ third-party and should not be modified** unless explicitly requested:
   match the existing style (public serialized fields, `[Header]`/`[Tooltip]` attributes,
   ScriptableObject data + MonoBehaviour runtime split).
 
+## Ways of working
+
+- **UI is the user's domain.** The user handles all UI work (canvases, prefabs, buttons, layout,
+  bindings) in the Unity Editor. When a feature needs UI, do the *code* side only: expose the
+  necessary public methods, `[SerializeField]` fields, `UnityEvent`s / C# events, and hooks — then
+  clearly tell the user what to wire up in the Editor. Do **not** attempt to build or wire UI
+  yourself, and don't consider a feature "done" from a UI standpoint; the user wires and tests it
+  in-Editor.
+- Verification is always done by the user playing the scene in the Editor (see "How to run /
+  test"). Provide concrete in-Editor test steps rather than assuming automated verification.
+
 ## Git
 
 - Work off `main`; branch before committing if asked to commit.

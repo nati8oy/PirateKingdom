@@ -44,7 +44,8 @@ public class Character : ScriptableObject
     [Header("Drvive Generation")]
     [SerializeField] public float damageInflictedDriveMultiplier = 4f; 
     [SerializeField] public float damageTakenDriveMultiplier = 4f;
-    [SerializeField] public float parryBonusDriveMultiplier = 40f;
+    [Tooltip("Drive gained on a successful parry = damage prevented x this value. Target is ~25 drive (a quarter segment) for a typical 5-damage hit.")]
+    [SerializeField] public float parryBonusDriveMultiplier = 5f;
     
     public enum BuffType
     {

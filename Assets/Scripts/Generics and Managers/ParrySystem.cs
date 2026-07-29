@@ -20,10 +20,24 @@ public class ParrySystem : MonoBehaviour
     private bool isActiveParryTarget = false;
     private float incomingDamage = 0f; // NEW: Store the incoming attack damage
 
+    // --- One attempt per incoming attack ---
+    // The sequence spans the whole attack (windup -> resolution), which is wider than the timing
+    // window. That's deliberate: a press during the windup has to be catchable so it can be
+    // consumed, otherwise mashing through the windup lands a parry on every attack.
+    private bool parrySequenceActive = false;
+    private bool parryAttemptSpent = false;
+    private bool parrySucceeded = false;
+
     public float ParryWindowDuration => parryWindowDuration;
     public float ParryDriveBonus => parryDriveBonus;
     public bool IsParryWindowActive => isParryWindowActive;
     public float IncomingDamage => incomingDamage; // NEW: Public getter
+
+    /// <summary>True once this attack's single parry attempt has been used, hit or miss.</summary>
+    public bool ParryAttemptSpent => parryAttemptSpent;
+
+    /// <summary>Whether the current attack was successfully parried.</summary>
+    public bool ParrySucceeded => parrySucceeded;
 
     // Events
     public System.Action OnParryWindowOpened;
@@ -54,19 +68,11 @@ public class ParrySystem : MonoBehaviour
         }
     }
 
-    private void OnEnable()
-    {
-        // Register with ParryInputManager instead of directly subscribing to input
-        if (ParryInputManager.Instance != null)
-        {
-            ParryInputManager.Instance.RegisterParrySystem(this);
-        }
- 
-    }
-
     private void OnDisable()
     {
-        // Unregister from ParryInputManager
+        // No matching registration step: the manager only ever dispatches to whichever system is
+        // the current active target, which OpenParryWindow() sets. This just makes sure we aren't
+        // left as that target after going away.
         if (ParryInputManager.Instance != null)
         {
             ParryInputManager.Instance.UnregisterParrySystem(this);
@@ -92,17 +98,48 @@ public class ParrySystem : MonoBehaviour
     }
 
     /// <summary>
-    /// Called by EnemyAttack to notify of incoming damage when parry window opens
+    /// Called by EnemyAttack when an attack begins its windup. Arms this character's single parry
+    /// attempt for the incoming attack and makes them the input target for the whole sequence —
+    /// not just the timing window — so an early press is caught and spent rather than ignored.
     /// </summary>
-    public void SetIncomingDamage(float damage)
+    public void BeginParrySequence(float damage)
     {
+        parrySequenceActive = true;
+        parryAttemptSpent = false;
+        parrySucceeded = false;
         incomingDamage = damage;
-        
-        
-        
+
+        if (ParryInputManager.Instance != null)
+        {
+            ParryInputManager.Instance.SetActiveParrySystem(this);
+        }
+
         if (showDebugInfo)
         {
-            Debug.Log($"[ParrySystem] Incoming damage set to: {incomingDamage}");
+            Debug.Log($"[ParrySystem] Parry sequence begun, incoming damage: {incomingDamage}");
+        }
+    }
+
+    /// <summary>
+    /// Called by EnemyAttack once the attack has resolved. Closes out the sequence and releases
+    /// the input target so presses between attacks are ignored entirely.
+    /// </summary>
+    public void EndParrySequence()
+    {
+        if (!parrySequenceActive) return;
+
+        parrySequenceActive = false;
+        isParryWindowActive = false;
+        ClearIncomingDamage();
+
+        if (isActiveParryTarget && ParryInputManager.Instance != null)
+        {
+            ParryInputManager.Instance.ClearActiveParrySystem();
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"[ParrySystem] Parry sequence ended. Attempt spent: {parryAttemptSpent}, succeeded: {parrySucceeded}");
         }
     }
 
@@ -115,38 +152,27 @@ public class ParrySystem : MonoBehaviour
     }
 
     /// <summary>
-    /// Closes the parry window
+    /// Closes the timing window. Note this does NOT end the parry sequence — the attack hasn't
+    /// resolved yet, and a late press still has to be caught so it can be spent and reported as a
+    /// miss. Releasing the input target is EndParrySequence()'s job.
     /// </summary>
     public void CloseParryWindow()
     {
         if (!isParryWindowActive) return;
 
         isParryWindowActive = false;
-        ClearIncomingDamage(); // NEW: Clear damage when window closes
-
-        // Clear active target if this was the active system
-        if (isActiveParryTarget && ParryInputManager.Instance != null)
-        {
-            ParryInputManager.Instance.ClearActiveParrySystem();
-        }
-
 
         OnParryWindowClosed?.Invoke();
     }
 
     /// <summary>
-    /// Forces a parry window to close immediately (for successful parries)
+    /// Forces the timing window shut immediately (for successful parries). Same as above: the
+    /// sequence stays open until the attack resolves.
     /// </summary>
     public void ForceCloseParryWindow()
     {
         isParryWindowActive = false;
-        ClearIncomingDamage(); // NEW: Clear damage when forced closed
-    
-        if (isActiveParryTarget && ParryInputManager.Instance != null)
-        {
-            ParryInputManager.Instance.ClearActiveParrySystem();
-        }
-    
+
         OnParryWindowClosed?.Invoke();
     }
 
@@ -172,13 +198,37 @@ public class ParrySystem : MonoBehaviour
         // Check if character is still alive
         if (!IsCharacterAlive())
         {
-  
+
             return;
         }
 
-        // Only allow parry during active window
+        // No attack inbound — there's nothing to parry, so don't burn anything.
+        if (!parrySequenceActive)
+        {
+            return;
+        }
+
+        // One attempt per attack: they've already had their go at this one.
+        if (parryAttemptSpent)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log("[ParrySystem] Parry input ignored — attempt already spent for this attack");
+            }
+            return;
+        }
+
+        // Consume the attempt up front. Whether this turns out to be a hit or a miss, there is no
+        // second try against this attack — that's what stops mashing from being a valid strategy.
+        parryAttemptSpent = true;
+
         if (!isParryWindowActive)
         {
+            // Mistimed: either still in windup, or the window has already elapsed.
+            if (showDebugInfo)
+            {
+                Debug.Log("[ParrySystem] Parry attempt mistimed — window not open");
+            }
             OnParryFailed?.Invoke();
             return;
         }
@@ -204,8 +254,12 @@ public class ParrySystem : MonoBehaviour
         // Play parry success sound
         PlayParrySound();
 
-        // Store the damage BEFORE closing the window (which clears it)
+        // Store the damage BEFORE closing the window
         float damageParried = incomingDamage;
+
+        // Record the outcome so EnemyAttack can read it directly rather than inferring a parry
+        // from the window having shut — the window also shuts on timeout.
+        parrySucceeded = true;
 
         // Close parry window immediately
         ForceCloseParryWindow();
@@ -250,13 +304,18 @@ public class ParrySystem : MonoBehaviour
     }
 
     /// <summary>
-    /// Check if a parry attempt would be successful at this moment
+    /// Check if a parry attempt would be successful at this moment — the window is open AND the
+    /// one attempt for this attack hasn't already been spent.
     /// </summary>
     public bool CanParryNow()
     {
-        return isParryWindowActive && IsCharacterAlive();
+        return isParryWindowActive && !parryAttemptSpent && IsCharacterAlive();
     }
-    
+
+    /// <summary>
+    /// Opens the timing window partway through the attack's windup. The input target was already
+    /// claimed by BeginParrySequence(), so this only controls whether a press counts as a hit.
+    /// </summary>
     public void OpenParryWindow()
     {
         if (isParryWindowActive) return;
@@ -269,12 +328,6 @@ public class ParrySystem : MonoBehaviour
 
         isParryWindowActive = true;
         parryWindowEndTime = Time.time + parryWindowDuration;
-
-        // Register as active parry target with the manager
-        if (ParryInputManager.Instance != null)
-        {
-            ParryInputManager.Instance.SetActiveParrySystem(this);
-        }
 
         OnParryWindowOpened?.Invoke();
     }

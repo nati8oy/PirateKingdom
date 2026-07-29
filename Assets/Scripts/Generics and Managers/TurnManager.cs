@@ -23,22 +23,55 @@ public class TurnManager : MonoBehaviour
     [SerializeField] private GameObject victoryUI;
     [SerializeField] private GameObject defeatUI;
     [SerializeField] private TMP_Text battleResultText;
+    [Tooltip("Start the battle automatically on Play. Uncheck when something else spawns the combatants and calls BeginBattle() itself.")]
+    [SerializeField] private bool autoStartBattle = true;
     private bool battleEnded = false;
-    
+    private bool battleStarted = false;
+
+    public bool BattleStarted => battleStarted;
+
     public List<GameObject> turnOrder = new List<GameObject>();
     private List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>();
 
     void Start()
     {
+        // Legacy path: crew and enemies are placed directly in the scene, so there is nothing to
+        // wait for. Once encounters spawn their combatants from run state, uncheck autoStartBattle
+        // and let the spawner call BeginBattle() when it's finished.
+        if (autoStartBattle)
+        {
+            BeginBattle();
+        }
+    }
+
+    /// <summary>
+    /// Starts the battle. Call this once every combatant exists in the scene — turn order is
+    /// snapshotted here, so anything spawned afterwards will not take part in the first round.
+    /// Safe to call only once; subsequent calls are ignored.
+    /// </summary>
+    public void BeginBattle()
+    {
+        if (battleStarted)
+        {
+            Debug.LogWarning("[TurnManager] BeginBattle() called but the battle has already started.");
+            return;
+        }
+
+        battleStarted = true;
         GetTurnOrder();
         SetCharacterTurn();
     }
 
     private void Update()
     {
+        // Nothing to poll until the battle actually begins. Without this guard an encounter that
+        // spawns its combatants would find zero living players on the first frame and immediately
+        // declare a defeat.
+        if (!battleStarted) return;
+
         // Don't process turns if battle has ended
         if (battleEnded) return;
-        
+
         // Check for battle end conditions
         CheckBattleEndConditions();
         

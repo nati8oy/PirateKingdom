@@ -502,7 +502,9 @@ public class EnemyManager : MonoBehaviour
                 Debug.Log($"[EnemyManager] {gameObject.name} attacking {targetManager.characterData?.characterName} with parry system");
             }
         
-            _enemyAttack.StartAttack(targetManager.gameObject, _selectedAction);
+            // Pass the already-rolled damage so the parry window reports the damage that will
+            // actually land, and the target's parry drive bonus is scaled off the real number.
+            _enemyAttack.StartAttack(targetManager.gameObject, _selectedAction, _pendingDamage);
         }
         else
         {

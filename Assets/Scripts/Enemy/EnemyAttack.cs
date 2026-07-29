@@ -10,24 +10,24 @@ public class EnemyAttack : MonoBehaviour
     [Header("Parry Settings")]
     [SerializeField] private float parryWindowStartOffset = 0.2f; // How long before hit the parry window opens
     
-    [Header("Attack Properties")]
-    [SerializeField] private float attackDamage = 25f;
-    [SerializeField] private LayerMask targetLayers = 1;
-    
     [Header("Debug")]
     [SerializeField] private bool showDebugInfo = false;
-    
+
     private CharacterManager characterManager;
     private bool isAttacking = false;
     private ParrySystem targetParrySystem;
     private ParryVisualFeedback targetVisualFeedback;
-    
+
     // Current action being executed
     private Action currentAction;
-    
+
+    // Damage rolled by EnemyManager for this attack. This is the same value that will actually be
+    // applied (full on hit, reduced on parry), so the target's parry drive bonus is calculated
+    // from the damage genuinely prevented rather than from a second, unrelated roll.
+    private float incomingDamage;
+
     public float AttackHitTime => attackHitTime;
     public float AttackRecoveryTime => attackRecoveryTime;
-    public float AttackDamage => attackDamage;
     public bool IsAttacking => isAttacking;
     
     // Property to get windup time from current action
@@ -45,12 +45,12 @@ public class EnemyAttack : MonoBehaviour
     }
     
     /// <summary>
-    /// Starts an attack sequence against the specified target using the given action
+    /// Starts an attack sequence against the specified target using the given action.
+    /// <paramref name="damage"/> is the already-rolled damage for this attack (including crit and
+    /// drive multipliers) and is what the target's parry window will report as incoming.
     /// </summary>
-    public void StartAttack(GameObject target, Action action)
+    public void StartAttack(GameObject target, Action action, float damage)
     {
-        
-        
         if (isAttacking)
         {
             if (showDebugInfo)
@@ -65,7 +65,8 @@ public class EnemyAttack : MonoBehaviour
         targetVisualFeedback = null;
         
         currentAction = action;
-        
+        incomingDamage = damage;
+
         // Add debug logging to track targeting
         if (showDebugInfo)
         {
@@ -108,15 +109,6 @@ public class EnemyAttack : MonoBehaviour
     }
     
     /// <summary>
-    /// Starts an attack sequence against the specified target
-    /// </summary>
-    public void StartAttack(GameObject target)
-    {
-        // Use a default action if none provided
-        StartAttack(target, null);
-    }
-    
-    /// <summary>
     /// DEPRECATED: Use StartAttack(GameObject target, Action action) instead
     /// This method should not be used as it doesn't specify which player to target
     /// </summary>
@@ -145,41 +137,16 @@ public class EnemyAttack : MonoBehaviour
     {
         isAttacking = true;
         bool wasParried = false;
-        
-        // Calculate damage early so we can pass it to parry system
-        float damage = attackDamage;
-        if (currentAction != null)
-        {
-            damage = Random.Range(currentAction.minDamage, currentAction.maxDamage);
-            if (showDebugInfo)
-            {
-                Debug.Log($"[EnemyAttack] Damage calculated from action: {damage} (range: {currentAction.minDamage}-{currentAction.maxDamage})");
-            }
-        }
-        else
-        {
-            if (showDebugInfo)
-            {
-                Debug.Log($"[EnemyAttack] currentAction is NULL, using attackDamage: {attackDamage}");
-            }
-        }
-        
-        // Check for critical hit
-        int critRoll = RollForCritical();
-        if (critRoll == 20)
-        {
-            damage *= 2;
-            if (showDebugInfo)
-            {
-                Debug.Log("[EnemyAttack] Critical hit! Damage doubled.");
-            }
-        }
-        
+
+        // Damage was rolled by EnemyManager and handed to us via StartAttack, so the number the
+        // parry window reports is the number that will actually be applied.
+        float damage = incomingDamage;
+
         if (showDebugInfo)
         {
-            Debug.Log($"[EnemyAttack] Final damage before parry window: {damage}");
+            Debug.Log($"[EnemyAttack] Damage for this attack: {damage}");
         }
-        
+
         // Get the windup time from the current action
         float windupTime = AttackWindupTime;
         
@@ -191,7 +158,15 @@ public class EnemyAttack : MonoBehaviour
         }
         
         OnAttackStart?.Invoke();
-        
+
+        // Arm the target's single parry attempt for the whole windup, not just the timing window.
+        // Claiming the input target this early is what lets an over-eager press be caught and
+        // spent rather than silently ignored.
+        if (targetParrySystem != null)
+        {
+            targetParrySystem.BeginParrySequence(damage);
+        }
+
         // Start the visual countdown immediately when attack begins
         if (targetVisualFeedback != null)
         {
@@ -201,47 +176,45 @@ public class EnemyAttack : MonoBehaviour
         {
             Debug.LogWarning("[EnemyAttack] targetVisualFeedback is null, cannot start countdown!");
         }
-        
+
         // Attack windup phase
         float windupEndTime = windupTime - parryWindowStartOffset;
         yield return new WaitForSeconds(windupEndTime);
-        
-        // Open parry window for target and inform them of incoming damage
+
+        // Open the timing window — from here a press counts as a hit rather than a miss
         if (targetParrySystem != null)
         {
-            if (showDebugInfo)
-            {
-                Debug.Log($"[EnemyAttack] Setting incoming damage to: {damage}");
-            }
-            targetParrySystem.SetIncomingDamage(damage); // NEW: Pass the damage amount
             targetParrySystem.OpenParryWindow();
-            
+
             if (showDebugInfo)
             {
                 Debug.Log($"[EnemyAttack] Parry window opened - incoming damage: {damage}");
             }
         }
-        
+
         // Wait for remaining windup time
         yield return new WaitForSeconds(parryWindowStartOffset);
-        
-        // Check if attack was parried before hitting
-        if (targetParrySystem != null && !targetParrySystem.IsParryWindowActive)
+
+        // Check if attack was parried before hitting. Read the outcome directly rather than
+        // inferring it from the window being shut — the window also shuts on timeout, so that
+        // inference only held while parryWindowDuration happened to exceed parryWindowStartOffset.
+        if (targetParrySystem != null && targetParrySystem.ParrySucceeded)
         {
-            // Parry window closed early - attack was parried
             wasParried = true;
-            
+
             if (showDebugInfo)
             {
                 Debug.Log("[EnemyAttack] Attack was parried!");
             }
-            
+
+            targetParrySystem.EndParrySequence();
+
             // Early exit - skip all hit feedback and damage
             isAttacking = false;
             currentAction = null;
             targetParrySystem = null;
             targetVisualFeedback = null;
-            
+
             OnAttackEnd?.Invoke();
             OnAttackComplete?.Invoke(wasParried);
             yield break;  // <-- EXIT EARLY, skip the rest of the coroutine
@@ -254,16 +227,16 @@ public class EnemyAttack : MonoBehaviour
         }
         
         OnAttackHit?.Invoke();
-        
-        // Close parry window since attack landed
+
+        // Attack landed — close the window and release the target's parry attempt.
         if (targetParrySystem != null)
         {
             targetParrySystem.CloseParryWindow();
+            targetParrySystem.EndParrySequence();
         }
-        
-        // Deal damage to target
-        DealDamageToTarget();
-        
+
+        // Damage itself is applied by EnemyManager.OnAttackComplete once parry state is known.
+
         // Attack hit duration
         yield return new WaitForSeconds(attackHitTime);
         
@@ -286,44 +259,6 @@ public class EnemyAttack : MonoBehaviour
         OnAttackComplete?.Invoke(wasParried);
     }
     
-    private void DealDamageToTarget()
-    {
-        if (targetParrySystem != null)
-        {
-            // Calculate damage from action if available
-            float damage = attackDamage;
-            if (currentAction != null)
-            {
-                damage = Random.Range(currentAction.minDamage, currentAction.maxDamage);
-            }
-            
-            // Try to find a HealthManager component on the target
-            var healthManager = targetParrySystem.GetComponent<HealthManager>();
-            if (healthManager != null)
-            {
-                if (showDebugInfo)
-                {
-                    Debug.Log($"[EnemyAttack] Dealing {damage} damage to {targetParrySystem.name}");
-                }
-                
-                // If HealthManager has a TakeDamage method, use it:
-                // healthManager.TakeDamage(damage);
-            }
-            else
-            {
-                // Alternative: try to find CharacterManager and deal damage through it
-                var targetCharacterManager = targetParrySystem.GetComponent<CharacterManager>();
-                if (targetCharacterManager != null)
-                {
-                    if (showDebugInfo)
-                    {
-                        Debug.Log($"[EnemyAttack] Would deal {damage} damage to {targetCharacterManager.name}");
-                    }
-                }
-            }
-        }
-    }
-
     /// <summary>
     /// Cancels the current attack (useful for interruptions)
     /// </summary>
@@ -334,22 +269,15 @@ public class EnemyAttack : MonoBehaviour
         StopAllCoroutines();
         isAttacking = false;
         currentAction = null;
-    
-        // Close any open parry windows
-        if (targetParrySystem != null && targetParrySystem.IsParryWindowActive)
+
+        // Close any open parry window and release the target's attempt — otherwise an interrupted
+        // attack would leave them armed and holding the input target indefinitely.
+        if (targetParrySystem != null)
         {
             targetParrySystem.CloseParryWindow();
+            targetParrySystem.EndParrySequence();
         }
 
-    
         OnAttackEnd?.Invoke();
-    }
-
-    /// <summary>
-    /// Rolls for critical hit using a d20 system
-    /// </summary>
-    private int RollForCritical()
-    {
-        return Random.Range(1, 21); // d20 roll (1-20)
     }
 }

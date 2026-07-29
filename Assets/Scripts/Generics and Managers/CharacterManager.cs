@@ -82,25 +82,28 @@ public class CharacterManager : MonoBehaviour
     {
         driveMeter = new DriveMeter();
         driveMeter.Initialize();
+
+        // Resolved in Awake, not Start: TurnManager.BeginBattle() runs during the Start phase and
+        // reaches driveManager via UpdateBuffsForTurn(). If this were assigned in Start, whichever
+        // Start happened to run second would silently skip the first turn's drive regen.
+        driveManager = GetComponent<DriveManager>();
     }
 
-    
+
     void Start()
     {
-        driveManager = GetComponent<DriveManager>();
-        
         actionStatusText.enabled = false;
-        characterName.text = characterData.characterName;
-        
+
         if (characterData != null)
         {
+            characterName.text = characterData.characterName;
             RefreshStats();
             BindToRunState();
             UpdateHealthBar();
         }
         else
         {
-            Debug.LogError("Character Data is missing!");
+            Debug.LogError($"Character Data is missing on '{gameObject.name}'!");
         }
         
         //hp.text = CurrentHealth + "/" + MaxHealth;

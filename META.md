@@ -7,6 +7,43 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 ---
 
+## 0. Status — read this first
+
+**Phase 1 is complete and verified in the Editor. Phase 2 is the next work, not yet started.**
+
+What exists and works today:
+
+| | |
+|---|---|
+| `Assets/Scripts/Meta/ContentDatabase.cs` | `id -> asset` registry. Asset at `Assets/Resources/ContentDatabase.asset`, 8 characters + 9 actions registered and stamped. |
+| `Assets/Scripts/Meta/RunState.cs` | `RunState` + `CrewMemberState`, plain serializable C#. |
+| `Assets/Scripts/Meta/RunManager.cs` | Owns the live run, JSON save/load at `Application.persistentDataPath/run.json`. Scene object in `Encounter.unity`. |
+| `CharacterManager.BindToRunState()` | Crew take starting health from the run; health and permadeath write back. |
+
+The loop that works right now: press Play in `Encounter.unity` → crew spawn at their carried
+health → fight → win → health and any deaths persist → press Play again and the crew are as you
+left them.
+
+**Editor tooling** (both under `Tools > Pirate Kingdom`, because `[ContextMenu]` entries are easy
+to miss — on a MonoBehaviour they're on the *component's* ⋮ button, on a ScriptableObject they're
+in the Inspector's ⋮ with the asset selected, and **never** on a Project-window right-click):
+
+- **Rebuild Content Database** — re-scan and stamp ids. Run after adding/deleting content assets.
+- **Delete Run Save** — wipe the save so the next Play rebuilds from `Debug Starting Crew`.
+- **Log Run Save Path** — prints the save location and whether it exists.
+
+**Gotcha that has already cost time twice:** an existing save always beats the RunManager's
+`Debug Starting Crew` list, so edits to that list appear to do nothing until you delete the save.
+The console states which path was taken on every play.
+
+Still hand-placed in the scene (Phase 2 changes this): the three crew and the enemies.
+
+**Open proposal:** a **2.5D presentation refactor** (combatants become sprites in 3D space rather
+than UI objects under a Canvas) is written up in §6 as an optional interlude between 2a and 2b.
+Not committed to — costed and waiting on a decision.
+
+---
+
 ## 1. Design pillars
 
 Three decisions that everything else follows from:
@@ -25,77 +62,77 @@ with worse or stranger ones, and the crew you reach the boss with is the story o
 
 ---
 
-## 2. The blocking problem: ScriptableObject state
+## 2. The blocking problem: ScriptableObject state — SOLVED in Phase 1a
 
-**This must be fixed first. Nothing else in this plan is safe until it is.**
+Kept here because it's the constraint the whole architecture is shaped around, and it must not be
+undone.
 
-`Character` currently holds mutable state — `activeBuffs`, `actionCooldowns`, `reputation` — as
-instance fields *on the ScriptableObject*. `TODO.md` already logs this as a bug because two
-Skeletons share one asset. The meta layer makes it far worse, because the meta wants to store
-**current HP, level, XP, and action loadout** per crew member.
+`Character` used to hold mutable state — `activeBuffs`, `actionCooldowns` — as instance fields
+*on the ScriptableObject*. That was already a logged bug (two Skeletons share `Skeleton.asset`),
+and the meta layer made it fatal, because the meta stores current HP, level, XP and loadout per
+crew member.
 
-If that state lives on the SO:
+Had that state stayed on the SO:
 
 - In the Editor, writes to a ScriptableObject **persist into the project asset**. `Black Sam.asset`
-  would accumulate damage, levels, and loadout changes across play sessions. Your authored data
-  drifts every time you press Play.
-- Permadeath is unimplementable — "dead" is a property of *this run's* Black Sam, not of the
+  would accumulate damage, levels, and loadout changes across play sessions — your authored data
+  drifting every time you press Play.
+- Permadeath would be unimplementable — "dead" is a property of *this run's* Black Sam, not of the
   Black Sam asset.
-- Two crew from the same asset (or two Skeletons) share one health pool.
+- Two crew from the same asset (or two Skeletons) would share one health pool.
 
-**The fix:** `Character` / `Enemy` / `Action` become **pure authored data, never written to at
-runtime.** All mutable state moves into a plain-C# run model (§3). This is the single largest
-piece of work in the plan and it touches `TurnManager`, `CharacterManager`,
-`ActionsManager.IsActionAvailable`, `EnemyManager`, `CrewManager`, and every `GetModified*()`
-call site.
+**The rule now, permanently:** `Character` / `Enemy` / `Action` are **authored data, never written
+to at runtime.** Per-battle state lives on `CharacterManager`; per-run state lives in `RunState`.
 
-It is also, conveniently, the fix `TODO.md` already prescribes for the duplicate-Skeleton bug.
-Doing it here closes that bug too.
+> The one exception still outstanding is `Character.reputation` — authored, zeroed by
+> `Initialize()`, never read. See the open question in §7.
 
 ---
 
 ## 3. Data model
 
 Plain `[Serializable]` C# classes — not ScriptableObjects, not MonoBehaviours. This is what gets
-JSON-serialized to disk.
+JSON-serialized to disk. **As built** (`Assets/Scripts/Meta/RunState.cs`):
 
 ```csharp
-[Serializable]
+[System.Serializable]
 public class RunState
 {
-    public int seed;
-    public MapGraph map;
-    public int currentNodeId;
-    public int plunder;                       // run currency
-    public List<CrewMemberState> crew;         // living + dead, dead kept for the run summary
-    public List<string> lootPool;              // Action ids still available to drop this run
+    public int saveVersion = CurrentSaveVersion;  // discard incompatible saves rather than half-load
+    public int plunder;                            // run currency
+    public List<CrewMemberState> crew;             // living + dead; dead kept for the run summary
+    // Phase 3 adds: seed, MapGraph map, currentNodeId, lootPool
 }
 
-[Serializable]
+[System.Serializable]
 public class CrewMemberState
 {
-    public string characterId;                 // -> Character asset, via ContentDatabase
-    public string displayName;                 // generated crew get their own name
+    public string characterId;                     // -> Character asset, via ContentDatabase
+    public string displayName;                     // generated crew get their own rolled name
     public float currentHealth;
-    public int level;
+    public int level = 1;
     public int xp;
-    public List<string> actionLoadout;          // <= 6 Action ids
-    public bool isDead;
+    public List<string> actionLoadout;             // <= 6 Action ids
+    public bool isDead;                            // permadeath — set once, never cleared
 }
 ```
+
+Adding fields later is cheap (absent fields take their defaults on load). Renaming or removing
+them is not — that's what `saveVersion` is for.
 
 ### Asset lookup: `ContentDatabase`
 
 `RunState` stores **string ids, not object references** — object references don't survive JSON.
-A `ContentDatabase` ScriptableObject holds the authoritative lists (all `Character`s, `Enemy`s,
-`Action`s, crew prefabs) and resolves `id -> asset` both ways.
+`ContentDatabase` holds the authoritative lists and resolves `id -> asset` both ways.
 
-Add a `public string id` field to `Character` and `Action`, authored once per asset. Do **not**
-key off `characterName` or the asset filename — renaming either would silently invalidate saves.
+Ids are stamped once from a sanitised asset name (`Black Sam` -> `black_sam`) and **never
+overwritten**, which is what makes renaming an asset safe. Never key save data off
+`characterName` or the asset filename.
 
 ### Stat resolution
 
-Final stats become a function of authored base + level + run buffs, computed at battle start:
+Currently: `CharacterManager.RefreshStats()` = authored base from the SO + this instance's buffs.
+Level is stored but **not yet applied** — Phase 5 folds it in, roughly:
 
 ```
 effectiveMaxHealth = characterData.maxHealth + (level - 1) * growth.healthPerLevel
@@ -162,6 +199,12 @@ once at `Awake`, and they'll need re-populating on every scene load.
 
 Each phase should be playable/verifiable before the next. UI is yours throughout — I do the code
 side and tell you what to wire.
+
+**How this has been working, and should keep working.** Phases are cut into slices (1a/1b/1c) that
+each leave the project in a playable, testable state. Code lands, the user play-tests in the
+Editor, and only then does the next slice start. Nothing here is verified by compilation or
+automated tests — there are none — so *"code complete"* and *"verified"* are tracked separately in
+this document, and no slice is marked ✅ until the user confirms it in the Editor.
 
 ### Phase 1 — Run state foundation ✅ COMPLETE
 
@@ -243,13 +286,172 @@ they finished on, visible live in the RunManager Inspector. Kill a crew member a
 `isDead` flips and persists. Confirm `Black Sam.asset` on disk is untouched throughout. Use
 **Delete Save** on the RunManager to reset.
 
-### Phase 2 — Parameterized encounters
-`EncounterDefinition` SO, `EncounterBootstrapper`, explicit `TurnManager.BeginBattle()`,
-`EncounterResult` written back to `RunState` on `EndBattle`. Move `ParryInputManager` into the
-scene first.
+### Phase 2 — Parameterized encounters ⬅ NEXT, not started
 
-*Verify:* two different `EncounterDefinition`s produce different fights in the same scene, and
-survivor HP persists into the second one.
+Goal: `Encounter.unity` stops being a hand-authored fight and starts **building itself** from
+(a) an `EncounterDefinition` for the enemies and (b) `RunState` for the crew. That's what lets one
+scene serve every node on the voyage map.
+
+**Groundwork already done** (during Phase 1, don't redo it):
+- `TurnManager.BeginBattle()` exists, is idempotent, and snapshots turn order. `Update()`
+  early-returns until it runs — without that, a spawning scene counts zero living players on
+  frame one and instantly declares defeat.
+- `TurnManager.autoStartBattle` (serialized, currently **ticked**) makes `Start()` self-start.
+  The bootstrapper unticks it and calls `BeginBattle()` once spawning is finished.
+- `ParryInputManager` is a single scene object, no longer per-crew-member on the prefab.
+
+**What the scene looks like today** — established by inspection, so the plan is grounded:
+- Crew are 3 instances of `Assets/Prefabs/PlayerCharacter.prefab`.
+- Enemies are instances of `Assets/Prefabs/EnemyCharacterVariant.prefab`.
+- `Assets/Prefabs/EnemyCharacter[DEPRECIATED].prefab` is referenced nowhere — ignore/delete it.
+- Both prefabs carry their own health bar, feedbacks and audio as children, so a spawned instance
+  is complete. The meaningful per-instance override is **position**, which spawn points solve.
+
+---
+
+**2a — `EncounterDefinition` + enemy spawning. Code done; Editor steps outstanding.**
+`Assets/Scripts/Meta/EncounterDefinition.cs` (which enemies, how many, display name, plunder
+reward) and `Assets/Scripts/Meta/EncounterBootstrapper.cs` (spawns them, then calls
+`BeginBattle()`). Crew stay hand-placed until 2b.
+
+Two ordering constraints, both load-bearing — **don't undo them**:
+
+- **Spawning happens in `Awake()`, battle start in `Start()`.** Unity guarantees every `Awake()`
+  finishes before any `Start()`, so the turn-order snapshot in `BeginBattle()` is complete by
+  construction rather than by luck. This is the correct fix for the race, *not* Script Execution
+  Order.
+- **Instances are created under an inactive staging parent, then reparented to the spawn point.**
+  `DriveManager.Awake()`, `ParrySystem.Awake()` and `EnemyManager.Awake()` all dereference
+  `CharacterManager.characterData`, and `EnemyCharacterVariant.prefab` has **no default assigned** —
+  so a plain `Instantiate` throws before the data can be set. An inactive parent defers `Awake`;
+  reparenting onto the active spawn point is what wakes the object, with its data already in place.
+  Any future combatant spawning must follow the same pattern.
+
+Also moved `CharacterManager.driveManager` resolution from `Start()` to `Awake()`. `BeginBattle()`
+reaches it via `UpdateBuffsForTurn()`, so leaving it in `Start()` meant whichever `Start()` ran
+second silently skipped the first turn's drive regen. (Same edit fixed a latent NRE: `Start()` read
+`characterData.characterName` *above* its own null check.)
+
+*Editor steps — user's domain:*
+1. Create one or two encounters via **Assets > Create > Scriptable Objects > Encounter Definition**
+   (e.g. "Two Skeletons" and "Skeleton + Elite").
+2. Add an `Encounter Bootstrapper` GameObject to `Encounter.unity`. Assign the encounter, set
+   **Enemy Prefab** to `EnemyCharacterVariant.prefab`, and fill **Enemy Spawn Points** with empty
+   child transforms positioned where enemies belong — under the same Canvas as the existing
+   combatants, since these are UI objects (RectTransform).
+3. **Delete the hand-placed enemies from the scene**, or you'll get both those and the spawned ones.
+4. Untick **Auto Start Battle** on `TurnManager` so the bootstrapper owns battle start.
+   (Leaving it ticked still works — `BeginBattle()` is idempotent and spawning is already done by
+   then — but one owner is clearer.)
+
+*Verify:* two different `EncounterDefinition` assets produce two visibly different fights in the
+same scene, with correct turn order, working parry, and no instant victory/defeat on frame one.
+Leaving the definition empty falls back to hand-placed enemies, so the scene stays playable.
+
+---
+
+### ⟡ Optional interlude — 2.5D presentation refactor
+
+**Not part of the meta plan, and not committed to.** Written up for a decision after 2a is wired.
+Combatants are currently UI objects (`RectTransform` under a Canvas); this converts them to sprites
+in 3D space with a camera, for a 2.5D look.
+
+**Why it's cheaper than it sounds** — three things checked in the codebase, not assumed:
+
+| Finding | Consequence |
+|---|---|
+| Of 25 MMF feedbacks on `PlayerCharacter.prefab`, only **one** is UI-bound (`MMF_Image`). The rest are `MMF_Sound` ×8, `MMF_Scale` ×5 (targets `Transform`, and `RectTransform` is one), `MMF_TMPColor` ×5, `MMF_TMPAlpha` ×2, `MMF_Events` ×3, `MMF_Pause` ×1. | The game-feel layer survives the move essentially intact — the part that looked most expensive isn't. |
+| `TargetHoverHandler` uses `IPointerEnterHandler` / `IPointerExitHandler`, which are **EventSystem** interfaces, not UI ones. | Hover works on 3D objects with a `PhysicsRaycaster` on the camera plus colliders — **no code change**. |
+| `TextMeshProUGUI` and 3D `TextMeshPro` both derive from `TMP_Text`, which is the type `CharacterManager` declares. | Swapping the components doesn't touch C#. |
+
+Clicking currently goes through a UI `Button` on `PlayerCharacter.prefab`, so that becomes
+`IPointerClickHandler` on `ClickableCharacter` — a few lines.
+
+#### Option A — hybrid: sprite bodies + a small world-space Canvas per character
+**Easy, and almost entirely Editor work. Recommended.**
+
+The body becomes a `SpriteRenderer` in 3D; health bar, name, status text and turn marker stay on a
+world-space Canvas parented to it. Every UI type survives — `Slider`, `Image`, `ParticleImage`,
+`TMP_Text` — so `CharacterManager`, `ParryVisualFeedback` and `DriveUI` need **no changes**. This
+is the conventional 2.5D approach.
+
+Code cost: one small change (`ClickableCharacter` click handling). `EncounterBootstrapper`'s
+`ResetLocalTransform()` already handles both `RectTransform` and plain `Transform`, so **2a needs
+nothing**.
+
+#### Option B — fully UI-free characters
+**Moderate: four files, all mechanical, none architectural.**
+
+| Thing | Where | Replacement |
+|---|---|---|
+| `Slider healthBar` | `CharacterManager` | scaled sprite or shader fill |
+| `Image turnMarker` | `CharacterManager` | `SpriteRenderer` |
+| `ParticleImage driveParticles` | `CharacterManager` + `DriveManager` (`.Play()` / `.Stop()`) | `ParticleSystem` |
+| `Image parryTimerBar` (uses `fillAmount`) | `ParryVisualFeedback` | material fill or scaled child |
+| `MMF_Image` ×1 | prefab | `MMF_SpriteRenderer` |
+
+The `ParticleImage` → `ParticleSystem` swap is the only one with any reach, and it's two call sites.
+
+#### Sequencing — the one real interaction
+
+Nothing in the meta layer is blocked by this: `RunState` and spawning are data-only and don't care
+about presentation. The single point of contact is **spawn points** — 2a is where they get
+authored, and converting to 2.5D re-authors their positions.
+
+So: **finish 2a's Editor wiring → do this as its own isolated slice → then 2b.** Spawn points get
+positioned once, in 3D, and visual changes are never being debugged at the same time as spawning
+changes.
+
+Doing it before the later phases matters more than doing it before 2b: ports, the voyage map and
+the loadout screen all add UI that would otherwise need reconciling with whatever convention this
+lands on.
+
+#### Still to decide
+- **Camera:** perspective, or orthographic with 3D depth. Both are legitimate 2.5D looks.
+- **Billboarding:** a billboard script, or — if the camera is fixed — simply pre-rotating sprites
+  to face it.
+
+---
+
+**2b — Crew spawned from `RunState`.**
+The bootstrapper also spawns living crew from `RunState` into crew spawn points. Dead crew simply
+don't appear. Replaces the temporary `characterData.Id` binding in
+`CharacterManager.BindToRunState()` with the spawner **assigning `CrewMemberState` explicitly** —
+id-matching can't distinguish two crew sharing one Character asset, and recruiting will make that
+real. Keep the "no active run" fallback so the scene is still playable standalone.
+
+*Verify:* kill a crew member, finish the fight, play again — they're absent and the fight starts
+with the survivors. `RunManager`'s `Debug Starting Crew` still drives a fresh run.
+
+**2c — `EncounterResult`.**
+One object returned at battle end carrying survivors' health, deaths, XP and plunder. Consolidates
+persistence into a single boundary and removes the scattered `SaveRun()` calls currently in
+`TurnManager.EndBattle()` and `CharacterManager`'s death path. This is the seam Phase 3 hands
+control back to the map through.
+
+*Verify:* the console shows exactly one save per encounter, and the numbers match what happened.
+
+**2d — `GameManager` static-list refresh.** (small, but blocks Phase 3)
+`GameManager.PlayerCharacters` / `EnemyCharacters` are **static** lists populated once in `Awake`.
+With combatants spawned at runtime and scenes loading repeatedly they go stale immediately.
+Re-populate on scene load and after spawning.
+
+*Verify:* `CombatController`'s automatic-targeting path (`useManualTargeting = false`) still finds
+valid targets after a respawn.
+
+---
+
+**Known question for 2b — `CrewManager` breaks when crew are spawned.** It's present in
+`Encounter.unity` and assembles the crew from `Player`-tagged objects in `Awake()`, which will now
+run *before* any crew exist, so it'll silently build an empty roster. Its only consumer is
+`Debugs/Debug_Crew.cs` (a logger) — nothing in gameplay reads `GetCrewMembers()` or the
+`crewSlot1..4` fields. So the options are: move it after spawning, fold it into the bootstrapper,
+or delete it along with `Debug_Crew`. Deleting is the honest call unless it's wanted for a crew UI
+later — flag it rather than assume.
+
+It also calls `crewMembers[i].Initialize()`, which is the last thing still resetting
+`Character.reputation` on the ScriptableObject. If `CrewManager` goes, that goes with it, which
+ties into the `reputation` open question in §7.
 
 ### Phase 3 — The voyage map
 `MapGraph` + seeded generator, `Voyage.unity`, node selection, scene transitions, save/resume.
@@ -288,6 +490,16 @@ It fits the fantasy (nobodies you pick up in port) and makes losing a generic cr
 differently than losing Black Sam.
 
 **Run length.** Node count drives all tuning. 12-15 is the genre norm for a ~30-45 min run.
+
+**Crew roster size vs. berths.** The party is 4 (`CrewManager.MAX_CREW_SIZE`), but only 3 crew are
+placed in `Encounter.unity` and `Tephi` is authored-but-unplaced. Once 2b spawns from `RunState`,
+"who's in the scene" stops being an Editor decision and becomes a run-state one — so the intended
+starting party size needs deciding. 3 or 4?
+
+**`Witch Healer` is authored with `allegiance: Enemy`** but appeared in a debug crew list. Only
+Player-allegiance characters bind to run state, so as crew it would silently never carry health.
+`CrewMemberState.CreateFrom()` now warns about this. Decide whether Witch is a recruitable crew
+member (flip to `Player`) or purely an enemy.
 
 **Does XP survive death?** Level is per-`CrewMemberState`, so it dies with them — intended. But
 it means a late recruit is permanently behind. Consider recruits scaling to the current map depth

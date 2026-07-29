@@ -5,9 +5,12 @@ Guidance for Claude Code when working in this repository.
 ## Project overview
 
 **Pirate Kingdom** is a Unity turn-based tactical RPG combat prototype (pirate theme). The
-codebase is currently a self-contained **battle system** — a party of player crew fights a
-group of enemies in a single encounter. There is no overworld, meta-progression, save system,
-or narrative layer yet; the scripts implement combat only.
+codebase is a self-contained **battle system** plus the beginnings of a **meta layer** — a
+roguelite voyage where a crew carries damage between fights and death is permanent.
+
+Built and working: combat, and run state (crew carry health across encounters, permadeath, JSON
+save/load). Not built yet: the voyage map, ports/recruiting, XP and levelling, cross-run unlocks,
+and any narrative layer. There is still only one scene.
 
 - **Engine:** Unity `6000.3.5f1` (Unity 6.3)
 - **Render pipeline:** Universal Render Pipeline (URP 17.3.0)
@@ -15,8 +18,12 @@ or narrative layer yet; the scripts implement combat only.
 - **Only scene:** `Assets/Scenes/Encounter.unity`
 - **Main branch:** `main`
 
-Known bugs, dead code, and deferred cleanup are tracked in **`TODO.md`** — check it before
-starting work, and add to it when you find something you're not fixing now.
+Two companion documents, both worth reading before starting work:
+
+- **`META.md`** — the meta-layer design and phased implementation plan. **Section 0 is a status
+  summary: read it first** to see what's built, what's next, and the Editor tooling that exists.
+- **`TODO.md`** — known bugs, dead code, and deferred cleanup. Check it before starting, and add
+  to it when you find something you're not fixing now.
 
 ## How to run / test
 
@@ -78,6 +85,17 @@ third-party and should not be modified** unless explicitly requested:
   - `RunManager.cs` — `DontDestroyOnLoad` singleton owning the live `RunState` and its save/load
     (`Application.persistentDataPath/run.json`). Has debug hooks to start a run without the
     voyage map, and context menus for Save / Load / Delete Save / Log Save Path.
+  - `EncounterDefinition.cs` — ScriptableObject describing one fight: which `Enemy` assets, how
+    many, display name, plunder reward.
+  - `EncounterBootstrapper.cs` — builds the encounter on scene load, then calls
+    `TurnManager.BeginBattle()`. **Two rules to preserve when touching combatant spawning:**
+    - Spawn in `Awake()`, start the battle in `Start()`. Unity finishes every `Awake()` before any
+      `Start()`, so the turn-order snapshot is complete by construction. Don't "fix" spawn ordering
+      with Script Execution Order.
+    - Instantiate under an **inactive** parent, assign `characterData`, *then* reparent onto the
+      active spawn point. `DriveManager`, `ParrySystem` and `EnemyManager` all dereference
+      `characterData` in `Awake()`, and the enemy prefab carries no default — a plain `Instantiate`
+      throws before the data can be set.
   - **Neither Meta file uses `using System;`** — it would make `System.Action` collide with the
     game's own `Action` ScriptableObject. System types are fully qualified instead.
 - `Player/PlayerCombatController.cs`, `Tooltip/`, `Debugs/`, `PlayerControls.cs` (generated input).

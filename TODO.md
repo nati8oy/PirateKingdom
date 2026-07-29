@@ -86,15 +86,16 @@ read — see the "what is `reputation` for?" open question in `META.md`. It shou
 the rest or be deleted once it has a purpose.
 
 ### `ParrySystem.Awake()` dereferences `characterData` before its null check
-`ParrySystem.cs:37` does
+`ParrySystem.cs:51` does
 `GetComponent<CharacterManager>().characterData.parryBonusDriveMultiplier` with no guard, and
-*then* null-checks `characterManager` at line 41. Throws an `NullReferenceException` if the
-component or its data is missing. Reorder the guard above the read.
+*then* null-checks `characterManager` immediately after. Throws a `NullReferenceException` if the
+component or its data is missing. Reorder the guard above the read — or just delete the field, see
+"Dead code and data" below, which removes the dereference entirely.
 
 ### A parry pays out drive twice
 `ParrySystem.PerformSuccessfulParry()` grants the parry bonus, and then
-`EnemyManager.cs:647` calls `TakeDamage(25% chip, wasParried: true)` — whose drive block
-(`CharacterManager.cs:201-207`) runs unconditionally and adds
+`EnemyManager.cs:656` calls `TakeDamage(25% chip, wasParried: true)` — whose drive block
+(`CharacterManager.cs:370-378`) runs unconditionally and adds
 `chip × damageTakenDriveMultiplier` on top.
 
 Deliberately left in for now and compensated for in Kolo Aka's tuning. If you'd rather it pay
@@ -117,20 +118,22 @@ nothing should produce a second instance any more. The `OnEnable`/`OnDisable` gu
 `CLAUDE.md`.
 
 ### Dead code and data
-- `ParrySystem.parryDriveBonus` / `ParryDriveBonus` (`ParrySystem.cs:8,24,37`) is cached in
+- `ParrySystem.parryDriveBonus` / `ParryDriveBonus` (`ParrySystem.cs:8,32,51`) is cached in
   `Awake` but never used — `PerformSuccessfulParry` re-reads `characterData` directly. Delete.
   (Deleting it also removes the unguarded `characterData` dereference logged as a bug above.)
 - `parryBonusDriveMultiplier` on **enemy** assets (Skeleton `2.5`, Slayer `10`) is never read.
   `OpenParryWindow()` is only called from `EnemyAttack`, and enemy attacks only target players,
   so enemies can never parry. Either wire up enemy parry or move the field off the shared
   `Character` base.
+- `Assets/Prefabs/EnemyCharacter[DEPRECIATED].prefab` has **0 references** anywhere in
+  `Encounter.unity` — enemies use `EnemyCharacterVariant.prefab`. Safe to delete.
 - `HealthManager.cs` is an empty stub; damage flows through `CharacterManager.TakeDamage`.
   Implement it or delete it.
 - `DriveManager.requiredSegments` (`DriveManager.cs:21`) is labelled legacy and kept only for
   Inspector compatibility.
-- Deprecated back-compat methods flagged in `CLAUDE.md`: `Character.UpdateBuffsForNewRound()`,
-  `CharacterManager.OnRoundComplete()`, and the two `[Obsolete]` `EnemyAttack.StartAttack()`
-  error-stub overloads.
+- Deprecated back-compat methods: `CharacterManager.OnRoundComplete()` (`CharacterManager.cs:340`)
+  and the two `[Obsolete]` `EnemyAttack.StartAttack()` error-stub overloads.
+  (`Character.UpdateBuffsForNewRound()` was deleted in Phase 1a.)
 
 ---
 

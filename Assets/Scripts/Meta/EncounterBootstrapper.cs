@@ -27,21 +27,33 @@ public class EncounterBootstrapper : MonoBehaviour
     [Tooltip("Leave empty to use whatever enemies are already placed in the scene by hand.")]
     [SerializeField] private EncounterDefinition encounter;
 
-    [Header("Spawning")]
+    [Header("Enemy spawning")]
     [Tooltip("Prefab used for every spawned enemy — normally EnemyCharacterVariant.prefab.")]
     [SerializeField] private GameObject enemyPrefab;
 
-    [Tooltip("One spawn point per enemy, filled in order. Must be under the same Canvas as the hand-placed combatants.")]
+    [Tooltip("One spawn point per enemy, filled in order. Must be under the same Canvas as the other combatants.")]
     [SerializeField] private Transform[] enemySpawnPoints;
+
+    [Header("Crew spawning")]
+    [Tooltip("Prefab used for every spawned crew member — normally PlayerCharacter.prefab. " +
+             "Leave empty to use crew placed in the scene by hand instead.")]
+    [SerializeField] private GameObject crewPrefab;
+
+    [Tooltip("One spawn point per crew berth, filled in order of the run's living crew.")]
+    [SerializeField] private Transform[] crewSpawnPoints;
 
     [Header("Wiring")]
     [Tooltip("Left empty, this is found automatically.")]
     [SerializeField] private TurnManager turnManager;
 
     private readonly List<CharacterManager> spawnedEnemies = new List<CharacterManager>();
+    private readonly List<CharacterManager> spawnedCrew = new List<CharacterManager>();
 
     /// <summary>Enemies this bootstrapper spawned, in spawn order.</summary>
     public IReadOnlyList<CharacterManager> SpawnedEnemies => spawnedEnemies;
+
+    /// <summary>Crew this bootstrapper spawned, in spawn order.</summary>
+    public IReadOnlyList<CharacterManager> SpawnedCrew => spawnedCrew;
 
     private void Awake()
     {
@@ -53,7 +65,113 @@ public class EncounterBootstrapper : MonoBehaviour
             return;
         }
 
-        SpawnEnemies();
+        // One staging area for both: combatant components read characterData in Awake, so nothing
+        // may wake until its data is assigned. See the class remarks.
+        GameObject staging = new GameObject("~SpawnStaging");
+        staging.transform.SetParent(transform, false);
+        staging.SetActive(false);
+
+        SpawnCrew(staging.transform);
+        SpawnEnemies(staging.transform);
+
+        Destroy(staging);
+    }
+
+    private void SpawnCrew(Transform staging)
+    {
+        if (crewPrefab == null)
+        {
+            Debug.Log("[EncounterBootstrapper] No crew prefab assigned — using the crew already in the scene.");
+            return;
+        }
+
+        if (RunManager.Instance == null || !RunManager.Instance.HasActiveRun)
+        {
+            Debug.LogWarning("[EncounterBootstrapper] No active run, so there's no crew to spawn. " +
+                             "Add a RunManager to the scene, or place crew by hand and clear the crew prefab.");
+            return;
+        }
+
+        if (crewSpawnPoints == null || crewSpawnPoints.Length == 0)
+        {
+            Debug.LogError("[EncounterBootstrapper] No crew spawn points assigned — cannot place the crew.");
+            return;
+        }
+
+        // Only the living sail on. Dead crew keep their record for the run summary but never spawn.
+        var living = new List<CrewMemberState>(RunManager.Instance.Current.LivingCrew);
+
+        if (living.Count == 0)
+        {
+            Debug.LogWarning("[EncounterBootstrapper] Every crew member is dead — the run should have ended.");
+            return;
+        }
+
+        if (living.Count > crewSpawnPoints.Length)
+        {
+            Debug.LogWarning($"[EncounterBootstrapper] {living.Count} living crew but only " +
+                             $"{crewSpawnPoints.Length} spawn points — the extras won't appear.");
+        }
+
+        int spawnCount = Mathf.Min(living.Count, crewSpawnPoints.Length);
+
+        for (int i = 0; i < spawnCount; i++)
+        {
+            Transform spawnPoint = crewSpawnPoints[i];
+
+            if (spawnPoint == null)
+            {
+                Debug.LogWarning($"[EncounterBootstrapper] Crew spawn point {i} is empty — skipping.");
+                continue;
+            }
+
+            SpawnCrewMember(living[i], spawnPoint, staging);
+        }
+
+        Debug.Log($"[EncounterBootstrapper] Spawned {spawnedCrew.Count} crew.");
+    }
+
+    private void SpawnCrewMember(CrewMemberState member, Transform spawnPoint, Transform staging)
+    {
+        if (ContentDatabase.Instance == null) return;
+
+        Character characterData = ContentDatabase.Instance.GetCharacter(member.characterId);
+
+        if (characterData == null)
+        {
+            // GetCharacter already logged the specifics.
+            Debug.LogError($"[EncounterBootstrapper] Can't spawn '{member.displayName}' — unresolved character id.");
+            return;
+        }
+
+        GameObject instance = Instantiate(crewPrefab, staging);
+
+        CharacterManager manager = instance.GetComponent<CharacterManager>();
+
+        if (manager == null)
+        {
+            Debug.LogError($"[EncounterBootstrapper] Crew prefab '{crewPrefab.name}' has no CharacterManager.");
+            Destroy(instance);
+            return;
+        }
+
+        // Both must be set before the object wakes. characterData in particular: DriveManager.Awake
+        // caches buffNextActionMultiplier off it, so waking with the prefab's default and swapping
+        // afterwards would leave the wrong character's drive multiplier cached.
+        manager.characterData = characterData;
+        manager.AssignCrewState(member);
+        instance.name = member.displayName;
+
+        instance.transform.SetParent(spawnPoint, false);
+        ResetLocalTransform(instance.transform);
+
+        if (!instance.CompareTag("Player"))
+        {
+            Debug.LogError($"[EncounterBootstrapper] Spawned crew '{instance.name}' is tagged '{instance.tag}', " +
+                           "not 'Player'. Target-finding and win/lose checks rely on that tag — fix it on the prefab.");
+        }
+
+        spawnedCrew.Add(manager);
     }
 
     private void Start()
@@ -64,7 +182,7 @@ public class EncounterBootstrapper : MonoBehaviour
         turnManager?.BeginBattle();
     }
 
-    private void SpawnEnemies()
+    private void SpawnEnemies(Transform staging)
     {
         if (encounter == null)
         {
@@ -98,12 +216,6 @@ public class EncounterBootstrapper : MonoBehaviour
                              $"only {enemySpawnPoints.Length} spawn points exist. The extras won't appear.");
         }
 
-        // See the class remarks: combatant components read characterData in Awake, so instances
-        // must not wake until their data is assigned.
-        GameObject staging = new GameObject("~SpawnStaging");
-        staging.transform.SetParent(transform, false);
-        staging.SetActive(false);
-
         int spawnCount = Mathf.Min(toSpawn.Count, enemySpawnPoints.Length);
 
         for (int i = 0; i < spawnCount; i++)
@@ -116,10 +228,8 @@ public class EncounterBootstrapper : MonoBehaviour
                 continue;
             }
 
-            SpawnEnemy(toSpawn[i], spawnPoint, staging.transform);
+            SpawnEnemy(toSpawn[i], spawnPoint, staging);
         }
-
-        Destroy(staging);
 
         Debug.Log($"[EncounterBootstrapper] Spawned {spawnedEnemies.Count} enemies for '{encounter.displayName}'.");
     }

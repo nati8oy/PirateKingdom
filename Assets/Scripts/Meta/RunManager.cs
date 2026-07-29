@@ -34,25 +34,63 @@ public class RunManager : MonoBehaviour
     [Tooltip("Serialized purely so you can watch it change in the Inspector during play. Don't hand-edit.")]
     [SerializeField] private RunState current;
 
-    public static RunManager Instance { get; private set; }
+    private static RunManager _instance;
+
+    /// <summary>
+    /// The live RunManager, or null if there isn't one in the scene.
+    /// </summary>
+    /// <remarks>
+    /// Resolved lazily, and the run is loaded on first access rather than only in <c>Awake</c>.
+    /// <see cref="EncounterBootstrapper"/> spawns the crew from its own <c>Awake</c>, and Unity
+    /// gives no ordering guarantee between GameObjects — so whichever of the two happened to wake
+    /// first would decide whether the crew existed at all. Same reasoning as
+    /// <c>ParryInputManager.Instance</c>: script execution order must not be load-bearing.
+    /// </remarks>
+    public static RunManager Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                _instance = FindObjectOfType<RunManager>();
+                if (_instance != null) _instance.EnsureRunLoaded();
+            }
+
+            return _instance;
+        }
+    }
 
     public RunState Current => current;
     public bool HasActiveRun => current != null;
+
+    private bool runLoaded;
 
     private static string SavePath => Path.Combine(Application.persistentDataPath, SaveFileName);
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
+        if (_instance != null && _instance != this)
         {
             Destroy(gameObject);
             return;
         }
 
-        Instance = this;
+        _instance = this;
         DontDestroyOnLoad(gameObject);
 
-        // Runs in Awake so the run is ready before any CharacterManager.Start() tries to bind.
+        // No-op if an earlier Instance access already loaded the run.
+        EnsureRunLoaded();
+    }
+
+    /// <summary>
+    /// Loads the run, or starts the debug one. Runs at most once, from whichever comes first:
+    /// this component's <c>Awake</c>, or the first <see cref="Instance"/> access.
+    /// </summary>
+    private void EnsureRunLoaded()
+    {
+        if (runLoaded) return;
+        runLoaded = true;
+
         if (LoadRun())
         {
             // Loud on purpose: an existing save wins over Debug Starting Crew, so edits to that
@@ -84,7 +122,7 @@ public class RunManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (Instance == this) Instance = null;
+        if (_instance == this) _instance = null;
     }
 
     /// <summary>Discards any current run and builds a fresh one from the given crew.</summary>

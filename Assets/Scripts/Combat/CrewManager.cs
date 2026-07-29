@@ -24,6 +24,19 @@ public class CrewManager : MonoBehaviour
     private void Awake()
     {
         playerCharacters = GameObject.FindGameObjectsWithTag("Player");
+
+        // Since Phase 2b the crew are spawned by EncounterBootstrapper, also during Awake, and
+        // Awake order between components is arbitrary — so this may well find nothing. Nothing in
+        // gameplay reads the roster it builds (its only consumer is Debugs/Debug_Crew), so this
+        // warns rather than being made to work. See META.md §6 2b: this component is a candidate
+        // for deletion, which is a call for the project owner rather than an assumption to make.
+        if (playerCharacters.Length == 0)
+        {
+            Debug.LogWarning("[CrewManager] Found no Player-tagged objects — the crew are probably spawned " +
+                             "after this ran. The roster it builds is unused by gameplay; consider deleting " +
+                             "CrewManager and Debug_Crew.");
+        }
+
         InitializeCrew();
     }
 

@@ -78,6 +78,20 @@ public class CharacterManager : MonoBehaviour
     /// <summary>The run-state record backing this character, or null if not part of a run.</summary>
     public CrewMemberState CrewState => crewState;
 
+    /// <summary>
+    /// Assigns the run record this character is playing as. Call this while the instance is still
+    /// parented to the spawner's inactive staging object — i.e. before <c>Awake</c>/<c>Start</c>.
+    /// </summary>
+    /// <remarks>
+    /// This is the authoritative way to bind a spawned crew member. The id-matching fallback in
+    /// <see cref="BindToRunState"/> exists only for hand-placed crew and can't tell two crew
+    /// sharing one Character asset apart.
+    /// </remarks>
+    public void AssignCrewState(CrewMemberState state)
+    {
+        crewState = state;
+    }
+
     void Awake()
     {
         driveMeter = new DriveMeter();
@@ -96,9 +110,15 @@ public class CharacterManager : MonoBehaviour
 
         if (characterData != null)
         {
-            characterName.text = characterData.characterName;
             RefreshStats();
             BindToRunState();
+
+            // Named after the run record where there is one, so generated crew keep their rolled
+            // name rather than showing the archetype's authored name.
+            characterName.text = crewState != null && !string.IsNullOrEmpty(crewState.displayName)
+                ? crewState.displayName
+                : characterData.characterName;
+
             UpdateHealthBar();
         }
         else
@@ -185,22 +205,28 @@ public class CharacterManager : MonoBehaviour
         // Enemies are per-encounter; nothing about them persists between fights.
         if (characterData.allegiance != Character.Allegiance.Player) return;
 
-        if (RunManager.Instance == null || !RunManager.Instance.HasActiveRun) return;
-
-        crewState = RunManager.Instance.GetCrewMember(characterData.Id);
-
+        // Preferred path: the spawner already told us exactly which record we are.
         if (crewState == null)
         {
-            Debug.LogWarning($"[CharacterManager] {characterData.characterName} (id '{characterData.Id}') " +
-                             "isn't in the active run's crew — starting at full health.");
-            return;
+            // Fallback for crew placed in the scene by hand, which have no spawner to bind them.
+            // Ambiguous if two crew share one Character asset — spawned crew never take this path.
+            if (RunManager.Instance == null || !RunManager.Instance.HasActiveRun) return;
+
+            crewState = RunManager.Instance.GetCrewMember(characterData.Id);
+
+            if (crewState == null)
+            {
+                Debug.LogWarning($"[CharacterManager] {characterData.characterName} (id '{characterData.Id}') " +
+                                 "isn't in the active run's crew — starting at full health.");
+                return;
+            }
         }
 
         if (crewState.isDead)
         {
-            Debug.LogWarning($"[CharacterManager] {crewState.displayName} is dead in the current run but is " +
-                             "still placed in the scene. They'll be spawned out once encounters build their " +
-                             "own crew from run state.");
+            Debug.LogWarning($"[CharacterManager] {crewState.displayName} is dead in the current run but is in " +
+                             "the scene anyway. Hand-placed crew aren't filtered by the run — remove them from " +
+                             "the scene and let the bootstrapper spawn the crew instead.");
         }
 
         CurrentHealth = Mathf.Clamp(crewState.currentHealth, 0f, MaxHealth);

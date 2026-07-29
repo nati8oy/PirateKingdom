@@ -87,8 +87,10 @@ third-party and should not be modified** unless explicitly requested:
     voyage map, and context menus for Save / Load / Delete Save / Log Save Path.
   - `EncounterDefinition.cs` — ScriptableObject describing one fight: which `Enemy` assets, how
     many, display name, plunder reward.
-  - `EncounterBootstrapper.cs` — builds the encounter on scene load, then calls
-    `TurnManager.BeginBattle()`. **Two rules to preserve when touching combatant spawning:**
+  - `EncounterBootstrapper.cs` — spawns the crew (from `RunState`) and the enemies (from the
+    `EncounterDefinition`) on scene load, then calls `TurnManager.BeginBattle()`. Crew are bound to
+    their run record explicitly via `CharacterManager.AssignCrewState()`; dead crew never spawn.
+    **Two rules to preserve when touching combatant spawning:**
     - Spawn in `Awake()`, start the battle in `Start()`. Unity finishes every `Awake()` before any
       `Start()`, so the turn-order snapshot is complete by construction. Don't "fix" spawn ordering
       with Script Execution Order.

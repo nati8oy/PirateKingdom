@@ -36,7 +36,8 @@ in the Inspector's ⋮ with the asset selected, and **never** on a Project-windo
 `Debug Starting Crew` list, so edits to that list appear to do nothing until you delete the save.
 The console states which path was taken on every play.
 
-Still hand-placed in the scene (Phase 2 changes this): the three crew and the enemies.
+**Enemies now spawn** from an `EncounterDefinition` via `EncounterBootstrapper` (Phase 2a).
+Crew are still hand-placed in the scene — Phase 2b spawns them from `RunState`.
 
 **Open proposal:** a **2.5D presentation refactor** (combatants become sprites in 3D space rather
 than UI objects under a Canvas) is written up in §6 as an optional interlude between 2a and 2b.
@@ -309,7 +310,7 @@ scene serve every node on the voyage map.
 
 ---
 
-**2a — `EncounterDefinition` + enemy spawning. Code done; Editor steps outstanding.**
+**2a — `EncounterDefinition` + enemy spawning. ✅ DONE, verified in Editor.**
 `Assets/Scripts/Meta/EncounterDefinition.cs` (which enemies, how many, display name, plunder
 reward) and `Assets/Scripts/Meta/EncounterBootstrapper.cs` (spawns them, then calls
 `BeginBattle()`). Crew stay hand-placed until 2b.
@@ -347,6 +348,10 @@ second silently skipped the first turn's drive regen. (Same edit fixed a latent 
 *Verify:* two different `EncounterDefinition` assets produce two visibly different fights in the
 same scene, with correct turn order, working parry, and no instant victory/defeat on frame one.
 Leaving the definition empty falls back to hand-placed enemies, so the scene stays playable.
+
+> **If the victory screen appears the instant you press Play**, the bootstrapper spawned nothing
+> and `CheckBattleEndConditions()` found zero enemies on frame one. Check the console — the
+> bootstrapper logs which precondition failed. In practice it's an unassigned **Enemy Prefab**.
 
 ---
 
@@ -413,15 +418,41 @@ lands on.
 
 ---
 
-**2b — Crew spawned from `RunState`.**
-The bootstrapper also spawns living crew from `RunState` into crew spawn points. Dead crew simply
-don't appear. Replaces the temporary `characterData.Id` binding in
-`CharacterManager.BindToRunState()` with the spawner **assigning `CrewMemberState` explicitly** —
-id-matching can't distinguish two crew sharing one Character asset, and recruiting will make that
-real. Keep the "no active run" fallback so the scene is still playable standalone.
+**2b — Crew spawned from `RunState`. Code done; Editor steps outstanding.**
+`EncounterBootstrapper` now spawns living crew as well as enemies, sharing one staging area.
+`CharacterManager.AssignCrewState()` lets the spawner bind the record **explicitly**; the
+id-matching path in `BindToRunState()` is kept only as a fallback for hand-placed crew, clearly
+marked as such. Dead crew are filtered out by `RunState.LivingCrew` and never spawn.
+
+Notes:
+- **`characterData` must be assigned before the object wakes** — this is why crew spawn through the
+  inactive staging area too, even though the crew prefab *does* carry a default. `DriveManager.Awake()`
+  caches `buffNextActionMultiplier` off `characterData`, so waking as the prefab's default (Black Sam)
+  and swapping afterwards would leave the wrong character's drive multiplier cached for the whole fight.
+- Crew are named from `CrewMemberState.displayName` where present, falling back to the authored
+  `characterName` — so generated crew will show their rolled name rather than the archetype's.
+- **Action loadout is not applied yet.** `CrewMemberState.actionLoadout` is populated and saved, but
+  `ActionsManager` still reads `characterData.actionSlots`. Applying per-crew loadouts needs an
+  instance-level action list on `CharacterManager` (the SO is shared and must not be written to) —
+  that's Phase 5.
+
+*Editor steps — user's domain:*
+1. On the `Encounter Bootstrapper`, set **Crew Prefab** to `PlayerCharacter.prefab` and fill
+   **Crew Spawn Points** with one empty child transform per berth (3–4), under the same Canvas.
+2. **Delete the hand-placed crew from the scene.** Leaving them gives you both them and the spawned
+   crew — and the hand-placed ones aren't filtered by the run, so dead crew would reappear.
+3. Leave **Crew Prefab** empty at any point to fall back to hand-placed crew.
 
 *Verify:* kill a crew member, finish the fight, play again — they're absent and the fight starts
-with the survivors. `RunManager`'s `Debug Starting Crew` still drives a fresh run.
+with the survivors at their carried health. **Delete Run Save** then Play restores the full crew.
+
+**Decision needed — `CrewManager`.** Its `Awake()` finds `Player`-tagged objects, but crew are now
+spawned during the bootstrapper's `Awake()`, and Awake order between components is arbitrary, so it
+will usually find nothing. It now warns instead of silently building an empty roster. Nothing in
+gameplay reads what it builds — its only consumer is `Debugs/Debug_Crew.cs`. Options: delete both,
+or drive it from the bootstrapper after spawning. Deleting also removes the last caller of
+`Character.Initialize()`, which is the last thing resetting `reputation` on the ScriptableObject —
+see the `reputation` open question in §7.
 
 **2c — `EncounterResult`.**
 One object returned at battle end carrying survivors' health, deaths, XP and plunder. Consolidates

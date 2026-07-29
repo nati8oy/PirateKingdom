@@ -68,7 +68,7 @@ public class TooltipUI : MonoBehaviour
     /// <summary>
     /// Shows detailed action tooltip with cooldown status from specific character
     /// </summary>
-    public void ShowActionTooltipWithCharacter(Action action, Character character)
+    public void ShowActionTooltipWithCharacter(Action action, CharacterManager character)
     {
         if (action == null) 
         {

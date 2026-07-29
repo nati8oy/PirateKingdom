@@ -320,9 +320,8 @@ public class DriveManager : MonoBehaviour
     {
         if (characterManager?.characterData != null)
         {
-            // Use the new RemoveFirstDebuff method instead
-            bool removed = characterManager.characterData.RemoveFirstDebuff();
-        
+            bool removed = characterManager.RemoveFirstDebuff();
+
             if (removed)
             {
                 characterManager.RefreshStats();
@@ -418,10 +417,9 @@ public class DriveManager : MonoBehaviour
     
     private bool HasDebuffs()
     {
-        if (characterManager?.characterData != null)
+        if (characterManager != null)
         {
-            var activeBuffs = characterManager.characterData.GetActiveBuffs();
-            foreach (var buff in activeBuffs)
+            foreach (var buff in characterManager.GetActiveBuffs())
             {
                 if (buff.Value < 0) return true;
             }

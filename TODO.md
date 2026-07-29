@@ -44,18 +44,18 @@ letting the receiving `CharacterManager` look it up. Note `EnemyManager.PerformD
 heal branch already multiplies explicitly *and* consumes before calling `Heal()` — it avoids a
 double-application only because the stacks are cleared first, which is fragile.
 
-### Cooldowns tick twice for whoever ends a round
-`CharacterManager.OnTurnComplete()` calls `characterData.UpdateActionCooldowns()`
-(`CharacterManager.cs:165`), and `TurnManager.RoundComplete()` calls it again on the same
-`currentCharacterTurn` (`TurnManager.cs:329`). The last character to act in a round therefore
-burns two turns of cooldown for one turn of play.
+### ~~Cooldowns tick twice for whoever ends a round~~ — DONE (Phase 1a)
+The redundant `UpdateActionCooldowns()` call in `TurnManager.RoundComplete()` is gone; the
+per-turn call in `CharacterManager.OnTurnComplete()` is the only one.
 
-The `RoundComplete()` call also only touches a single character rather than everyone, which looks
-vestigial from the old round-based buff system. Masked today because nothing in `Encounter.unity`
-has a `cooldown > 0`.
+### ~~Enemy action cooldowns never started~~ — DONE (Phase 1a)
+`EnemyManager.ChooseBestAction()` has always filtered on `IsActionAvailable`, but nothing ever
+marked an enemy action as *used*, so enemy cooldowns never began — every action was permanently
+available. `EnemyManager` also carried a second, name-keyed cooldown dictionary with its own
+`UseAction` / `IsActionAvailable` / `UpdateActionCooldowns` that no caller ever touched.
 
-**Fix direction:** delete the `UpdateActionCooldowns()` line from `RoundComplete()` — the
-per-turn call in `OnTurnComplete()` is the correct one.
+That duplicate system is deleted, and enemies now call `CharacterManager.UseAction()` on the same
+path as the player. Masked until now because no enemy action has a `cooldown` above 0.
 
 ### `EnemyManager.Start()` initializes the drive manager off a stale field
 `EnemyManager.cs:75-84` calls `enemyDriveManager.Initialize(enemyData.driveConfig)` *before*
@@ -70,24 +70,20 @@ Inspector field. It also dereferences `enemyDriveManager` with no null check.
 **Fix direction:** reorder so `enemyData` is resolved from `CharacterManager` first, or drop the
 redundant `Start()` init entirely and rely on `Awake()`.
 
-### Duplicate scene instances share ScriptableObject state
-`Character` holds `activeBuffs`, `actionCooldowns`, and `reputation` as instance fields on the
-**ScriptableObject**, but multiple scene objects can point `characterData` at the same asset.
-This is live today: both Skeleton enemies in `Encounter.unity` reference
-`Assets/Scripts/Enemy/Skeleton.asset`.
+### ~~Duplicate scene instances share ScriptableObject state~~ — DONE (Phase 1a)
+`activeBuffs` and `actionCooldowns` now live on the runtime `CharacterManager`, so two scene
+objects sharing a `Character` asset (both Skeletons reference `Skeleton.asset`) no longer share
+buffs, cooldowns, or double-tick their durations. `Character` is authored data only — **do not
+reintroduce mutable fields on it**, both for this reason and because Editor play sessions write
+ScriptableObject changes into the project asset on disk.
 
-Consequences: debuffing one Skeleton debuffs both; an action put on cooldown by one is on
-cooldown for both; and `UpdateBuffsForCharacterTurn()` / `UpdateActionCooldowns()` run once per
-skeleton turn, so durations tick down twice as fast as authored.
+`ActionsManager.IsActionAvailable()` and `LoadCharacterActions()` now take a `CharacterManager`
+rather than a `Character`, as do `TooltipUI.ShowActionTooltipWithCharacter()` and
+`ActionButtonHover.SetActionWithCharacter()`.
 
-Currently masked because Skeleton's only action (`Slash_Attack`) has `cooldown: 0` and nothing
-debuffs enemies yet — but it will bite as soon as either changes, or as soon as two crew members
-share a `Character` asset.
-
-**Fix direction:** move per-battle mutable state (`activeBuffs`, `actionCooldowns`, `reputation`)
-off `Character` and onto the runtime `CharacterManager`, leaving the ScriptableObject as pure
-authored data. Non-trivial — touches `TurnManager`, `ActionsManager.IsActionAvailable`,
-`EnemyManager`, and every `GetModified*()` call site.
+Still on the ScriptableObject: `reputation`. It's authored, zeroed by `Initialize()`, and never
+read — see the "what is `reputation` for?" open question in `META.md`. It should either move with
+the rest or be deleted once it has a purpose.
 
 ### `ParrySystem.Awake()` dereferences `characterData` before its null check
 `ParrySystem.cs:37` does

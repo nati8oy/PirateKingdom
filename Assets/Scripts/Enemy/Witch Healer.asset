@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
   m_Name: Witch Healer
   m_EditorClassIdentifier: 
+  id: witch_healer
   characterName: Witch
   actionSlots:
   - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
@@ -23,14 +24,27 @@ MonoBehaviour:
   availableActions: []
   level: 1
   reputation: 0
+  deathSoundEffect: {fileID: 0}
   characterClass: 0
   allegiance: 1
   maxHealth: 75
   attackPower: 5
   defenseValue: 3
   speed: 3
+  buffNextActionMultiplier: 1.5
+  damageInflictedDriveMultiplier: 4
+  damageTakenDriveMultiplier: 4
+  parryBonusDriveMultiplier: 5
   healThreshold: 0.3
+  driveConfig:
+    strategy: 0
+    healthThreshold: 0.5
+    usageChance: 0.5
+    preferredAction: 0
+    minimumSegmentsToUse: 1
+    stacksPerBuff: 2
   showDebugInfo: 0
+  targetingStrategy: 0
   attackWeight: 0.3
   healWeight: 0.9
   buffWeight: 0.5

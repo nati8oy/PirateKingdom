@@ -54,9 +54,7 @@ public class TargetHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerE
             if (selectedAction != null)
             {
                 // Return to showing detailed selected action info (same as hover)
-                CharacterManager currentCharacter = combatController.GetCurrentCharacter();
-                Character currentCharacterData = currentCharacter != null ? currentCharacter.characterData : null;
-                TooltipUI.Instance.ShowActionTooltipWithCharacter(selectedAction, currentCharacterData);
+                TooltipUI.Instance.ShowActionTooltipWithCharacter(selectedAction, combatController.GetCurrentCharacter());
             }
             else
             {

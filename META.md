@@ -163,15 +163,85 @@ once at `Awake`, and they'll need re-populating on every scene load.
 Each phase should be playable/verifiable before the next. UI is yours throughout — I do the code
 side and tell you what to wire.
 
-### Phase 1 — Run state foundation
-Move mutable state off the ScriptableObjects. Add `id` to `Character`/`Action`, build
-`ContentDatabase`, define `RunState`/`CrewMemberState`, add `RunManager` with save/load.
-`CharacterManager` initializes from `CrewMemberState` instead of `characterData.maxHealth`.
+### Phase 1 — Run state foundation ✅ COMPLETE
 
-*Verify:* start a fight with a debug `RunState` where Black Sam is at 20/60 — he spawns at 20.
-Kill him, confirm `isDead` flips in the run state and `Black Sam.asset` on disk is untouched.
+**1a — Runtime combat state off the ScriptableObjects. ✅ DONE.**
+`activeBuffs` and `actionCooldowns` moved from `Character` to `CharacterManager`; `Character` is
+now authored data only. Everything that queries buff/cooldown state takes a `CharacterManager`.
+*Closed three `TODO.md` bugs along the way:* the shared-ScriptableObject-state bug, the
+round-end double-tick of cooldowns, and enemy cooldowns never starting.
 
-*Closes:* `TODO.md` "Duplicate scene instances share ScriptableObject state".
+*Verify:* damage/debuff one Skeleton — the other should be unaffected. Buff durations should tick
+once per turn, not twice. `Skeleton.asset` on disk should be unchanged after a play session.
+
+**1b — Ids + `ContentDatabase`. ✅ DONE, verified in Editor.**
+`Character` and `Action` each gained a serialized `id` with a public `Id` getter, and
+`Assets/Scripts/Meta/ContentDatabase.cs` resolves `id -> asset` in both directions. Purely
+additive — nothing reads it yet, so no behaviour change.
+
+Ids are stamped from a sanitised asset *name* (`Black Sam` -> `black_sam`) rather than the asset
+GUID, so save files stay readable. Stamping happens in an explicit `Rebuild From Project` context
+menu rather than `OnValidate`, because `AssetDatabase` calls during validation are an import-time
+hazard. **Existing ids are never overwritten** — that would silently invalidate saved runs — so
+renaming an asset after its first stamp is safe.
+
+*Editor step — user's domain:* create `Assets/Resources/`, add a Content Database asset there via
+**Assets > Create > Scriptable Objects > Content Database** (it must be named `ContentDatabase`,
+since it's found by `Resources.Load` with no scene wiring), then run
+**Tools > Pirate Kingdom > Rebuild Content Database**. Re-run it after adding or deleting any
+Character/Enemy/Action asset.
+
+> The same rebuild is also a `[ContextMenu]` on the asset, but note those only appear in the
+> **Inspector's ⋮ menu** with the asset selected — never on a right-click in the Project window.
+
+*Verify:* the console reports 8 characters and 9 actions stamped, and the assets show their new
+ids in the Inspector.
+
+**1c — `RunState` + `RunManager`. ✅ DONE, verified in Editor.**
+`Assets/Scripts/Meta/RunState.cs` defines `RunState`/`CrewMemberState`; `RunManager.cs` owns the
+live run and its JSON persistence at `Application.persistentDataPath/run.json`.
+`CharacterManager.BindToRunState()` takes starting health from the crew record, and health/death
+are written back.
+
+Design notes:
+- **Everything tolerates there being no run.** No `RunManager`, no save, or no matching crew
+  record all fall back to full health, so pressing Play straight into the encounter scene still
+  works. That fallback is what keeps the project playable through Phases 1–2.
+- **Enemies never bind.** They're per-encounter; nothing about them persists.
+- **Binding by `characterData.Id` is a temporary bridge** for scene-placed crew. It can't tell two
+  crew sharing one Character asset apart. Phase 2's spawner assigns `CrewMemberState` explicitly
+  and this goes away.
+- **Saves happen at encounter boundaries, not continuously.** Health syncs in memory on every
+  damage/heal, but the disk write only happens on death and at `EndBattle`. This is deliberate:
+  battle state (enemy health, buffs, turn order) isn't serialised, so a mid-fight save would
+  reload with the crew damaged and the enemies back to full. Per-encounter saving means quitting
+  mid-fight rewinds cleanly to the start of that encounter, and closes the save-scum hole where
+  you quit to undo a bad turn. Resuming *inside* a battle would mean serialising the whole
+  encounter — a much larger job, and not planned.
+  - Consequence for testing: taking damage and pressing Stop **will not** persist. Finish the
+    battle first, or watch `currentHealth` change live in the RunManager Inspector.
+- `RunState.saveVersion` exists so incompatible old saves are detected and discarded rather than
+  half-loaded. Bump `CurrentSaveVersion` on any breaking format change.
+- Neither Meta file uses `using System;` — it would make `System.Action` collide with the game's
+  own `Action` ScriptableObject. Keep it that way.
+
+*Editor step — user's domain:* add a `Run Manager` GameObject to `Encounter.unity`, and populate
+its **Debug Starting Crew** list with the crew assets placed in the scene (Black Sam, Kolo Aka,
+Biku Bale). `Start Debug Run If No Save` should stay ticked until the voyage map exists.
+
+> **An existing save always beats Debug Starting Crew.** `Awake()` loads the save if there is one,
+> so editing that list looks like it does nothing. Reset it with
+> **Tools > Pirate Kingdom > Delete Run Save** (works while not playing, and needs no RunManager
+> instance), then press Play. The console states which path was taken on every play.
+>
+> The same actions also exist as `[ContextMenu]` entries on the component — but note those only
+> appear on the **component's ⋮ button** in the Inspector, not on the GameObject and not in the
+> Project window. The Tools menu is the reliable route.
+
+*Verify:* play once and take damage, then stop and play again — crew should return at the health
+they finished on, visible live in the RunManager Inspector. Kill a crew member and confirm
+`isDead` flips and persists. Confirm `Black Sam.asset` on disk is untouched throughout. Use
+**Delete Save** on the RunManager to reset.
 
 ### Phase 2 — Parameterized encounters
 `EncounterDefinition` SO, `EncounterBootstrapper`, explicit `TurnManager.BeginBattle()`,

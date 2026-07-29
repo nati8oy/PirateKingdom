@@ -5,26 +5,24 @@ using UnityEngine.EventSystems;
 public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     private Action associatedAction;
-    private Character ownerCharacter; // Reference to the character who owns this action
-    
+    // The runtime character who owns this action — cooldowns are per instance, so this has to be
+    // the CharacterManager rather than the shared Character asset.
+    private CharacterManager ownerCharacter;
+
     public void SetAction(Action action)
     {
         associatedAction = action;
-        
+
         // Try to find the character that owns this action
         // This could be from ActionsManager context or current character
         CombatController combatController = FindObjectOfType<CombatController>();
         if (combatController != null)
         {
-            CharacterManager currentCharacter = combatController.GetCurrentCharacter();
-            if (currentCharacter != null && currentCharacter.characterData != null)
-            {
-                ownerCharacter = currentCharacter.characterData;
-            }
+            ownerCharacter = combatController.GetCurrentCharacter();
         }
     }
-    
-    public void SetActionWithCharacter(Action action, Character character)
+
+    public void SetActionWithCharacter(Action action, CharacterManager character)
     {
         associatedAction = action;
         ownerCharacter = character;
@@ -58,9 +56,7 @@ public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerEx
         if (combatController != null && combatController.selectedAction != null)
         {
             // If an action is selected, show the same detailed info as when hovering
-            CharacterManager currentCharacter = combatController.GetCurrentCharacter();
-            Character currentCharacterData = currentCharacter != null ? currentCharacter.characterData : null;
-            TooltipUI.Instance.ShowActionTooltipWithCharacter(combatController.selectedAction, currentCharacterData);
+            TooltipUI.Instance.ShowActionTooltipWithCharacter(combatController.selectedAction, combatController.GetCurrentCharacter());
         }
         else if (TooltipUI.Instance != null)
         {

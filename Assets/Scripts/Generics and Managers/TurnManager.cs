@@ -132,9 +132,18 @@ public class TurnManager : MonoBehaviour
     private void EndBattle(bool playerVictory)
     {
         battleEnded = true;
-        
+
         // Stop all turn processing
         CancelInvoke();
+
+        // Commit surviving crew's health to the run before anything is torn down, so damage
+        // carries into the next encounter. Deaths were already recorded as they happened.
+        // Phase 2 replaces this with a proper EncounterResult (XP, plunder, and so on).
+        foreach (var character in FindObjectsOfType<CharacterManager>())
+        {
+            character.SyncHealthToRunState();
+        }
+        RunManager.Instance?.SaveRun();
         
         // Hide turn marker if current character exists
         if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
@@ -299,7 +308,7 @@ public class TurnManager : MonoBehaviour
             
                 if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
                 {
-                    actionsManager.LoadCharacterActions(currentCharacterTurn.characterData); 
+                    actionsManager.LoadCharacterActions(currentCharacterTurn);
 
                     if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
                     {
@@ -359,11 +368,10 @@ public class TurnManager : MonoBehaviour
         
         roundCounterInt += 1;
         //Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
-        currentCharacterTurn.characterData?.UpdateActionCooldowns(); 
-        
-        
-        // Note: We no longer update buffs here since they're now turn-based
-        // Buffs are updated individually when each character completes their turn
+
+        // Note: cooldowns and buffs are both ticked per character in CharacterManager.OnTurnComplete().
+        // There used to be an UpdateActionCooldowns() call here as well, which double-ticked the
+        // cooldowns of whichever character happened to end the round.
     }
     
     // Public method to restart battle (can be called from UI buttons)

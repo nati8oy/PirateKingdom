@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using AssetKits.ParticleImage;
 using TMPro;
 using UnityEngine;
@@ -59,9 +61,23 @@ public class CharacterManager : MonoBehaviour
 
     private bool isDead = false;
     private DriveManager driveManager;
-    
+
     private DriveMeter driveMeter;
-    
+
+    // --- Per-battle runtime state ---
+    // These used to live on the Character ScriptableObject, which meant two scene objects sharing
+    // an asset (both Skeletons share Skeleton.asset) shared one set of buffs and cooldowns, and
+    // that Editor play sessions wrote into the project asset. They belong to the instance.
+    private readonly List<Character.ActiveBuff> activeBuffs = new List<Character.ActiveBuff>();
+    private readonly Dictionary<Action, int> actionCooldowns = new Dictionary<Action, int>();
+
+    // The run-state record this character is playing as, when a run is in progress. Null for
+    // enemies (per-encounter, nothing persists) and whenever there's no active run.
+    private CrewMemberState crewState;
+
+    /// <summary>The run-state record backing this character, or null if not part of a run.</summary>
+    public CrewMemberState CrewState => crewState;
+
     void Awake()
     {
         driveMeter = new DriveMeter();
@@ -79,7 +95,7 @@ public class CharacterManager : MonoBehaviour
         if (characterData != null)
         {
             RefreshStats();
-            CurrentHealth = characterData.maxHealth;
+            BindToRunState();
             UpdateHealthBar();
         }
         else
@@ -98,10 +114,20 @@ public class CharacterManager : MonoBehaviour
         if (!isDead && CurrentHealth <= 0)
         {
             isDead = true;
-            
+
+            // Permadeath: record it in the run before this object goes away, or the crew member
+            // would come back next encounter as though nothing happened.
+            if (crewState != null)
+            {
+                crewState.isDead = true;
+                crewState.currentHealth = 0f;
+                Debug.Log($"[CharacterManager] {crewState.displayName} died — removed from the run's crew for good.");
+                RunManager.Instance?.SaveRun();
+            }
+
             // Play character-specific death audio from scriptable object
             PlayDeathAudio();
-            
+
             OnDeath?.Invoke();
             Destroy(gameObject);
         }
@@ -138,17 +164,159 @@ public class CharacterManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Picks up this character's carried-over health from the active run, falling back to full
+    /// health when there's no run (playing the encounter scene directly), when this is an enemy,
+    /// or when no matching crew record exists.
+    /// </summary>
+    /// <remarks>
+    /// Binding by <c>characterData.Id</c> is a temporary bridge for scene-placed crew. Once
+    /// encounters spawn their combatants from run state, the spawner should assign the
+    /// <see cref="CrewMemberState"/> explicitly — matching on id can't distinguish two crew
+    /// sharing one Character asset.
+    /// </remarks>
+    private void BindToRunState()
+    {
+        CurrentHealth = MaxHealth;
+
+        // Enemies are per-encounter; nothing about them persists between fights.
+        if (characterData.allegiance != Character.Allegiance.Player) return;
+
+        if (RunManager.Instance == null || !RunManager.Instance.HasActiveRun) return;
+
+        crewState = RunManager.Instance.GetCrewMember(characterData.Id);
+
+        if (crewState == null)
+        {
+            Debug.LogWarning($"[CharacterManager] {characterData.characterName} (id '{characterData.Id}') " +
+                             "isn't in the active run's crew — starting at full health.");
+            return;
+        }
+
+        if (crewState.isDead)
+        {
+            Debug.LogWarning($"[CharacterManager] {crewState.displayName} is dead in the current run but is " +
+                             "still placed in the scene. They'll be spawned out once encounters build their " +
+                             "own crew from run state.");
+        }
+
+        CurrentHealth = Mathf.Clamp(crewState.currentHealth, 0f, MaxHealth);
+        Debug.Log($"[CharacterManager] {crewState.displayName} joined the fight at {CurrentHealth}/{MaxHealth}.");
+    }
+
+    /// <summary>Pushes current health back into the run so it carries to the next encounter.</summary>
+    public void SyncHealthToRunState()
+    {
+        if (crewState == null) return;
+        crewState.currentHealth = CurrentHealth;
+    }
+
     // Refresh all stats from character data, including buffs
     public void RefreshStats()
     {
         if (characterData != null)
         {
-            MaxHealth = characterData.GetModifiedMaxHealth();
-            AttackPower = characterData.GetModifiedAttackPower();
-            DefenseValue = characterData.GetModifiedDefenseValue();
-            Speed = characterData.GetModifiedSpeed();
+            // Authored base from the ScriptableObject + this instance's own buffs. Clamps match
+            // the ones the Character asset used to apply.
+            MaxHealth = Mathf.Max(1f, characterData.maxHealth + SumBuffValue(Character.BuffType.Health));
+            AttackPower = Mathf.Max(0f, characterData.attackPower + SumBuffValue(Character.BuffType.Attack));
+            DefenseValue = Mathf.Max(0f, characterData.defenseValue + SumBuffValue(Character.BuffType.Defense));
+            Speed = Mathf.Max(0.1f, characterData.speed + SumBuffValue(Character.BuffType.Speed));
             UpdateBuffDisplay();
         }
+    }
+
+    private float SumBuffValue(Character.BuffType buffType)
+    {
+        float total = 0f;
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Type == buffType)
+            {
+                total += buff.Value;
+            }
+        }
+        return total;
+    }
+
+    /// <summary>Ticks down this character's buffs at the end of their turn, dropping expired ones.</summary>
+    private void UpdateBuffsForCharacterTurn()
+    {
+        for (int i = activeBuffs.Count - 1; i >= 0; i--)
+        {
+            activeBuffs[i].ReduceTurns();
+            if (activeBuffs[i].IsExpired())
+            {
+                Debug.Log($"Buff/Debuff expired on {characterData?.characterName}: {activeBuffs[i].Type} after completing turn");
+                activeBuffs.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>Ticks down this character's action cooldowns at the end of their turn.</summary>
+    public void UpdateActionCooldowns()
+    {
+        foreach (var action in actionCooldowns.Keys.ToList())
+        {
+            int turnsRemaining = actionCooldowns[action] - 1;
+
+            if (turnsRemaining <= 0)
+            {
+                actionCooldowns.Remove(action);
+                Debug.Log($"{characterData?.characterName}: {action.actionName} cooldown expired and is now available");
+            }
+            else
+            {
+                actionCooldowns[action] = turnsRemaining;
+            }
+        }
+    }
+
+    /// <summary>Marks an action used, putting it on cooldown for this character only.</summary>
+    public void UseAction(Action action)
+    {
+        if (action != null && action.cooldown > 0)
+        {
+            int cooldownTurns = Mathf.RoundToInt(action.cooldown);
+            actionCooldowns[action] = cooldownTurns;
+            Debug.Log($"{characterData?.characterName} used {action.actionName}, cooldown: {cooldownTurns} turns");
+        }
+    }
+
+    /// <summary>Whether this character can use the action right now (i.e. it isn't on cooldown).</summary>
+    public bool IsActionAvailable(Action action)
+    {
+        if (action == null) return false;
+        if (action.cooldown <= 0) return true;
+
+        return !actionCooldowns.ContainsKey(action);
+    }
+
+    public int GetActionCooldownRemaining(Action action)
+    {
+        if (action == null || !actionCooldowns.ContainsKey(action))
+            return 0;
+
+        return actionCooldowns[action];
+    }
+
+    /// <summary>Removes the first negative-valued buff. Used by the Drive "remove debuff" action.</summary>
+    public bool RemoveFirstDebuff()
+    {
+        for (int i = 0; i < activeBuffs.Count; i++)
+        {
+            if (activeBuffs[i].Value < 0)
+            {
+                activeBuffs.RemoveAt(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public List<Character.ActiveBuff> GetActiveBuffs()
+    {
+        return new List<Character.ActiveBuff>(activeBuffs);
     }
 
     // Call this at the beginning of each character's turn to update buffs and refresh stats
@@ -161,8 +329,8 @@ public class CharacterManager : MonoBehaviour
     // Call this when the character completes their turn
     public void OnTurnComplete()
     {
-        characterData?.UpdateBuffsForCharacterTurn();
-        characterData?.UpdateActionCooldowns(); 
+        UpdateBuffsForCharacterTurn();
+        UpdateActionCooldowns();
         driveManager?.OnTurnEnd(); // Handle drive turn end effects
         RefreshStats(); // Update stats after buffs are reduced
         if (characterData != null) Debug.Log($"{characterData.characterName} completed their turn, buffs updated");
@@ -191,6 +359,7 @@ public class CharacterManager : MonoBehaviour
         float roundedDamage = Mathf.Round(damage);
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
         UpdateHealthBar();
+        SyncHealthToRunState();
 
         if (CurrentHealth <= 0)
         {
@@ -309,17 +478,16 @@ public class CharacterManager : MonoBehaviour
         float roundedHeal = Mathf.Round(amount);
         CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + roundedHeal);
         UpdateHealthBar();
+        SyncHealthToRunState();
     }
 
     public void AddBuff(Character.BuffType type, float amount, float duration)
     {
         // Convert float duration to turns (assuming 1 duration = 1 turn)
         int turns = Mathf.RoundToInt(duration);
-        characterData?.AddBuff(type, amount, turns);
+        activeBuffs.Add(new Character.ActiveBuff(type, amount, turns));
+        Debug.Log($"Added {(amount > 0 ? "buff" : "debuff")} to {characterData?.characterName}: {type} {amount:+0;-0} for {turns} turns");
         RefreshStats(); // Immediately update stats to reflect the new buff
-        
-        string buffName = amount > 0 ? "Buff" : "Debuff";
-        //Debug.Log($"{buffName} applied to {characterData.characterName}: {type} {amount:+0;-0} for {turns} turns");
     }
 
     public void Miss()
@@ -364,9 +532,6 @@ public class CharacterManager : MonoBehaviour
     
     public bool HasActiveBuff(Character.BuffType buffType)
     {
-        if (characterData == null) return false;
-    
-        var activeBuffs = characterData.GetActiveBuffs();
         foreach (var buff in activeBuffs)
         {
             if (buff.Type == buffType)
@@ -374,13 +539,11 @@ public class CharacterManager : MonoBehaviour
         }
         return false;
     }
-    
+
     public void UpdateBuffDisplay()
     {
         if (buffEffectText == null || characterData == null) return;
-    
-        var activeBuffs = characterData.GetActiveBuffs();
-    
+
         if (activeBuffs.Count == 0)
         {
             buffEffectText.text = "";

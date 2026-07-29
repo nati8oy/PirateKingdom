@@ -66,14 +66,47 @@ third-party and should not be modified** unless explicitly requested:
     **not** roll damage; `EnemyManager` rolls once and passes the value into
     `StartAttack(target, action, damage)`.
   - `EnemyDriveManager.cs` — automated enemy drive usage strategies.
+- `Meta/` — the run/voyage layer that sits above combat. See `META.md` for the full plan.
+  - `ContentDatabase.cs` — ScriptableObject registry mapping stable string `id`s to `Character` /
+    `Action` assets. Save data can't hold Unity object references, so run state stores ids and
+    resolves them here. Lives at `Assets/Resources/ContentDatabase.asset` and is reached via
+    `ContentDatabase.Instance` (`Resources.Load`, no scene wiring). Rebuild it via
+    **Tools > Pirate Kingdom > Rebuild Content Database** after adding or deleting content assets.
+  - `RunState.cs` — plain `[Serializable]` `RunState` + `CrewMemberState`. Everything that
+    persists across encounters in one voyage: crew, their carried health, level/XP, action
+    loadout, and permadeath flag. JSON-serialized, so it holds **ids, never object references**.
+  - `RunManager.cs` — `DontDestroyOnLoad` singleton owning the live `RunState` and its save/load
+    (`Application.persistentDataPath/run.json`). Has debug hooks to start a run without the
+    voyage map, and context menus for Save / Load / Delete Save / Log Save Path.
+  - **Neither Meta file uses `using System;`** — it would make `System.Action` collide with the
+    game's own `Action` ScriptableObject. System types are fully qualified instead.
 - `Player/PlayerCombatController.cs`, `Tooltip/`, `Debugs/`, `PlayerControls.cs` (generated input).
 
 ## Key architecture concepts
 
 - **ScriptableObject data vs. MonoBehaviour runtime.** `Character`/`Enemy`/`Action` are
-  ScriptableObjects holding *shared/base data*. `CharacterManager` is the *per-instance runtime
-  state* in the scene. Note buffs/cooldowns live on the ScriptableObject (`Character`), so they
-  are shared state — `Initialize()` is called to reset them at battle start.
+  ScriptableObjects holding *authored data only*. `CharacterManager` is the *per-instance runtime
+  state* in the scene, and owns `activeBuffs` + `actionCooldowns`.
+  - **Never put mutable runtime state on a ScriptableObject.** Two reasons: several scene objects
+    can share one asset (both Skeletons reference `Skeleton.asset`), and in the Editor writes to a
+    ScriptableObject persist into the project asset on disk, so play sessions would permanently
+    drift your authored data.
+  - Consequently anything that needs buff/cooldown state takes a `CharacterManager`, not a
+    `Character` — `ActionsManager.IsActionAvailable()`, `ActionsManager.LoadCharacterActions()`,
+    `TooltipUI.ShowActionTooltipWithCharacter()`, `ActionButtonHover.SetActionWithCharacter()`.
+  - Buffed stats are computed in `CharacterManager.RefreshStats()` (authored base + this
+    instance's buffs). `CharacterManager.GetModifiedAttackPower()` is a *different* thing — it
+    applies the Drive multiplier on top of the already-buffed `AttackPower`.
+  - `reputation` is still on `Character`; it's authored, zeroed, and never read.
+- **Stable asset ids.** `Character.Id` and `Action.Id` are serialized strings stamped once by
+  `ContentDatabase`'s *Rebuild From Project*, derived from the asset name (`Black Sam` ->
+  `black_sam`). Save data references content by these ids, so **never change an id once runs have
+  been saved against it**, and never key save data off `characterName` or the asset filename.
+  Rebuild never overwrites an existing id, which is what makes renaming an asset safe.
+- **Run state is optional.** A `CharacterManager` binds to a `CrewMemberState` on `Start()` only
+  when there's an active run and it's a `Player`; otherwise it falls back to full health. Every
+  consumer of `RunManager.Instance` must tolerate it being null — playing `Encounter.unity`
+  directly with no run is a supported case, and enemies never bind at all.
 - **Turn flow:** `TurnManager.BeginBattle()` → `GetTurnOrder()` (initiative = `Speed + Random(1,9)`)
   → `SetCharacterTurn()` → player picks action (UI) or enemy AI acts → `CompleteTurn()` advances
   the index → new round re-rolls order. Battle end is polled in `TurnManager.Update()`.

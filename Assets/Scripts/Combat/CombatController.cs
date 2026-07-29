@@ -354,10 +354,10 @@ public class CombatController : MonoBehaviour
     // Mark action as used AFTER successful execution
     if (turnManager.currentCharacterTurn != null && turnManager.currentCharacterTurn.characterData != null)
     {
-        turnManager.currentCharacterTurn.characterData.UseAction(selectedAction);
-        
+        turnManager.currentCharacterTurn.UseAction(selectedAction);
+
         // Refresh the actions UI to show updated cooldown states
-        FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn.characterData);
+        FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn);
     }
     
     turnManager.CompleteTurn();

@@ -486,20 +486,27 @@ public class CharacterManager : MonoBehaviour
         }
     }
 
-    public void Heal(float amount)
-    {   
-        // Apply drive mode healing multiplier if active
-        if (driveManager != null)
+    /// <summary>
+    /// Heals this character. <paramref name="driveMultiplier"/> is the <b>caster's</b> drive-stack
+    /// multiplier, supplied by whoever resolved the action.
+    /// </summary>
+    /// <remarks>
+    /// This used to read <c>driveManager.GetNextHealingMultiplier()</c> off <i>this</i> character —
+    /// i.e. the heal's <b>target</b>. A healer who committed drive stacks and healed a crewmate
+    /// therefore spent the segments for nothing while the target's idle stacks were consumed
+    /// instead; self-heals only worked because healer and target were the same object. The caster's
+    /// multiplier is not something the receiver can look up, so it has to be passed in.
+    /// </remarks>
+    public void Heal(float amount, float driveMultiplier = 1f)
+    {
+        if (driveMultiplier > 1f)
         {
-            float healingMultiplier = driveManager.GetNextHealingMultiplier();
-            amount *= healingMultiplier;
-            
-            if (healingMultiplier > 1f)
-            {
-                Debug.Log($"Drive mode boosted healing from base amount to {amount} (multiplier: {healingMultiplier}x)");
-            }
+            amount *= driveMultiplier;
+            Debug.Log($"Drive stacks boosted healing on {characterData?.characterName ?? gameObject.name} " +
+                      $"to {amount} (multiplier: {driveMultiplier}x)");
         }
-        
+
+
         actionStatusText.enabled = true;
         actionStatusText.text = "+" + Mathf.Round(amount);
         healFeedback.PlayFeedbacks();

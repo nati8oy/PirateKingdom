@@ -559,23 +559,22 @@ public class EnemyManager : MonoBehaviour
             case Action.ActionType.Heal:
                 float healing = Random.Range(_selectedAction.minHeal, _selectedAction.maxHeal);
                 
-                // Apply drive mode multiplier to healing if active
+                // Pass the healer's drive multiplier in rather than pre-multiplying: Heal() applies
+                // it, and can't derive it itself because its own DriveManager is the target's.
                 DriveManager healerDriveManager = _characterManager.GetComponent<DriveManager>();
-                if (healerDriveManager != null)
+                float healingMultiplier = healerDriveManager != null
+                    ? healerDriveManager.GetNextHealingMultiplier()
+                    : 1f;
+
+                if (healingMultiplier > 1f)
                 {
-                    float healingMultiplier = healerDriveManager.GetNextHealingMultiplier();
-                    healing *= healingMultiplier;
-                    
-                    if (healingMultiplier > 1f)
-                    {
-                        Debug.Log($"[EnemyManager] {gameObject.name} applied {healingMultiplier}x drive multiplier to healing! Healing: {healing}");
-                    }
-                    
-                    // Consume the drive buff after applying it
-                    healerDriveManager.OnAttackPerformed();
+                    Debug.Log($"[EnemyManager] {gameObject.name} applied {healingMultiplier}x drive multiplier to healing!");
                 }
-                
-                _characterManager.Heal(healing);
+
+                _characterManager.Heal(healing, healingMultiplier);
+
+                // Consume the drive buff after applying it
+                healerDriveManager?.OnAttackPerformed();
                 break;
                 
             case Action.ActionType.Buff:

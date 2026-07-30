@@ -22,27 +22,51 @@ Target: a clean parry pays ~25 drive (a quarter segment) for a typical ~5-damage
 
 ---
 
+## Tuning & game feel
+
+Notes on values that are *correct in code* but read as broken in play. Worth checking before
+debugging a system that "doesn't work".
+
+### A low `buffNextActionMultiplier` reads as a broken drive system — resolved for Black Sam
+Black Sam was authored at **1.25** against **2.0** on Kolo Aka, Biku Bale, Skeleton and Skeleton
+Elite. Since `baseBonus = buffNextActionMultiplier - 1`, that gave him **1.25×** on the first stack
+where a Skeleton got **2.0×**, and stack 2 took him only to 1.375× (capping at 1.47× on four stacks
+against the roster's 1.9375×). Raised in the Inspector, which fixed the feel.
+
+**The generalizable trap:** drive multipliers are applied to small integer damage ranges and then
+put through `Mathf.Round` in `TakeDamage`. On Black Sam's loadout — Stab 2–4, Slash 3–7 — a 1.25×
+multiplier frequently moved the damage number by **0 or 1**. So committing a whole drive segment,
+which is an expensive and deliberate player choice, produced no visible feedback. The system was
+working perfectly; the reward was rounding away.
+
+Consequences worth keeping in mind:
+
+- **Any `buffNextActionMultiplier` below ~1.5 is invisible at current damage scales.** Tephi is
+  still at 1.5, which is the weakest case left on the roster.
+- **Diminishing returns compress this further.** Stacks 3 and 4 add `baseBonus·d²` and
+  `baseBonus·d³` — at `decayRate` 0.5 and a low base bonus those are fractions of a point, i.e.
+  segments spent for literally nothing after rounding.
+- **A spender needs to be legible at the smallest damage roll it can apply to**, not just on
+  average. Sanity-check new drive tuning against `minDamage`, not the midpoint.
+- The same rounding applies to heals (`Heal` rounds too), so low heal ranges have the same problem.
+
+---
+
 ## Bugs
 
-### Drive stacks don't boost heals cast on an ally
-`CharacterManager.Heal()` applies `driveManager.GetNextHealingMultiplier()` using **its own**
-`driveManager` field — i.e. the **target's** DriveManager, not the healer's. `CombatController`
-(`CombatController.cs:337-341`) heals the target and *then* clears the **healer's** stacks via
-`currentCharacter.OnAttackPerformed()`.
+### ~~Drive stacks don't boost heals cast on an ally~~ — DONE
+`CharacterManager.Heal()` applied `driveManager.GetNextHealingMultiplier()` using **its own**
+`driveManager` field — i.e. the **target's** DriveManager, not the healer's. So a player healer who
+committed drive stacks and healed a crewmate spent the segments for nothing while the target's idle
+stacks were consumed instead; self-heals only worked by coincidence (healer and target are the same
+object). Enemies were unaffected, because `EnemyManager`'s heal branch multiplied explicitly with
+the healer's own manager — which is why drive visibly worked for enemies and not for the player.
 
-So a healer who commits drive stacks and heals a crewmate spends the segments for nothing, while
-the target's idle stacks get consumed instead. Self-heals only work by coincidence (healer and
-target are the same object). This contradicts the "next **attack _or_ heal**" contract in
-`CLAUDE.md`.
-
-`TooltipUI.ShowTargetTooltip()` reads the **attacker's** multiplier for the healing preview, so
-the tooltip also disagrees with what actually happens.
-
-**Fix direction:** pass the caster's multiplier into `Heal()` (e.g. `Heal(float amount, float
-driveMultiplier = 1f)`) and have `CombatController` / `EnemyManager` supply it, rather than
-letting the receiving `CharacterManager` look it up. Note `EnemyManager.PerformDirectAttack()`'s
-heal branch already multiplies explicitly *and* consumes before calling `Heal()` — it avoids a
-double-application only because the stacks are cleared first, which is fragile.
+Now `Heal(float amount, float driveMultiplier = 1f)` takes the **caster's** multiplier, supplied by
+whoever resolves the action (`CombatController`, `EnemyManager`, `DriveManager.ExecuteHealSelf`).
+The receiving `CharacterManager` no longer looks one up — it can't, the caster's stacks aren't its
+to read. `TooltipUI.ShowTargetTooltip()` already read the attacker's multiplier, so the preview and
+the result now agree.
 
 ### ~~Cooldowns tick twice for whoever ends a round~~ — DONE (Phase 1a)
 The redundant `UpdateActionCooldowns()` call in `TurnManager.RoundComplete()` is gone; the

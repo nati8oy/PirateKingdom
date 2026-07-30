@@ -309,8 +309,9 @@ public class DriveManager : MonoBehaviour
     {
         if (characterManager != null)
         {
-            float finalHealAmount = healAmount * GetNextHealingMultiplier();
-            characterManager.Heal(finalHealAmount);
+            // Self-heal, so caster and target are the same character — but pass the multiplier
+            // explicitly anyway, since Heal() no longer looks one up on its own behalf.
+            characterManager.Heal(healAmount, GetNextHealingMultiplier());
             return true;
         }
         return false;

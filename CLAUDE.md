@@ -149,6 +149,10 @@ third-party and should not be modified** unless explicitly requested:
     1.50× / 1.75× / 1.875× / 1.9375×, hard-capped at 2.0×. Stacks are consumed (reset to 0) after
     the action and cleared at turn end (spent segments are **not** refunded). The multiplier is
     read via `GetNextAttackDamageMultiplier()` / `GetNextHealingMultiplier()`.
+    - **Whoever resolves the action reads the multiplier off the _caster_ and applies it.**
+      `CharacterManager.Heal(amount, driveMultiplier)` takes the caster's multiplier as a
+      parameter and must never look one up itself — its own `driveManager` belongs to the heal's
+      *target*, so doing so spent the healer's segments while consuming the target's idle stacks.
   - **Player input:** each press of the Drive action adds one stack to the selected crew member
     (`PlayerInputHandler` → `TryAddDriveStack()`). Sound + particles fire on **every** stack.
   - **Enemies** use the *same* stacking system: `EnemyDriveManager.EvaluateDriveUsage()` (called at

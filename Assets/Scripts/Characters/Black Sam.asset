@@ -31,7 +31,7 @@ MonoBehaviour:
   attackPower: 10
   defenseValue: 5
   speed: 15
-  buffNextActionMultiplier: 1.25
+  buffNextActionMultiplier: 1.75
   damageInflictedDriveMultiplier: 5
   damageTakenDriveMultiplier: 2.5
   parryBonusDriveMultiplier: 10

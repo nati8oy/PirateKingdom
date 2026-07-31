@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77d7b3b9b9ab14cfa94b83d1a4f795c2, type: 3}
   m_Name: Skeleton
   m_EditorClassIdentifier: 
+  id: skeleton
   characterName: Skeleton
   actionSlots:
   - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
@@ -30,7 +31,7 @@ MonoBehaviour:
   attackPower: 10
   defenseValue: 5
   speed: 5
-  buffAttackMultiplier: 2
+  buffNextActionMultiplier: 2
   damageInflictedDriveMultiplier: 2.5
   damageTakenDriveMultiplier: 5
   parryBonusDriveMultiplier: 2.5
@@ -41,6 +42,7 @@ MonoBehaviour:
     usageChance: 1
     preferredAction: 0
     minimumSegmentsToUse: 1
+    stacksPerBuff: 2
   showDebugInfo: 0
   targetingStrategy: 0
   attackWeight: 0.7

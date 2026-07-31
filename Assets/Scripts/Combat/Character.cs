@@ -1,11 +1,23 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine.Serialization;
 
 [CreateAssetMenu(fileName = "Character", menuName = "Scriptable Objects/Character")]
 public class Character : ScriptableObject
 {
+    [Header("Identity")]
+    [Tooltip("Stable id used by save data. Stamped automatically by ContentDatabase's 'Rebuild From Project'. " +
+             "Once runs have been saved against it, DO NOT change it — saves reference characters by this string.")]
+    [SerializeField] private string id;
+
+    /// <summary>Stable save-data id. Empty until ContentDatabase stamps it.</summary>
+    public string Id => id;
+
+#if UNITY_EDITOR
+    /// <summary>Editor-only. Set by ContentDatabase when stamping ids; never call at runtime.</summary>
+    public void EditorAssignId(string newId) => id = newId;
+#endif
+
     [Header("Basic Info")]
     public string characterName;
     private const int ACTION_SLOTS = 6;
@@ -44,7 +56,8 @@ public class Character : ScriptableObject
     [Header("Drvive Generation")]
     [SerializeField] public float damageInflictedDriveMultiplier = 4f; 
     [SerializeField] public float damageTakenDriveMultiplier = 4f;
-    [SerializeField] public float parryBonusDriveMultiplier = 40f;
+    [Tooltip("Drive gained on a successful parry = damage prevented x this value. Target is ~25 drive (a quarter segment) for a typical 5-damage hit.")]
+    [SerializeField] public float parryBonusDriveMultiplier = 5f;
     
     public enum BuffType
     {
@@ -78,24 +91,22 @@ public class Character : ScriptableObject
         }
     }
 
-    private List<ActiveBuff> activeBuffs = new List<ActiveBuff>();
-    
-    // Dictionary to track action cooldowns - maps action to turns remaining until usable
-    private Dictionary<Action, int> actionCooldowns = new Dictionary<Action, int>();
-    
-    public void Initialize()
-    {
-        reputation = 0f;
-        activeBuffs.Clear();
-        actionCooldowns.Clear();
-    }
+    // NOTE: this ScriptableObject is *authored data only*. Per-battle mutable state — active
+    // buffs, action cooldowns, current health — lives on the runtime CharacterManager, because
+    // several scene objects can point at the same asset (both Skeletons share Skeleton.asset) and
+    // because in the Editor writes to a ScriptableObject persist into the project asset on disk.
+    // Do not reintroduce mutable fields here.
+    //
+    // `Initialize()` used to live here and zeroed `reputation` — the last thing in the codebase
+    // writing to a Character asset at runtime. Its only caller was CrewManager, deleted in Phase 2c,
+    // so it went with it rather than sitting around as a ready-made way to reintroduce the problem.
+    // `reputation` itself is still authored and still never read; see META.md §7.
 
     public void ResetActionsToDefault()
     {
         actionSlots = new Action[ACTION_SLOTS];
         actionSlots[0] = ScriptableObject.CreateInstance<Action>();
         actionSlots[0].actionName = "Move";
-        actionCooldowns.Clear();
     }
 
     private int GetValidActionCount()
@@ -110,209 +121,6 @@ public class Character : ScriptableObject
             }
         }
         return count;
-    }
-
-    public void AddBuff(BuffType buffType, float value, int turnsDuration)
-    {
-        ActiveBuff newBuff = new ActiveBuff(buffType, value, turnsDuration);
-        activeBuffs.Add(newBuff);
-        Debug.Log($"Added {(value > 0 ? "buff" : "debuff")} to {characterName}: {buffType} {value:+0;-0} for {turnsDuration} turns");
-    }
-    
-    // Add this method to your Character class, likely near the AddBuff method
-
-    public void RemoveBuff(BuffType buffType)
-    {
-        for (int i = activeBuffs.Count - 1; i >= 0; i--)
-        {
-            if (activeBuffs[i].Type == buffType)
-            {
-                activeBuffs.RemoveAt(i);
-                return; // Remove only the first matching buff
-            }
-        }
-    }
-
-// Alternative version that removes all buffs of a specific type
-    public void RemoveAllBuffsOfType(BuffType buffType)
-    {
-        for (int i = activeBuffs.Count - 1; i >= 0; i--)
-        {
-            if (activeBuffs[i].Type == buffType)
-            {
-                activeBuffs.RemoveAt(i);
-            }
-        }
-    }
-
-// Method to remove the first debuff (negative value) found - useful for drive actions
-    public bool RemoveFirstDebuff()
-    {
-        for (int i = 0; i < activeBuffs.Count; i++)
-        {
-            if (activeBuffs[i].Value < 0)
-            {
-                activeBuffs.RemoveAt(i);
-                return true; // Successfully removed a debuff
-            }
-        }
-        return false; // No debuffs found to remove
-    }
-
-
-    public void UpdateBuffsForCharacterTurn()
-    {
-        for (int i = activeBuffs.Count - 1; i >= 0; i--)
-        {
-            activeBuffs[i].ReduceTurns();
-            if (activeBuffs[i].IsExpired())
-            {
-                Debug.Log($"Buff/Debuff expired on {characterName}: {activeBuffs[i].Type} after completing turn");
-                activeBuffs.RemoveAt(i);
-            }
-        }
-    }
-
-    // Update action cooldowns when the character completes their turn
-    public void UpdateActionCooldowns()
-    {
-        List<Action> actionsToRemove = new List<Action>();
-        
-        // Create a snapshot of the dictionary to avoid modification during enumeration
-        foreach (var kvp in actionCooldowns.ToList())
-        {
-            Action action = kvp.Key;
-            int turnsRemaining = kvp.Value - 1;
-            
-            if (turnsRemaining <= 0)
-            {
-                actionsToRemove.Add(action);
-                Debug.Log($"{characterName}: {action.actionName} cooldown expired and is now available");
-            }
-            else
-            {
-                actionCooldowns[action] = turnsRemaining;
-            }
-        }
-        
-        // Remove expired actions
-        foreach (Action action in actionsToRemove)
-        {
-            actionCooldowns.Remove(action);
-        }
-    }
-
-    // Use an action and put it on cooldown
-    public void UseAction(Action action)
-    {
-        if (action.cooldown > 0)
-        {
-            int cooldownTurns = Mathf.RoundToInt(action.cooldown);
-            actionCooldowns[action] = cooldownTurns;
-            Debug.Log($"{characterName} used {action.actionName}, cooldown: {cooldownTurns} turns");
-        }
-    }
-
-    // Check if an action is available (not on cooldown)
-    
-// Check if an action is available (not on cooldown)
-    public bool IsActionAvailable(Action action)
-    {
-        if (action == null) 
-        {
-            Debug.Log("IsActionAvailable: action is null");
-            return false;
-        }
-    
-        //Debug.Log($"IsActionAvailable: Checking {action.actionName}");
-        //Debug.Log($"  - action.cooldown: {action.cooldown}");
-        //Debug.Log($"  - actionCooldowns.ContainsKey(action): {actionCooldowns.ContainsKey(action)}");
-    
-        // If the action has no cooldown, it's always available
-        if (action.cooldown <= 0) 
-        {
-            //Debug.Log($"  - Result: TRUE (no cooldown)");
-            return true;
-        }
-    
-        // Check if the action is currently on cooldown
-        bool result = !actionCooldowns.ContainsKey(action);
-        return result;
-    }
-
-    // Get the remaining cooldown turns for an action
-    public int GetActionCooldownRemaining(Action action)
-    {
-        if (action == null || !actionCooldowns.ContainsKey(action))
-            return 0;
-        
-        return actionCooldowns[action];
-    }
-
-    // Deprecated method - kept for backwards compatibility
-    public void UpdateBuffsForNewRound()
-    {
-        // This method is now deprecated since we use turn-based buffs
-        // The method is kept to avoid breaking existing code, but does nothing
-        Debug.LogWarning($"UpdateBuffsForNewRound() is deprecated for {characterName}. Use UpdateBuffsForCharacterTurn() instead.");
-    }
-
-    // Get modified stats with buffs applied
-    public float GetModifiedAttackPower()
-    {
-        float totalAttack = attackPower;
-        foreach (var buff in activeBuffs)
-        {
-            if (buff.Type == BuffType.Attack)
-            {
-                totalAttack += buff.Value;
-            }
-        }
-        return Mathf.Max(0, totalAttack); // Ensure it doesn't go negative
-    }
-
-    public float GetModifiedDefenseValue()
-    {
-        float totalDefense = defenseValue;
-        foreach (var buff in activeBuffs)
-        {
-            if (buff.Type == BuffType.Defense)
-            {
-                totalDefense += buff.Value;
-            }
-        }
-        return Mathf.Max(0, totalDefense);
-    }
-
-    public float GetModifiedSpeed()
-    {
-        float totalSpeed = speed;
-        foreach (var buff in activeBuffs)
-        {
-            if (buff.Type == BuffType.Speed)
-            {
-                totalSpeed += buff.Value;
-            }
-        }
-        return Mathf.Max(0.1f, totalSpeed); // Minimum speed of 0.1 to prevent issues
-    }
-
-    public float GetModifiedMaxHealth()
-    {
-        float totalHealth = maxHealth;
-        foreach (var buff in activeBuffs)
-        {
-            if (buff.Type == BuffType.Health)
-            {
-                totalHealth += buff.Value;
-            }
-        }
-        return Mathf.Max(1, totalHealth); // Minimum health of 1
-    }
-
-    public List<ActiveBuff> GetActiveBuffs()
-    {
-        return new List<ActiveBuff>(activeBuffs);
     }
 
     public float Reputation
@@ -339,17 +147,5 @@ public class Character : ScriptableObject
         {
             actionSlots[i] = null;
         }
-    }
-
-    // Obsolete methods for backwards compatibility
-    public float GetAttackPower()
-    {
-        return GetModifiedAttackPower();
-    }
-
-    public void UpdateBuffs(float deltaTime)
-    {
-        // This method is now obsolete since we use turn-based buffs
-        // Keep for backwards compatibility but don't use it
     }
 }

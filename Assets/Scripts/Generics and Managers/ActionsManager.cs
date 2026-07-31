@@ -15,15 +15,19 @@ public class ActionsManager : MonoBehaviour
     /// Returns false if the action is on cooldown
     /// This method can be used by both player and enemy AI
     /// </summary>
-    public static bool IsActionAvailable(Action action, Character character)
+    /// <remarks>
+    /// Takes the runtime <see cref="CharacterManager"/>, not the <see cref="Character"/> asset —
+    /// cooldowns are per scene instance, so two enemies sharing one asset track them separately.
+    /// </remarks>
+    public static bool IsActionAvailable(Action action, CharacterManager character)
     {
         if (action == null || character == null)
             return false;
-        
+
         return character.IsActionAvailable(action);
     }
-    
-    public void LoadCharacterActions(Character character)
+
+    public void LoadCharacterActions(CharacterManager character)
     {
         // Clear existing actions
         foreach (Transform child in actionsGrid.transform)
@@ -31,10 +35,18 @@ public class ActionsManager : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        // Create new action slots
-        for (int i = 0; i < character.actionSlots.Length; i++)
+        if (character == null || character.characterData == null)
         {
-            Action action = character.actionSlots[i];
+            Debug.LogWarning("[ActionsManager] LoadCharacterActions called with no character.");
+            return;
+        }
+
+        Action[] actionSlots = character.characterData.actionSlots;
+
+        // Create new action slots
+        for (int i = 0; i < actionSlots.Length; i++)
+        {
+            Action action = actionSlots[i];
             
             if (action == null || string.IsNullOrEmpty(action.actionName)) 
             {

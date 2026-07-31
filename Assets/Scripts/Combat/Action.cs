@@ -21,6 +21,19 @@ public class Action : ScriptableObject
     
     
 
+    [Header("Identity")]
+    [Tooltip("Stable id used by save data. Stamped automatically by ContentDatabase's 'Rebuild From Project'. " +
+             "Once runs have been saved against it, DO NOT change it — saved loadouts reference actions by this string.")]
+    [SerializeField] private string id;
+
+    /// <summary>Stable save-data id. Empty until ContentDatabase stamps it.</summary>
+    public string Id => id;
+
+#if UNITY_EDITOR
+    /// <summary>Editor-only. Set by ContentDatabase when stamping ids; never call at runtime.</summary>
+    public void EditorAssignId(string newId) => id = newId;
+#endif
+
     [Header("Action Configuration")]
     public string actionName;
     public ActionType actionType;

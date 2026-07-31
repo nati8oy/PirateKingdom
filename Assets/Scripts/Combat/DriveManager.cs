@@ -309,8 +309,9 @@ public class DriveManager : MonoBehaviour
     {
         if (characterManager != null)
         {
-            float finalHealAmount = healAmount * GetNextHealingMultiplier();
-            characterManager.Heal(finalHealAmount);
+            // Self-heal, so caster and target are the same character — but pass the multiplier
+            // explicitly anyway, since Heal() no longer looks one up on its own behalf.
+            characterManager.Heal(healAmount, GetNextHealingMultiplier());
             return true;
         }
         return false;
@@ -320,9 +321,8 @@ public class DriveManager : MonoBehaviour
     {
         if (characterManager?.characterData != null)
         {
-            // Use the new RemoveFirstDebuff method instead
-            bool removed = characterManager.characterData.RemoveFirstDebuff();
-        
+            bool removed = characterManager.RemoveFirstDebuff();
+
             if (removed)
             {
                 characterManager.RefreshStats();
@@ -418,10 +418,9 @@ public class DriveManager : MonoBehaviour
     
     private bool HasDebuffs()
     {
-        if (characterManager?.characterData != null)
+        if (characterManager != null)
         {
-            var activeBuffs = characterManager.characterData.GetActiveBuffs();
-            foreach (var buff in activeBuffs)
+            foreach (var buff in characterManager.GetActiveBuffs())
             {
                 if (buff.Value < 0) return true;
             }

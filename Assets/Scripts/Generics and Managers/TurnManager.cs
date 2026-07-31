@@ -23,22 +23,84 @@ public class TurnManager : MonoBehaviour
     [SerializeField] private GameObject victoryUI;
     [SerializeField] private GameObject defeatUI;
     [SerializeField] private TMP_Text battleResultText;
+    [Tooltip("Start the battle automatically on Play. Uncheck when something else spawns the combatants and calls BeginBattle() itself.")]
+    [SerializeField] private bool autoStartBattle = true;
     private bool battleEnded = false;
-    
+    private bool battleStarted = false;
+
+    public bool BattleStarted => battleStarted;
+
+    // Which encounter is being fought, pushed in by EncounterBootstrapper before BeginBattle().
+    // Null is fine and means a hand-placed fight — it just pays no plunder. Phase 3 will get this
+    // from the map node instead.
+    private EncounterDefinition encounterContext;
+
+    /// <summary>The last finished encounter's report, or null until a battle has ended.</summary>
+    public EncounterResult LastResult { get; private set; }
+
+    /// <summary>
+    /// Fires once, at battle end, with everything the encounter did to the run. Hook a results
+    /// screen here. Fully-qualified System.Action on purpose — a bare `Action` is the game's own
+    /// ability ScriptableObject.
+    /// </summary>
+    public event System.Action<EncounterResult> OnEncounterComplete;
+
+    /// <summary>
+    /// Tells the battle which encounter it is, so the reward can be paid at the end. Call before
+    /// <see cref="BeginBattle"/>.
+    /// </summary>
+    public void SetEncounter(EncounterDefinition definition)
+    {
+        encounterContext = definition;
+    }
+
     public List<GameObject> turnOrder = new List<GameObject>();
     private List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>();
 
     void Start()
     {
+        // Legacy path: crew and enemies are placed directly in the scene, so there is nothing to
+        // wait for. Once encounters spawn their combatants from run state, uncheck autoStartBattle
+        // and let the spawner call BeginBattle() when it's finished.
+        if (autoStartBattle)
+        {
+            BeginBattle();
+        }
+    }
+
+    /// <summary>
+    /// Starts the battle. Call this once every combatant exists in the scene — turn order is
+    /// snapshotted here, so anything spawned afterwards will not take part in the first round.
+    /// Safe to call only once; subsequent calls are ignored.
+    /// </summary>
+    public void BeginBattle()
+    {
+        if (battleStarted)
+        {
+            Debug.LogWarning("[TurnManager] BeginBattle() called but the battle has already started.");
+            return;
+        }
+
+        battleStarted = true;
+
+        // Opened here rather than in the bootstrapper so it happens exactly once per fight whether
+        // the bootstrapper or autoStartBattle owns the start.
+        RunManager.Instance?.BeginEncounter();
+
         GetTurnOrder();
         SetCharacterTurn();
     }
 
     private void Update()
     {
+        // Nothing to poll until the battle actually begins. Without this guard an encounter that
+        // spawns its combatants would find zero living players on the first frame and immediately
+        // declare a defeat.
+        if (!battleStarted) return;
+
         // Don't process turns if battle has ended
         if (battleEnded) return;
-        
+
         // Check for battle end conditions
         CheckBattleEndConditions();
         
@@ -99,10 +161,27 @@ public class TurnManager : MonoBehaviour
     private void EndBattle(bool playerVictory)
     {
         battleEnded = true;
-        
+
         // Stop all turn processing
         CancelInvoke();
-        
+
+        // Commit surviving crew's health to the run before anything is torn down, so damage carries
+        // into the next encounter. Casualties can't be collected here — a dying CharacterManager
+        // destroys its GameObject on the spot — so they were reported to RunManager as they
+        // happened. CompleteEncounter() then applies rewards and writes the run to disk once.
+        foreach (var character in FindObjectsOfType<CharacterManager>())
+        {
+            character.SyncHealthToRunState();
+        }
+
+        LastResult = RunManager.Instance?.CompleteEncounter(playerVictory, encounterContext);
+
+        if (LastResult != null)
+        {
+            Debug.Log($"[TurnManager] Encounter complete — {LastResult.Summary()}");
+            OnEncounterComplete?.Invoke(LastResult);
+        }
+
         // Hide turn marker if current character exists
         if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
         {
@@ -266,7 +345,7 @@ public class TurnManager : MonoBehaviour
             
                 if (currentCharacterTurn != null && currentCharacterTurn.characterData != null)
                 {
-                    actionsManager.LoadCharacterActions(currentCharacterTurn.characterData); 
+                    actionsManager.LoadCharacterActions(currentCharacterTurn);
 
                     if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Enemy)
                     {
@@ -326,11 +405,10 @@ public class TurnManager : MonoBehaviour
         
         roundCounterInt += 1;
         //Debug.Log($"Round {roundCounterInt - 1} complete! Starting Round {roundCounterInt}");
-        currentCharacterTurn.characterData?.UpdateActionCooldowns(); 
-        
-        
-        // Note: We no longer update buffs here since they're now turn-based
-        // Buffs are updated individually when each character completes their turn
+
+        // Note: cooldowns and buffs are both ticked per character in CharacterManager.OnTurnComplete().
+        // There used to be an UpdateActionCooldowns() call here as well, which double-ticked the
+        // cooldowns of whichever character happened to end the round.
     }
     
     // Public method to restart battle (can be called from UI buttons)

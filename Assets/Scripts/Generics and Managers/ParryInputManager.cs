@@ -1,10 +1,10 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System.Collections.Generic;
 
 /// <summary>
-/// Centralized manager for parry input that coordinates between all ParrySystem instances
+/// Routes the shared Parry input action to whichever ParrySystem currently has an open parry
+/// window. Lives on a single GameObject in the encounter scene.
 /// </summary>
 public class ParryInputManager : MonoBehaviour
 {
@@ -15,81 +15,97 @@ public class ParryInputManager : MonoBehaviour
     [SerializeField] private bool showDebugInfo = false;
     
     private static ParryInputManager _instance;
-    public static ParryInputManager Instance => _instance;
-    
-    private readonly List<ParrySystem> registeredParrySystems = new List<ParrySystem>();
-    private ParrySystem activeParrySystem = null;
-    
-    private void Awake()
+
+    /// <summary>
+    /// The active manager. Resolves lazily so that a ParrySystem registering from its own
+    /// OnEnable can't miss us purely because of script execution order — which matters once
+    /// crew are spawned at runtime rather than placed in the scene.
+    /// </summary>
+    public static ParryInputManager Instance
     {
-        // Singleton pattern
-        if (_instance == null)
+        get
         {
-            _instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        else
-        {
-            Destroy(gameObject);
-            return;
+            if (_instance == null)
+            {
+                _instance = FindObjectOfType<ParryInputManager>();
+            }
+            return _instance;
         }
     }
-    
+
+    private ParrySystem activeParrySystem = null;
+
+    private void Awake()
+    {
+        // Deliberately NOT DontDestroyOnLoad. Parry input is only meaningful inside an encounter,
+        // and a manager that survived into the map scene would still be alive when the next
+        // encounter loads its own — leaving a stale instance holding the shared input action.
+        // This component belongs on a single GameObject in the encounter scene.
+        if (_instance != null && _instance != this)
+        {
+            // Should not happen now that this lives in the scene rather than on the character
+            // prefab — so shout rather than swallow it. Destroy only this component, not the whole
+            // GameObject. The OnEnable/OnDisable guards below are what keep the duplicate from
+            // calling Disable() on the *shared* project-wide Parry action on its way out, which
+            // would silently kill parry input for the surviving instance.
+            Debug.LogError($"[ParryInputManager] A second ParryInputManager was found on '{gameObject.name}'. " +
+                           "There must be exactly one, in the encounter scene. Destroying the duplicate component.");
+            Destroy(this);
+            return;
+        }
+
+        _instance = this;
+    }
+
     private void OnEnable()
     {
+        // Guard: duplicates must never touch the shared input action's enabled state.
+        if (_instance != this) return;
+
         if (parryInputAction != null)
         {
             parryInputAction.action.performed += OnParryInput;
             parryInputAction.action.Enable();
         }
     }
-    
+
     private void OnDisable()
     {
+        if (_instance != this) return;
+
         if (parryInputAction != null)
         {
             parryInputAction.action.performed -= OnParryInput;
             parryInputAction.action.Disable();
         }
     }
-    
-    /// <summary>
-    /// Register a ParrySystem with the manager
-    /// </summary>
-    public void RegisterParrySystem(ParrySystem parrySystem)
+
+    private void OnDestroy()
     {
-        if (!registeredParrySystems.Contains(parrySystem))
+        if (_instance == this)
         {
-            registeredParrySystems.Add(parrySystem);
-            if (showDebugInfo)
-            {
-                Debug.Log($"[ParryInputManager] Registered ParrySystem for {parrySystem.gameObject.name}");
-            }
+            _instance = null;
         }
     }
     
     /// <summary>
-    /// Unregister a ParrySystem from the manager
+    /// Called by a ParrySystem that is being disabled or destroyed. Input dispatch only ever goes
+    /// to <see cref="activeParrySystem"/>, so the only thing that matters here is dropping the
+    /// active target if it's the one going away — otherwise a character who dies mid-parry-window
+    /// leaves a dangling active reference.
     /// </summary>
     public void UnregisterParrySystem(ParrySystem parrySystem)
     {
-        if (registeredParrySystems.Contains(parrySystem))
+        if (activeParrySystem != parrySystem) return;
+
+        activeParrySystem = null;
+
+        if (showDebugInfo)
         {
-            registeredParrySystems.Remove(parrySystem);
-            
-            // Clear active system if it's being unregistered
-            if (activeParrySystem == parrySystem)
-            {
-                activeParrySystem = null;
-            }
-            
-            if (showDebugInfo)
-            {
-                Debug.Log($"[ParryInputManager] Unregistered ParrySystem for {parrySystem?.gameObject?.name ?? "Unknown"}");
-            }
+            Debug.Log($"[ParryInputManager] Active ParrySystem for {parrySystem?.gameObject?.name ?? "Unknown"} went away, cleared");
         }
     }
-    
+
     /// <summary>
     /// Set which ParrySystem should respond to input
     /// </summary>
@@ -149,25 +165,5 @@ public class ParryInputManager : MonoBehaviour
         
         // Forward input to active ParrySystem
         activeParrySystem.HandleParryInput(context);
-    }
-    
-    /// <summary>
-    /// Clean up any null references in the registered systems list
-    /// </summary>
-    public void CleanupNullReferences()
-    {
-        for (int i = registeredParrySystems.Count - 1; i >= 0; i--)
-        {
-            if (registeredParrySystems[i] == null || registeredParrySystems[i].gameObject == null)
-            {
-                registeredParrySystems.RemoveAt(i);
-            }
-        }
-        
-        // Clear active system if it's null
-        if (activeParrySystem == null || activeParrySystem.gameObject == null)
-        {
-            activeParrySystem = null;
-        }
     }
 }

@@ -334,9 +334,16 @@ public class CombatController : MonoBehaviour
                 healAmount *= 2;
             }
             
-            targetManager.Heal(healAmount); // This now applies drive mode multiplier automatically
-            Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount}");
-            
+            // The healer's drive stacks, read before they're consumed below. Heal() can't look this
+            // up itself — its own DriveManager belongs to the target, not the caster.
+            DriveManager healerDriveManager = currentCharacter.GetDriveManager();
+            float healDriveMultiplier = healerDriveManager != null
+                ? healerDriveManager.GetNextHealingMultiplier()
+                : 1f;
+
+            targetManager.Heal(healAmount, healDriveMultiplier);
+            Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount} (drive x{healDriveMultiplier})");
+
             // IMPORTANT: Consume drive mode after the heal
             currentCharacter.OnAttackPerformed();
             break;
@@ -354,10 +361,10 @@ public class CombatController : MonoBehaviour
     // Mark action as used AFTER successful execution
     if (turnManager.currentCharacterTurn != null && turnManager.currentCharacterTurn.characterData != null)
     {
-        turnManager.currentCharacterTurn.characterData.UseAction(selectedAction);
-        
+        turnManager.currentCharacterTurn.UseAction(selectedAction);
+
         // Refresh the actions UI to show updated cooldown states
-        FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn.characterData);
+        FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn);
     }
     
     turnManager.CompleteTurn();

@@ -17,7 +17,12 @@ public class ParryVisualFeedback : MonoBehaviour
     private ParrySystem parrySystem;
     private CharacterManager characterManager;
     private Coroutine feedbackCoroutine;
-    private bool wasMyParryWindowActive = false;
+
+    // True from the moment an attack starts winding up on this character until shortly after it
+    // resolves. Gates success/failure messaging so we only report on our own attacks. This tracks
+    // the whole attack rather than just the timing window, because a mistimed parry can now be
+    // spent during the windup — before the window has opened.
+    private bool isMyAttackIncoming = false;
     
     // Attack countdown tracking
     private bool isTrackingAttack = false;
@@ -97,13 +102,20 @@ public class ParryVisualFeedback : MonoBehaviour
     
     private void OnParryWindowOpened()
     {
-        wasMyParryWindowActive = true;
-        
+        isMyAttackIncoming = true;
+
+        // Don't advertise a parry opportunity the player can no longer take — they already spent
+        // this attack's single attempt by pressing during the windup.
+        if (parrySystem != null && parrySystem.ParryAttemptSpent)
+        {
+            return;
+        }
+
         if (parryWindowIndicator != null)
         {
             parryWindowIndicator.SetActive(true);
         }
-        
+
         if (parryTimerBar != null)
         {
             parryTimerBar.color = parryActiveColor;
@@ -113,7 +125,7 @@ public class ParryVisualFeedback : MonoBehaviour
     
     private void OnParryWindowClosed()
     {
-        // Don't immediately set wasMyParryWindowActive to false here
+        // Don't immediately set isMyAttackIncoming to false here
         // Let the success/failed events handle it first
         isTrackingAttack = false;
         
@@ -134,34 +146,41 @@ public class ParryVisualFeedback : MonoBehaviour
     private System.Collections.IEnumerator ClearParryWindowFlagDelayed()
     {
         yield return new WaitForEndOfFrame(); // Wait one frame
-        wasMyParryWindowActive = false;
+        isMyAttackIncoming = false;
     }
-    
+
     private void OnParrySuccess()
     {
-        if (wasMyParryWindowActive)
+        if (isMyAttackIncoming)
         {
             //ShowFeedbackMessage("PARRY!", parrySuccessColor);
             characterManager.Parry();
-            
+
             Debug.Log($"[ParryVisualFeedback] Showing PARRY SUCCESS on {gameObject.name}");
         }
         else
         {
-            Debug.Log($"[ParryVisualFeedback] Not showing PARRY SUCCESS on {gameObject.name} - wasMyParryWindowActive: {wasMyParryWindowActive}");
+            Debug.Log($"[ParryVisualFeedback] Not showing PARRY SUCCESS on {gameObject.name} - isMyAttackIncoming: {isMyAttackIncoming}");
         }
     }
-    
+
     private void OnParryFailed()
     {
-        if (wasMyParryWindowActive)
+        if (isMyAttackIncoming)
         {
             ShowFeedbackMessage("FAILED", parryFailedColor);
+
+            // The attempt is gone — stop advertising a window they can't use.
+            if (parryWindowIndicator != null)
+            {
+                parryWindowIndicator.SetActive(false);
+            }
+
             Debug.Log($"[ParryVisualFeedback] Showing PARRY FAILED on {gameObject.name}");
         }
         else
         {
-            Debug.Log($"[ParryVisualFeedback] Not showing PARRY FAILED on {gameObject.name} - wasMyParryWindowActive: {wasMyParryWindowActive}");
+            Debug.Log($"[ParryVisualFeedback] Not showing PARRY FAILED on {gameObject.name} - isMyAttackIncoming: {isMyAttackIncoming}");
         }
     }
     
@@ -173,6 +192,10 @@ public class ParryVisualFeedback : MonoBehaviour
         isTrackingAttack = true;
         attackStartTime = Time.time;
         totalAttackTime = attackDuration;
+
+        // Arm messaging from the start of the windup, not from the window opening — a parry can
+        // now be spent (and failed) before the window is ever open.
+        isMyAttackIncoming = true;
         
         if (parryTimerBar != null)
         {

@@ -9,7 +9,8 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 ## 0. Status — read this first
 
-**Phase 1 is complete and verified in the Editor. Phase 2 is the next work, not yet started.**
+**Phase 1 is complete and verified. Phase 2 is code-complete — 2a and 2b are verified in the Editor,
+2c and 2d are awaiting a play-test. Phase 3 (the voyage map) is the next new work.**
 
 What exists and works today:
 
@@ -18,11 +19,14 @@ What exists and works today:
 | `Assets/Scripts/Meta/ContentDatabase.cs` | `id -> asset` registry. Asset at `Assets/Resources/ContentDatabase.asset`, 8 characters + 9 actions registered and stamped. |
 | `Assets/Scripts/Meta/RunState.cs` | `RunState` + `CrewMemberState`, plain serializable C#. |
 | `Assets/Scripts/Meta/RunManager.cs` | Owns the live run, JSON save/load at `Application.persistentDataPath/run.json`. Scene object in `Encounter.unity`. |
-| `CharacterManager.BindToRunState()` | Crew take starting health from the run; health and permadeath write back. |
+| `Assets/Scripts/Meta/EncounterDefinition.cs` | What one fight *is*: which enemies, how many, display name, plunder reward. |
+| `Assets/Scripts/Meta/EncounterBootstrapper.cs` | Spawns crew (from `RunState`) and enemies (from the definition), then starts the battle. |
+| `Assets/Scripts/Meta/EncounterResult.cs` | The report one encounter produces — survivors, casualties, plunder. |
+| `CharacterManager.AssignCrewState()` | The spawner binds each crew member to its run record explicitly. |
 
-The loop that works right now: press Play in `Encounter.unity` → crew spawn at their carried
-health → fight → win → health and any deaths persist → press Play again and the crew are as you
-left them.
+The loop that works right now: press Play in `Encounter.unity` → crew and enemies both spawn, crew at
+their carried health → fight → win → health, deaths and plunder persist in one write → press Play
+again and the crew are as you left them, minus the dead.
 
 **Editor tooling** (both under `Tools > Pirate Kingdom`, because `[ContextMenu]` entries are easy
 to miss — on a MonoBehaviour they're on the *component's* ⋮ button, on a ScriptableObject they're
@@ -36,12 +40,15 @@ in the Inspector's ⋮ with the asset selected, and **never** on a Project-windo
 `Debug Starting Crew` list, so edits to that list appear to do nothing until you delete the save.
 The console states which path was taken on every play.
 
-**Enemies now spawn** from an `EncounterDefinition` via `EncounterBootstrapper` (Phase 2a).
-Crew are still hand-placed in the scene — Phase 2b spawns them from `RunState`.
+**Outstanding Editor step:** deleting `CrewManager`/`Debug_Crew` left the `Crew` and `Debugs`
+GameObjects in `Encounter.unity` carrying missing scripts. Both are leaf objects holding nothing
+else — delete them.
 
-**Open proposal:** a **2.5D presentation refactor** (combatants become sprites in 3D space rather
-than UI objects under a Canvas) is written up in §6 as an optional interlude between 2a and 2b.
-Not committed to — costed and waiting on a decision.
+**Open proposal:** a **2.5D presentation refactor** (combatants become sprites in world space rather
+than UI objects under a Canvas) is written up in §6. Not committed to. The **camera is decided —
+orthographic, with scripted parallax and Sorting Layer ordering** — and background parallax is
+*separable* from the combatant conversion, so it can land on its own. Doing either means re-authoring
+spawn point positions, so both are still cheapest before Phase 3 adds map UI.
 
 ---
 
@@ -186,13 +193,13 @@ duplicate-handling gets exercised hard:
 
 | Component | Status |
 |---|---|
-| `GameManager` | Destroys duplicates. Fine. But `PlayerCharacters` / `EnemyCharacters` are **static** lists that must be re-populated on every scene load, not just at `Awake`. |
+| `GameManager` | **Done (2d).** Destroys duplicates, and the static `PlayerCharacters` / `EnemyCharacters` lists now re-populate on `SceneManager.sceneLoaded` and after the bootstrapper spawns. `OnEnable`/`OnDisable` are guarded on `instance != this` so a duplicate can't unsubscribe the real one. |
 | `TooltipUI` | Destroys duplicate GameObjects. Fine. |
 | `ParryInputManager` | **Done.** Now a single GameObject in `Encounter.unity`, off the character prefab. `DontDestroyOnLoad` removed (an instance surviving into the map scene would still hold the shared input action when the next encounter loads its own), `Instance` resolves lazily so it can't lose a race with spawning, dead registration list deleted. |
 
-That leaves `GameManager` as the one still needing attention before Phase 3, when scene
-transitions become real: its `PlayerCharacters` / `EnemyCharacters` are **static** lists populated
-once at `Awake`, and they'll need re-populating on every scene load.
+All three are handled. `RunManager` is a fourth `DontDestroyOnLoad` singleton, added in Phase 1c —
+it destroys duplicates and resolves `Instance` lazily, and is the one that's *meant* to survive
+between the map and an encounter, since it owns the run.
 
 ---
 
@@ -357,9 +364,12 @@ Leaving the definition empty falls back to hand-placed enemies, so the scene sta
 
 ### ⟡ Optional interlude — 2.5D presentation refactor
 
-**Not part of the meta plan, and not committed to.** Written up for a decision after 2a is wired.
-Combatants are currently UI objects (`RectTransform` under a Canvas); this converts them to sprites
-in 3D space with a camera, for a 2.5D look.
+**Not part of the meta plan, and not committed to.** Combatants are currently UI objects
+(`RectTransform` under a Canvas); this converts them to sprites in world space with a camera, for a
+2.5D look. Phase 2 is finished, so it's available as a standalone slice.
+
+The **camera question is settled — orthographic**, and background parallax turns out to be separable
+from this refactor entirely. See "Camera & parallax" below before costing anything else here.
 
 **Why it's cheaper than it sounds** — three things checked in the codebase, not assumed:
 
@@ -403,18 +413,55 @@ Nothing in the meta layer is blocked by this: `RunState` and spawning are data-o
 about presentation. The single point of contact is **spawn points** — 2a is where they get
 authored, and converting to 2.5D re-authors their positions.
 
-So: **finish 2a's Editor wiring → do this as its own isolated slice → then 2b.** Spawn points get
-positioned once, in 3D, and visual changes are never being debugged at the same time as spawning
-changes.
-
-Doing it before the later phases matters more than doing it before 2b: ports, the voyage map and
+2a and 2b are both done and verified, so this is now a standalone slice whenever it's wanted. Doing
+it before Phase 3 still matters more than anything else about the ordering: ports, the voyage map and
 the loadout screen all add UI that would otherwise need reconciling with whatever convention this
-lands on.
+lands on. The one cost of deferring is that spawn point positions get re-authored.
 
-#### Still to decide
-- **Camera:** perspective, or orthographic with 3D depth. Both are legitimate 2.5D looks.
-- **Billboarding:** a billboard script, or — if the camera is fixed — simply pre-rotating sprites
-  to face it.
+#### Camera & parallax — decided (orthographic)
+
+External input from an engineer, recorded because it settles two open questions and shrinks the
+scope:
+
+**You don't need a 3D scene for any of this.** Unity has one renderer and every scene has a Z axis.
+The "2D" project template only changes *defaults* — camera projection, sprite import mode, scene
+view orientation, lighting. So "go 2.5D" is not a project-level switch.
+
+Parallax has two implementations:
+
+| | How it works | Cost |
+|---|---|---|
+| **Perspective camera**, layers spaced along Z | The projection matrix does the parallax for free | Distant layers shrink, so every layer's art has to be scaled for its depth |
+| **Orthographic camera**, scripted movement | Z offsets do nothing visually; you move layers yourself | You write the script, but art is authored at face value |
+
+**Most 2D games use the second, and that's the call here.** Orthographic camera, each layer under its
+own empty GameObject, ordered with **Sorting Layer + Order in Layer rather than Z**.
+
+Two implementation details worth not rediscovering:
+
+- **Drive layer positions from the camera's _absolute_ position, not accumulated per-frame deltas.**
+  Absolute can't drift; accumulating error does.
+- **Endless scrolling:** either keep three copies and wrap one as it leaves view, or set the texture
+  wrap mode to `Repeat` and scroll the texture offset instead of moving transforms. The second is
+  cheaper but needs a tileable texture and a **separate material instance per layer** (otherwise
+  layers share one material and scroll together).
+
+**What this changes about the plan:**
+
+- **Billboarding is no longer a question.** It only existed because the camera might have been
+  perspective. A fixed orthographic camera has nothing to billboard toward.
+- **Parallax is decoupled from the combatant refactor.** Background parallax needs an orthographic
+  camera and sprite layers; it does *not* require moving combatants off the Canvas. It can land as
+  its own small slice, before or after this, or instead of it.
+- **Option A still holds.** A world-space Canvas has its own Sorting Layer / Order in Layer fields,
+  so the per-character UI participates in exactly the same ordering scheme as `SpriteRenderer`s —
+  one convention across both.
+- **Caveat to check first:** combatants currently live under a **Screen Space** Canvas, which doesn't
+  move with a world camera at all. Whatever camera the parallax uses, the Canvas render mode is the
+  thing that decides whether the fight sits in the parallaxed world or floats in front of it. Worth
+  settling before authoring layers.
+- With orthographic, depth reads entirely from art, scale and parallax speed — the projection
+  contributes no depth cue. That's the normal 2D trade, just worth stating.
 
 ---
 
@@ -446,43 +493,75 @@ Notes:
 *Verify:* kill a crew member, finish the fight, play again — they're absent and the fight starts
 with the survivors at their carried health. **Delete Run Save** then Play restores the full crew.
 
-**Decision needed — `CrewManager`.** Its `Awake()` finds `Player`-tagged objects, but crew are now
-spawned during the bootstrapper's `Awake()`, and Awake order between components is arbitrary, so it
-will usually find nothing. It now warns instead of silently building an empty roster. Nothing in
-gameplay reads what it builds — its only consumer is `Debugs/Debug_Crew.cs`. Options: delete both,
-or drive it from the bootstrapper after spawning. Deleting also removes the last caller of
-`Character.Initialize()`, which is the last thing resetting `reputation` on the ScriptableObject —
-see the `reputation` open question in §7.
+**`CrewManager` — resolved: deleted.** Its `Awake()` found `Player`-tagged objects, but crew are now
+spawned during the bootstrapper's `Awake()` and Awake order between components is arbitrary, so it
+usually found nothing. Nothing in gameplay read the roster it built; its only consumer,
+`Debugs/Debug_Crew.cs`, had an unassigned reference and was already inert. Both are gone.
 
-**2c — `EncounterResult`.**
-One object returned at battle end carrying survivors' health, deaths, XP and plunder. Consolidates
-persistence into a single boundary and removes the scattered `SaveRun()` calls currently in
-`TurnManager.EndBattle()` and `CharacterManager`'s death path. This is the seam Phase 3 hands
-control back to the map through.
+That removed the last caller of `Character.Initialize()`, which was the last thing writing to a
+Character ScriptableObject at runtime, so **that method is deleted too** rather than left as a
+ready-made way to reintroduce the problem. `reputation` itself is still authored and still never
+read — see the open question in §7.
 
-*Verify:* the console shows exactly one save per encounter, and the numbers match what happened.
+*Editor step — user's domain:* the `Crew` and `Debugs` GameObjects in `Encounter.unity` now carry
+missing scripts. Both are leaf objects with nothing but a Transform and the deleted component, so
+delete them outright.
 
-**2d — `GameManager` static-list refresh.** (small, but blocks Phase 3)
-`GameManager.PlayerCharacters` / `EnemyCharacters` are **static** lists populated once in `Awake`.
-With combatants spawned at runtime and scenes loading repeatedly they go stale immediately.
-Re-populate on scene load and after spawning.
+**2c — `EncounterResult`. Code done; Editor steps outstanding.**
+`Assets/Scripts/Meta/EncounterResult.cs` is the report one encounter produces: survivors and their
+end health, this fight's casualties, and the plunder paid. Persistence now happens at exactly one
+boundary.
+
+How it fits together:
+
+- `TurnManager.BeginBattle()` → `RunManager.BeginEncounter()`. Opened there rather than in the
+  bootstrapper so it runs once per fight whichever of the two owns battle start.
+- `CharacterManager`'s death path → `RunManager.ReportCrewDeath()`, which flips `isDead` **in memory
+  only**. It can't wait for the end of the battle: a dying `CharacterManager` destroys its
+  GameObject on the spot, so casualties are unreadable from the scene by then.
+- `TurnManager.EndBattle()` → syncs survivors' health, then `RunManager.CompleteEncounter()` awards
+  plunder, builds the result, and calls `SaveRun()` **once**. `TurnManager.LastResult` holds it and
+  `TurnManager.OnEncounterComplete` fires it.
+
+Notes:
+
+- **Rewards are victory-only**, and a null `EncounterDefinition` just means no payout — so a
+  hand-placed fight with no definition stays playable.
+- **No XP.** `CrewMemberState.xp` is still only ever read. Awarding it belongs with Phase 5, which
+  also has to fold level into stat resolution; splitting those across phases would mean XP
+  accumulating with no visible effect.
+- **Behaviour change worth knowing:** a death no longer writes through the instant it happens, so
+  quitting mid-fight now rewinds the deaths *as well as* the damage. Previously the corpse stuck
+  while everyone else's wounds were refunded. Same policy as documented in 1c, applied consistently.
+- `TurnManager.OnEncounterComplete` is declared as `System.Action<EncounterResult>` — fully
+  qualified, because a bare `Action` is the game's own ability ScriptableObject.
+
+*Editor steps — user's domain:* nothing is required for it to work. To show a results screen, hook
+`TurnManager.OnEncounterComplete` (or read `TurnManager.LastResult` when the victory UI opens) — the
+result carries `encounterName`, `playerVictory`, `plunderAwarded`, `plunderTotal`, and a per-crew
+list of `displayName` / `endHealth` / `died`.
+
+*Verify:* finish a fight and confirm the console shows **exactly one** `[RunManager] Run saved` plus
+one `[TurnManager] Encounter complete — …` line whose numbers match what happened. Kill a crew
+member and check they're listed as `died` and absent next encounter. Win with a `plunderReward` set
+and watch `plunder` climb in the RunManager Inspector; lose and confirm it doesn't.
+
+**2d — `GameManager` static-list refresh. ✅ DONE, code side.**
+`GameManager` now re-populates on `SceneManager.sceneLoaded`, and `EncounterBootstrapper` calls
+`FindCharacters()` after spawning. `GetAlivePlayerCount()` / `GetAliveEnemyCount()` refresh before
+counting, since as static entry points they gave callers no way to know the cache was stale.
+
+Smaller than this plan assumed: the only real consumer, `CombatController.FindRandomValidTarget()`,
+already called `FindCharacters()` itself, and the two count helpers had **zero callers** — so the
+staleness was latent rather than a live bug.
+
+`OnEnable`/`OnDisable` are guarded on `instance != this`, matching `ParryInputManager` — without it
+a duplicate being destroyed in `Awake` would unsubscribe the real instance.
 
 *Verify:* `CombatController`'s automatic-targeting path (`useManualTargeting = false`) still finds
 valid targets after a respawn.
 
 ---
-
-**Known question for 2b — `CrewManager` breaks when crew are spawned.** It's present in
-`Encounter.unity` and assembles the crew from `Player`-tagged objects in `Awake()`, which will now
-run *before* any crew exist, so it'll silently build an empty roster. Its only consumer is
-`Debugs/Debug_Crew.cs` (a logger) — nothing in gameplay reads `GetCrewMembers()` or the
-`crewSlot1..4` fields. So the options are: move it after spawning, fold it into the bootstrapper,
-or delete it along with `Debug_Crew`. Deleting is the honest call unless it's wanted for a crew UI
-later — flag it rather than assume.
-
-It also calls `crewMembers[i].Initialize()`, which is the last thing still resetting
-`Character.reputation` on the ScriptableObject. If `CrewManager` goes, that goes with it, which
-ties into the `reputation` open question in §7.
 
 ### Phase 3 — The voyage map
 `MapGraph` + seeded generator, `Voyage.unity`, node selection, scene transitions, save/resume.
@@ -522,10 +601,11 @@ differently than losing Black Sam.
 
 **Run length.** Node count drives all tuning. 12-15 is the genre norm for a ~30-45 min run.
 
-**Crew roster size vs. berths.** The party is 4 (`CrewManager.MAX_CREW_SIZE`), but only 3 crew are
-placed in `Encounter.unity` and `Tephi` is authored-but-unplaced. Once 2b spawns from `RunState`,
-"who's in the scene" stops being an Editor decision and becomes a run-state one — so the intended
-starting party size needs deciding. 3 or 4?
+**Crew roster size vs. berths.** The party is 4 (now just the bootstrapper's crew spawn point
+count, since `CrewManager` and its `MAX_CREW_SIZE` are deleted), but only 3 crew are
+in `Debug Starting Crew` and `Tephi` is authored but not in it. Now that 2b spawns from `RunState`,
+"who's in the fight" is a run-state decision rather than an Editor one — there are 4 crew spawn
+points and 3 crew, so the intended starting party size needs deciding. 3 or 4?
 
 **`Witch Healer` is authored with `allegiance: Enemy`** but appeared in a debug crew list. Only
 Player-allegiance characters bind to run state, so as crew it would silently never carry health.

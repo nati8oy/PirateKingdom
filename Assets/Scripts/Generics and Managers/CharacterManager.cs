@@ -139,13 +139,23 @@ public class CharacterManager : MonoBehaviour
             isDead = true;
 
             // Permadeath: record it in the run before this object goes away, or the crew member
-            // would come back next encounter as though nothing happened.
+            // would come back next encounter as though nothing happened. Reported to RunManager
+            // rather than written to disk here — the save happens once, at the encounter boundary,
+            // in RunManager.CompleteEncounter().
             if (crewState != null)
             {
-                crewState.isDead = true;
-                crewState.currentHealth = 0f;
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.ReportCrewDeath(crewState);
+                }
+                else
+                {
+                    // No manager to report to, so there's nothing that could persist this anyway.
+                    crewState.isDead = true;
+                    crewState.currentHealth = 0f;
+                }
+
                 Debug.Log($"[CharacterManager] {crewState.displayName} died — removed from the run's crew for good.");
-                RunManager.Instance?.SaveRun();
             }
 
             // Play character-specific death audio from scriptable object

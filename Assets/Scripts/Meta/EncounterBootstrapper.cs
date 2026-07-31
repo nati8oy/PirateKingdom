@@ -75,6 +75,11 @@ public class EncounterBootstrapper : MonoBehaviour
         SpawnEnemies(staging.transform);
 
         Destroy(staging);
+
+        // GameManager caches its Player/Enemy lists by tag and would otherwise keep the snapshot it
+        // took in its own Awake — empty or partial, since these combatants were built during Awake
+        // too and component order is arbitrary.
+        GameManager.Instance.FindCharacters();
     }
 
     private void SpawnCrew(Transform staging)
@@ -176,10 +181,15 @@ public class EncounterBootstrapper : MonoBehaviour
 
     private void Start()
     {
+        if (turnManager == null) return;
+
+        // Set before BeginBattle so the reward is known when the battle ends.
+        turnManager.SetEncounter(encounter);
+
         // Every combatant exists by now (spawning happened in Awake), so the turn-order snapshot
         // is complete. BeginBattle is idempotent: if TurnManager.autoStartBattle is still ticked
         // it will already have run, and this call is ignored with a warning.
-        turnManager?.BeginBattle();
+        turnManager.BeginBattle();
     }
 
     private void SpawnEnemies(Transform staging)

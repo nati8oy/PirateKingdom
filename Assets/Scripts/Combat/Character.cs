@@ -96,11 +96,11 @@ public class Character : ScriptableObject
     // several scene objects can point at the same asset (both Skeletons share Skeleton.asset) and
     // because in the Editor writes to a ScriptableObject persist into the project asset on disk.
     // Do not reintroduce mutable fields here.
-
-    public void Initialize()
-    {
-        reputation = 0f;
-    }
+    //
+    // `Initialize()` used to live here and zeroed `reputation` — the last thing in the codebase
+    // writing to a Character asset at runtime. Its only caller was CrewManager, deleted in Phase 2c,
+    // so it went with it rather than sitting around as a ready-made way to reintroduce the problem.
+    // `reputation` itself is still authored and still never read; see META.md §7.
 
     public void ResetActionsToDefault()
     {

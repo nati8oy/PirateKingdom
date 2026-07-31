@@ -30,6 +30,30 @@ public class TurnManager : MonoBehaviour
 
     public bool BattleStarted => battleStarted;
 
+    // Which encounter is being fought, pushed in by EncounterBootstrapper before BeginBattle().
+    // Null is fine and means a hand-placed fight — it just pays no plunder. Phase 3 will get this
+    // from the map node instead.
+    private EncounterDefinition encounterContext;
+
+    /// <summary>The last finished encounter's report, or null until a battle has ended.</summary>
+    public EncounterResult LastResult { get; private set; }
+
+    /// <summary>
+    /// Fires once, at battle end, with everything the encounter did to the run. Hook a results
+    /// screen here. Fully-qualified System.Action on purpose — a bare `Action` is the game's own
+    /// ability ScriptableObject.
+    /// </summary>
+    public event System.Action<EncounterResult> OnEncounterComplete;
+
+    /// <summary>
+    /// Tells the battle which encounter it is, so the reward can be paid at the end. Call before
+    /// <see cref="BeginBattle"/>.
+    /// </summary>
+    public void SetEncounter(EncounterDefinition definition)
+    {
+        encounterContext = definition;
+    }
+
     public List<GameObject> turnOrder = new List<GameObject>();
     private List<(GameObject obj, float initiative)> initiativeList = new List<(GameObject obj, float initiative)>();
 
@@ -58,6 +82,11 @@ public class TurnManager : MonoBehaviour
         }
 
         battleStarted = true;
+
+        // Opened here rather than in the bootstrapper so it happens exactly once per fight whether
+        // the bootstrapper or autoStartBattle owns the start.
+        RunManager.Instance?.BeginEncounter();
+
         GetTurnOrder();
         SetCharacterTurn();
     }
@@ -136,15 +165,23 @@ public class TurnManager : MonoBehaviour
         // Stop all turn processing
         CancelInvoke();
 
-        // Commit surviving crew's health to the run before anything is torn down, so damage
-        // carries into the next encounter. Deaths were already recorded as they happened.
-        // Phase 2 replaces this with a proper EncounterResult (XP, plunder, and so on).
+        // Commit surviving crew's health to the run before anything is torn down, so damage carries
+        // into the next encounter. Casualties can't be collected here — a dying CharacterManager
+        // destroys its GameObject on the spot — so they were reported to RunManager as they
+        // happened. CompleteEncounter() then applies rewards and writes the run to disk once.
         foreach (var character in FindObjectsOfType<CharacterManager>())
         {
             character.SyncHealthToRunState();
         }
-        RunManager.Instance?.SaveRun();
-        
+
+        LastResult = RunManager.Instance?.CompleteEncounter(playerVictory, encounterContext);
+
+        if (LastResult != null)
+        {
+            Debug.Log($"[TurnManager] Encounter complete — {LastResult.Summary()}");
+            OnEncounterComplete?.Invoke(LastResult);
+        }
+
         // Hide turn marker if current character exists
         if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
         {

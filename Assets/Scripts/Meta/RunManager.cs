@@ -153,11 +153,115 @@ public class RunManager : MonoBehaviour
         return current?.FindCrewMember(characterId);
     }
 
+    // --- Encounter boundary ---
+    // Crew who died during the encounter currently being fought. Tracked here because the dying
+    // GameObject is destroyed on the spot, so the battle's end can't read casualties back off the
+    // scene — but the run record survives, and this is the list of which records are new losses.
+    private readonly List<CrewMemberState> deathsThisEncounter = new List<CrewMemberState>();
+    private bool encounterInProgress;
+
     /// <summary>
-    /// Writes the run to disk. Called at encounter boundaries and on death — deliberately NOT on
-    /// every health change: we can't serialise a battle in progress, so a mid-fight save would
-    /// reload with the crew damaged and the enemies restored. Saving per encounter means quitting
-    /// mid-fight cleanly rewinds to the start of that encounter.
+    /// Opens an encounter. Called from <c>TurnManager.BeginBattle()</c>, so it runs once per fight
+    /// regardless of whether the bootstrapper or <c>autoStartBattle</c> owns the start.
+    /// </summary>
+    public void BeginEncounter()
+    {
+        deathsThisEncounter.Clear();
+        encounterInProgress = true;
+    }
+
+    /// <summary>
+    /// Records a permadeath in memory. Deliberately does <b>not</b> save — see
+    /// <see cref="CompleteEncounter"/> for why the write waits for the encounter boundary.
+    /// </summary>
+    public void ReportCrewDeath(CrewMemberState member)
+    {
+        if (member == null) return;
+
+        member.isDead = true;
+        member.currentHealth = 0f;
+
+        if (!deathsThisEncounter.Contains(member)) deathsThisEncounter.Add(member);
+    }
+
+    /// <summary>
+    /// Closes the encounter: awards plunder, builds the <see cref="EncounterResult"/>, and writes
+    /// the run to disk <b>once</b>. Returns the result, or null if there's no active run.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is the single persistence boundary. Health syncs into <see cref="RunState"/>
+    /// continuously as damage lands, and deaths are recorded by
+    /// <see cref="ReportCrewDeath"/> — but neither touches the disk. Only this does.</para>
+    ///
+    /// <para>Consequence, and it's intended: quitting mid-fight rewinds cleanly to the start of the
+    /// encounter, losing both the damage <i>and</i> the deaths. Previously a death wrote through
+    /// immediately while damage didn't, so quitting after a casualty kept the corpse and refunded
+    /// everyone else's wounds.</para>
+    /// </remarks>
+    public EncounterResult CompleteEncounter(bool playerVictory, EncounterDefinition encounter)
+    {
+        if (!encounterInProgress)
+        {
+            Debug.LogWarning("[RunManager] CompleteEncounter() called without a matching BeginEncounter() — " +
+                             "ignoring, so the run isn't written twice.");
+            return null;
+        }
+
+        encounterInProgress = false;
+
+        if (current == null)
+        {
+            Debug.Log("[RunManager] Encounter finished with no active run — nothing to persist.");
+            return null;
+        }
+
+        var result = new EncounterResult
+        {
+            encounterName = encounter != null ? encounter.displayName : "hand-placed encounter",
+            playerVictory = playerVictory
+        };
+
+        // Rewards are for winning only. A missing definition just means no payout — the scene is
+        // still playable with enemies placed by hand.
+        if (playerVictory && encounter != null && encounter.plunderReward > 0)
+        {
+            current.plunder += encounter.plunderReward;
+            result.plunderAwarded = encounter.plunderReward;
+        }
+
+        result.plunderTotal = current.plunder;
+
+        foreach (CrewMemberState member in current.crew)
+        {
+            if (member == null) continue;
+
+            bool diedHere = deathsThisEncounter.Contains(member);
+
+            // Crew lost in an earlier encounter took no part in this one, so they're not in the report.
+            if (member.isDead && !diedHere) continue;
+
+            result.crew.Add(new EncounterResult.CrewOutcome
+            {
+                characterId = member.characterId,
+                displayName = member.displayName,
+                endHealth = member.currentHealth,
+                died = diedHere
+            });
+        }
+
+        deathsThisEncounter.Clear();
+
+        SaveRun();
+
+        return result;
+    }
+
+    /// <summary>
+    /// Writes the run to disk. In normal play the only caller is
+    /// <see cref="CompleteEncounter"/> — deliberately NOT on every health change or death: we can't
+    /// serialise a battle in progress, so a mid-fight save would reload with the crew damaged and
+    /// the enemies restored. Saving per encounter means quitting mid-fight cleanly rewinds to the
+    /// start of that encounter.
     /// </summary>
     [ContextMenu("Save Run")]
     public void SaveRun()

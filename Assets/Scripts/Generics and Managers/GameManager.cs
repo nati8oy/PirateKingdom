@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -38,7 +39,32 @@ public class GameManager : MonoBehaviour
 
         Initialize();
     }
-    
+
+    // PlayerCharacters/EnemyCharacters are static and this object survives scene loads, so without
+    // this the lists would keep the snapshot taken on the very first Awake — stale the moment a new
+    // encounter loads its own combatants. Guarded on `instance != this` so a duplicate being
+    // destroyed in Awake can't unsubscribe the real one, matching ParryInputManager's convention.
+    private void OnEnable()
+    {
+        if (instance != this) return;
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDisable()
+    {
+        if (instance != this) return;
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        FindCharacters();
+    }
+
+    /// <summary>
+    /// Rebuilds the cached Player/Enemy lists from the current scene. Call after spawning
+    /// combatants at runtime — <see cref="EncounterBootstrapper"/> does.
+    /// </summary>
     public void FindCharacters()
     {
         EnemyCharacters.Clear();
@@ -58,13 +84,17 @@ public class GameManager : MonoBehaviour
         FindCharacters();
     }
     
+    // Both refresh first: they're static entry points, so a caller has no way to know whether the
+    // cached lists are current, and answering from a stale snapshot is worse than the lookup cost.
     public static int GetAlivePlayerCount()
     {
+        Instance.FindCharacters();
         return PlayerCharacters.Count(player => player != null && player.GetComponent<CharacterManager>() != null);
     }
-    
+
     public static int GetAliveEnemyCount()
     {
+        Instance.FindCharacters();
         return EnemyCharacters.Count(enemy => enemy != null && enemy.GetComponent<CharacterManager>() != null);
     }
 }

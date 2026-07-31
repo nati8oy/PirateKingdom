@@ -51,12 +51,14 @@ third-party and should not be modified** unless explicitly requested:
   - `CombatController.cs` — resolves **player** actions on a target (d20 hit rolls, crits, drive
     multipliers) and calls `TurnManager.CompleteTurn()`.
   - `DriveManager.cs` / `DriveMeter.cs` / `DriveUI.cs` — the "Drive" super-meter resource system.
-  - `CrewManager.cs` — assembles the player crew (max 4) from `Player`-tagged objects.
   - `ClickableCharacter.cs`, `ParryVisualFeedback.cs`.
 - `Generics and Managers/`
   - `TurnManager.cs` — **the heart of combat.** Initiative-based turn order (re-rolled each
     round), round counter, per-turn buff/cooldown updates, and win/lose (`EndBattle`) handling.
-  - `GameManager.cs` — singleton; tracks `PlayerCharacters` / `EnemyCharacters` by tag.
+  - `GameManager.cs` — singleton; tracks `PlayerCharacters` / `EnemyCharacters` by tag. Those lists
+    are **static** and the object is `DontDestroyOnLoad`, so they're re-populated on
+    `SceneManager.sceneLoaded` and by `EncounterBootstrapper` after it spawns — a single `Awake`
+    snapshot goes stale the moment combatants are spawned at runtime.
   - `CharacterManager.cs` — the **runtime MonoBehaviour** wrapper around a `Character`
     ScriptableObject: current health, taking/dealing damage, healing, feedbacks, death, drive.
   - `ActionsManager.cs` — builds the player action-button UI (incl. the End Turn button) and the
@@ -87,8 +89,18 @@ third-party and should not be modified** unless explicitly requested:
     voyage map, and context menus for Save / Load / Delete Save / Log Save Path.
   - `EncounterDefinition.cs` — ScriptableObject describing one fight: which `Enemy` assets, how
     many, display name, plunder reward.
+  - `EncounterResult.cs` — the report one encounter produces: survivors and their end health, this
+    fight's casualties, plunder awarded. **The single persistence boundary.**
+    `TurnManager.BeginBattle()` opens the encounter via `RunManager.BeginEncounter()`; deaths are
+    reported to `RunManager.ReportCrewDeath()` **in memory only** as they happen (a dying
+    `CharacterManager` destroys its GameObject immediately, so casualties can't be read back at the
+    end); `TurnManager.EndBattle()` then calls `RunManager.CompleteEncounter()`, which awards
+    plunder, builds the result and calls `SaveRun()` **once**. Read it via `TurnManager.LastResult`
+    or the `TurnManager.OnEncounterComplete` event. Don't reintroduce `SaveRun()` calls elsewhere —
+    a mid-fight save reloads with the crew damaged and the enemies restored.
   - `EncounterBootstrapper.cs` — spawns the crew (from `RunState`) and the enemies (from the
-    `EncounterDefinition`) on scene load, then calls `TurnManager.BeginBattle()`. Crew are bound to
+    `EncounterDefinition`) on scene load, then calls `TurnManager.SetEncounter()` (so the reward is
+    known at battle end) and `TurnManager.BeginBattle()`. Crew are bound to
     their run record explicitly via `CharacterManager.AssignCrewState()`; dead crew never spawn.
     **Two rules to preserve when touching combatant spawning:**
     - Spawn in `Awake()`, start the battle in `Start()`. Unity finishes every `Awake()` before any

@@ -42,6 +42,18 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: Background Middle
+    uniqueID: 2061080047
+    locked: 0
+  - name: Front Middle
+    uniqueID: 1100344855
+    locked: 0
+  - name: Player + Enemies
+    uniqueID: 913397309
+    locked: 0
+  - name: Front Near
+    uniqueID: 624899053
+    locked: 0
   m_RenderingLayers:
   - Default
   - Light Layer 1

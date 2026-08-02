@@ -43,6 +43,11 @@ public class ActionsManager : MonoBehaviour
 
         Action[] actionSlots = character.characterData.actionSlots;
 
+        // The panel shows whoever's turn it is, including enemies, so the player can read what
+        // they're about to be hit with — but only a Player-allegiance character's actions may be
+        // clicked. Without this the enemy's own buttons are live during the enemy turn.
+        bool playerControlled = character.characterData.allegiance == Character.Allegiance.Player;
+
         // Create new action slots
         for (int i = 0; i < actionSlots.Length; i++)
         {
@@ -83,8 +88,8 @@ public class ActionsManager : MonoBehaviour
             
             if (button != null)
             {
-                // Enable/disable button based on availability
-                button.interactable = isAvailable;
+                // Enable/disable button based on availability and whose turn it is
+                button.interactable = isAvailable && playerControlled;
                 
                 button.onClick.AddListener(() => {
                     Debug.Log($"Button clicked for action: {action.actionName}");
@@ -150,15 +155,15 @@ public class ActionsManager : MonoBehaviour
         }
         
         // Add the End Turn button after all action slots
-        CreateEndTurnButton();
+        CreateEndTurnButton(playerControlled);
     }
-    
-    private void CreateEndTurnButton()
+
+    private void CreateEndTurnButton(bool interactable)
     {
         // If no prefab is assigned, try to create a simple button dynamically
         if (endTurnButtonPrefab == null)
         {
-            CreateDynamicEndTurnButton();
+            CreateDynamicEndTurnButton(interactable);
             return;
         }
         
@@ -174,7 +179,7 @@ public class ActionsManager : MonoBehaviour
         
         if (button != null)
         {
-            button.interactable = true;
+            button.interactable = interactable;
             button.onClick.AddListener(() => {
                 Debug.Log("End Turn button clicked!");
                 TurnManager turnManager = FindObjectOfType<TurnManager>();
@@ -199,7 +204,7 @@ public class ActionsManager : MonoBehaviour
         }
     }
     
-    private void CreateDynamicEndTurnButton()
+    private void CreateDynamicEndTurnButton(bool interactable)
     {
         // Create a simple end turn button if no prefab is assigned
         GameObject endTurnSlot = new GameObject("EndTurnButton");
@@ -221,7 +226,7 @@ public class ActionsManager : MonoBehaviour
         image.color = new Color(0.8f, 0.2f, 0.2f, 1f); // Red color to distinguish it
         
         button.targetGraphic = image;
-        button.interactable = true;
+        button.interactable = interactable;
         button.onClick.AddListener(() => {
             Debug.Log("End Turn button clicked!");
             TurnManager turnManager = FindObjectOfType<TurnManager>();

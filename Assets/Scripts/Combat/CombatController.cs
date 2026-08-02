@@ -252,7 +252,12 @@ public class CombatController : MonoBehaviour
         return true;
     }
 
-    private bool IsValidTarget(CharacterManager targetManager)
+    /// <summary>
+    /// Whether the selected action may be used on this target. Public so UI feedback
+    /// (ActionTargetingLine) asks the same authority that execution does, rather than keeping a
+    /// second copy of the targeting rules that could drift out of step.
+    /// </summary>
+    public bool IsValidTarget(CharacterManager targetManager)
     {
         if (selectedAction == null)
             return false;

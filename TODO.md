@@ -54,6 +54,23 @@ Consequences worth keeping in mind:
 
 ## Bugs
 
+### ~~Player could act during the enemy's turn~~ — DONE
+`ActionsManager.LoadCharacterActions()` is called for enemies too, and buttons were enabled purely
+on cooldown (`button.interactable = isAvailable`), so the **enemy's own actions were clickable
+during their turn** — pick one, click a target, and it resolved.
+
+Fixed in three layers, all needed:
+- `ActionsManager` gates `interactable` on the loaded character's allegiance, **including the End
+  Turn button** (otherwise the player could skip the enemy's turn). The panel still *shows* enemy
+  actions, deliberately, so the player can read what's coming.
+- `CombatController.IsPlayerControlledTurn()` guards `SelectAction()` and
+  `TryExecuteActionOnCurrentTarget()`. UI state alone can't close a click that lands on the frame
+  the turn flips.
+- `TurnManager.SetCharacterTurn()` calls `CombatController.ClearSelection()` on every turn change.
+  This closed a second, quieter version: an action selected but never targeted stayed live, so the
+  next character to act could resolve an action that wasn't theirs — `PerformAction` attributes it
+  to `currentCharacterTurn`, so a crew member could use an action outside their own loadout.
+
 ### ~~Drive stacks don't boost heals cast on an ally~~ — DONE
 `CharacterManager.Heal()` applied `driveManager.GetNextHealingMultiplier()` using **its own**
 `driveManager` field — i.e. the **target's** DriveManager, not the healer's. So a player healer who
@@ -140,6 +157,19 @@ script execution order can't strand a `ParrySystem`, and the dead registration l
 The duplicate branch in `Awake()` is kept but now logs an error instead of swallowing it, since
 nothing should produce a second instance any more. The `OnEnable`/`OnDisable` guards stay — see
 `CLAUDE.md`.
+
+### Leftovers from the 2.5D conversion
+- `txt_hit_text` and `img_glow` are still direct children of the `PlayerCharacter.prefab` root,
+  outside `CharacterUI`. Both are inactive, and **`txt_hit_text` is referenced by no script** —
+  the floating damage number is `actionStatusText` (`UI_action_text`, under `CharacterUI`). Delete
+  `txt_hit_text`; decide whether `img_glow` is wanted and either move it under `CharacterUI` or
+  delete it. Anything left outside a Canvas will simply never render.
+- `EnemyCharacterVariant.prefab` still carries **dangling overrides** pointing at the `Image` and
+  `Button` that were deleted from the base during the conversion. They can never apply. The `Image`
+  one held the enemy colour tint, which is why enemies briefly rendered untinted — the tint now
+  lives on the variant's `SpriteRenderer.Color`. Harmless, but worth clearing.
+- `Players characters` (the old `GridLayoutGroup` container in `Encounter.unity`) is disabled rather
+  than deleted, and `Player Crew` is an empty leftover RectTransform root. Both can go.
 
 ### Dead code and data
 - `ParrySystem.parryDriveBonus` / `ParryDriveBonus` (`ParrySystem.cs:8,32,51`) is cached in

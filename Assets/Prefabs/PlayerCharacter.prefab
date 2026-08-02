@@ -873,7 +873,7 @@ BoxCollider2D:
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
   m_SpriteTilingProperty:
-    border: {x: 0, y: 0, z: 0, w: 0}
+    border: {x: 0.13, y: 0, z: 0.14, w: 0}
     pivot: {x: 0.5, y: 0.5}
     oldSize: {x: 0.96, y: 2}
     newSize: {x: 0.96, y: 2}
@@ -918,7 +918,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 11.517523}
+  m_AnchoredPosition: {x: 96.9, y: 11.517523}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &539647207317930816
@@ -989,7 +989,7 @@ MonoBehaviour:
   m_text: 10/100
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 9af941986ada74ded9b5fc26bb7b9a67, type: 2}
-  m_sharedMaterial: {fileID: 7293991361916449328, guid: 8c6a0c527b6d74e1db24335223c4e8bd, type: 2}
+  m_sharedMaterial: {fileID: -4217512158137574524, guid: 9af941986ada74ded9b5fc26bb7b9a67, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1055,7 +1055,7 @@ MonoBehaviour:
   m_margin: {x: 7.657692, y: 0, z: 0, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
-  m_hasFontAssetChanged: 1
+  m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
 --- !u!1 &686371566887458474
@@ -3483,9 +3483,9 @@ RectTransform:
   - {fileID: 61470267325889371}
   m_Father: {fileID: 3825582818541846883}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 2}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -1, y: 0}
   m_SizeDelta: {x: 1920, y: 1080}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &3726708986045537271
@@ -3547,7 +3547,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 45}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -263.6245}
+  m_AnchoredPosition: {x: 0, y: 9.996094}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1080088654975387185
@@ -4700,7 +4700,7 @@ MonoBehaviour:
   _bursts:
   - time: 0
     count: 15
-    used: 0
+    used: 1
   _particleTrailRenderer: {fileID: 0}
   _trailModule:
     enabled: 0
@@ -6086,7 +6086,7 @@ MonoBehaviour:
   _bursts:
   - time: 0
     count: 1
-    used: 0
+    used: 1
   _particleTrailRenderer: {fileID: 0}
   _trailModule:
     enabled: 0
@@ -9737,7 +9737,7 @@ MonoBehaviour:
   _bursts:
   - time: 0
     count: 1
-    used: 0
+    used: 1
   _particleTrailRenderer: {fileID: 0}
   _trailModule:
     enabled: 0
@@ -10310,7 +10310,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -263.62454}
+  m_AnchoredPosition: {x: 0, y: 14}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &9102280893666471266
@@ -14073,7 +14073,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: 0, y: -237}
+  m_AnchoredPosition: {x: 91, y: -237}
   m_SizeDelta: {x: 192.35, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &5639042724575201444
@@ -14403,7 +14403,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1461082935090294446, guid: 7f146f94c2a0e46b8819243c0ecfbe7d, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -263.6245
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 1461082935090294446, guid: 7f146f94c2a0e46b8819243c0ecfbe7d, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x

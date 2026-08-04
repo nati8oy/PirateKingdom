@@ -51,7 +51,13 @@ third-party and should not be modified** unless explicitly requested:
   - `CombatController.cs` — resolves **player** actions on a target (d20 hit rolls, crits, drive
     multipliers) and calls `TurnManager.CompleteTurn()`.
   - `DriveManager.cs` / `DriveMeter.cs` / `DriveUI.cs` — the "Drive" super-meter resource system.
-  - `ClickableCharacter.cs`, `ParryVisualFeedback.cs`.
+  - `ClickableCharacter.cs` — target selection. Implements `IPointerClickHandler` (world sprite
+    body + `Collider2D` + a `Physics2DRaycaster` on the camera). Its `CharacterClicked()` is still
+    public so a UI Button's OnClick can drive it too.
+  - `ActionTargetingLine.cs` — **experimental, self-contained.** LineRenderer from the selected
+    action's source to a legal target, plus valid / invalid / default cursor swaps. Delete the
+    file and its GameObject to remove the feature entirely.
+  - `ParryVisualFeedback.cs`.
 - `Generics and Managers/`
   - `TurnManager.cs` — **the heart of combat.** Initiative-based turn order (re-rolled each
     round), round counter, per-turn buff/cooldown updates, and win/lose (`EndBattle`) handling.
@@ -62,10 +68,21 @@ third-party and should not be modified** unless explicitly requested:
   - `CharacterManager.cs` — the **runtime MonoBehaviour** wrapper around a `Character`
     ScriptableObject: current health, taking/dealing damage, healing, feedbacks, death, drive.
   - `ActionsManager.cs` — builds the player action-button UI (incl. the End Turn button) and the
-    shared `IsActionAvailable` cooldown check used by both player and enemy AI.
+    shared `IsActionAvailable` cooldown check used by both player and enemy AI. The panel shows
+    whoever's turn it is, **enemies included**, but buttons are only interactable for a
+    `Player`-allegiance character — see "Turn ownership" below.
   - `ParrySystem.cs` + `ParryInputManager.cs` — real-time parry windows on incoming enemy attacks.
   - `PlayerInputHandler.cs` — maps the Drive input action to `EnterDriveMode`.
+  - `CursorManager.cs` — the single owner of the hardware cursor. `DontDestroyOnLoad`, lazy
+    `Instance`, tolerates being absent. **Anything that swaps the cursor must go through it**
+    (`SetCursor` / `ResetToDefault`) — a component calling `Cursor.SetCursor(null, …)` directly
+    restores the *system* cursor and silently discards the game's default.
   - `HealthManager.cs` — **currently an empty stub.**
+- `Environment/` — 2D presentation helpers, independent of combat.
+  - `ParallaxController.cs` + `ParallaxLayer.cs` — camera-referenced parallax with optional
+    per-layer auto-scroll. One controller drives every layer so they share a `Depth Scale`.
+  - `SortingOrderFromPosition.cs` — derives Order in Layer from world Y so lower-on-screen draws
+    in front. Optional; combatants spawn from one prefab and would otherwise share one order.
 - `Enemy/`
   - `Enemy.cs` — ScriptableObject subclass of `Character` with AI config (action weights,
     targeting strategy, heal threshold, drive config).
@@ -149,6 +166,39 @@ third-party and should not be modified** unless explicitly requested:
     don't try to win that race with Script Execution Order.
   - `Update()` early-returns until the battle has begun. Without that guard a scene that spawns
     its combatants would count zero living players on frame one and instantly declare a defeat.
+- **Turn ownership — the player may only act on their own turn.** Enforced in three places, and
+  all three are load-bearing:
+  - `ActionsManager.LoadCharacterActions()` sets `button.interactable = isAvailable && playerControlled`,
+    where `playerControlled` is the loaded character's allegiance. The panel deliberately still
+    *shows* the enemy's actions so the player can read what's coming — it just can't be clicked.
+    **The End Turn button is gated the same way**, or the player could skip the enemy's turn.
+  - `CombatController` checks `IsPlayerControlledTurn()` in both `SelectAction()` and
+    `TryExecuteActionOnCurrentTarget()` — the single funnel every action passes through. UI state
+    alone isn't enough: a click landing on the same frame the turn flips would otherwise resolve.
+  - `TurnManager.SetCharacterTurn()` calls `CombatController.ClearSelection()` on every turn
+    change. **A selection belongs to the turn it was made in** — without this, an action picked
+    but never targeted stays live, and the next character to act resolves an action that isn't
+    theirs (`PerformAction` attributes it to `currentCharacterTurn`).
+  - `CombatController.IsValidTarget()` is **public on purpose** so UI feedback asks the same
+    authority execution does. Don't reimplement targeting rules anywhere else.
+- **Presentation is 2.5D: combatants are world sprites, not UI.** Orthographic camera, sprite
+  bodies, and a **World Space** `CharacterUI` Canvas per character carrying the health bar, drive
+  meter, parry indicator and floating damage text.
+  - Draw order is **Sorting Layer + Order in Layer, never Z.** Layers back to front:
+    `Default`, `Background Middle`, `Front Middle`, `Player + Enemies`, `Front Near`.
+  - The scene Canvas is **Screen Space – Camera** on `Player + Enemies`, which is what lets the
+    HUD interleave with the sprite layers at all.
+  - `EnemyCharacterVariant.prefab` is a **Prefab Variant of `PlayerCharacter.prefab`** — presentation
+    changes are made once on the base and inherited. (`EnemyCharacter[DEPRECIATED].prefab` is
+    *not* its base and is genuinely unreferenced.)
+  - **UGUI Graphics and `ParticleImage` only render under a Canvas.** Anything visual on a
+    combatant must live under `CharacterUI`, not directly under the character root.
+  - `CharacterUI` is anchored at `(0.5, 0.5)` — its centre — so its position doesn't depend on the
+    root's `sizeDelta`. Don't re-anchor it to a corner; that made the enemy variant's UI fly off
+    screen when the root rect changed.
+  - Clicking and hovering both need a `Collider2D` on the combatant plus a **`Physics2DRaycaster`
+    on the camera**. `IPointerEnterHandler`/`IPointerClickHandler` are EventSystem interfaces, not
+    UI ones, so they work on sprites once a raycaster exists.
 - **d20 combat resolution:** roll 1–20. `1` = critical miss, `20` = critical hit (double dmg),
   otherwise `roll + attackPower >= target defense` to hit. Same system for player and enemy.
 - **Drive system:** a 4-segment meter (`DriveMeter`, max 400, +50/turn regen) that fills from
@@ -227,6 +277,16 @@ third-party and should not be modified** unless explicitly requested:
   - `ParryInputManager` uses a serialized `InputActionReference`, which resolves to the **shared**
     project-wide asset. Calling `Enable()`/`Disable()` there is global and is not ref-counted, so
     any component that disables one of those actions disables it for every other consumer.
+- **Reparenting writes compensating scale and position.** Unity preserves world transform when you
+  drag an object into a differently-scaled parent, so it back-solves local values — a child of the
+  screen-space Canvas picks up a scale like `108` or `0.009`. When you're deliberately moving
+  between coordinate systems that compensation is exactly what must be discarded: **Transform ⋮ →
+  Reset, then re-place in world units.** This produced two separate "the sprite is invisible" hunts;
+  the sprite was rendering at about two pixels both times.
+- **A Prefab Variant freezes every property it has ever overridden.** Later edits to the base don't
+  reach those properties, and overrides whose target component was deleted from the base go dangling
+  and silently stop applying. After changing the base, check the variant's Overrides dropdown and
+  revert anything that should be tracking again.
 - The code is prototype-quality with heavy `Debug.Log` tracing and several **deprecated methods
   kept for backwards compatibility** (marked in comments — e.g. `UpdateBuffsForNewRound`,
   old `StartAttack` overloads, `OnRoundComplete`). Prefer the non-deprecated paths.

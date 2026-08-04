@@ -38,8 +38,36 @@ public class CombatController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// True only while a Player-allegiance character holds the turn. The action buttons are
+    /// already disabled outside that window, but this is the authority — it also covers a click
+    /// that lands in the same frame the turn changes, and a selection left over from an earlier
+    /// turn.
+    /// </summary>
+    private bool IsPlayerControlledTurn()
+    {
+        CharacterManager current = turnManager != null ? turnManager.currentCharacterTurn : null;
+
+        return current != null
+               && current.characterData != null
+               && current.characterData.allegiance == Character.Allegiance.Player;
+    }
+
+    /// <summary>Drops any pending action/target. Called by TurnManager whenever the turn changes.</summary>
+    public void ClearSelection()
+    {
+        selectedAction = null;
+        currentTargetManager = null;
+    }
+
     public void SelectAction(Action action)
     {
+        if (!IsPlayerControlledTurn())
+        {
+            Debug.Log($"Ignoring selection of {action?.actionName} — it is not a player character's turn.");
+            return;
+        }
+
         // Set the selected action
         selectedAction = action;
 
@@ -205,6 +233,13 @@ public class CombatController : MonoBehaviour
             return false;
         }
 
+        if (!IsPlayerControlledTurn())
+        {
+            Debug.Log("Ignoring action — it is not a player character's turn.");
+            ClearSelection();
+            return false;
+        }
+
         if (!IsValidTarget(currentTargetManager))
         {
             Debug.LogError($"Invalid target for action {selectedAction.name}");
@@ -217,7 +252,12 @@ public class CombatController : MonoBehaviour
         return true;
     }
 
-    private bool IsValidTarget(CharacterManager targetManager)
+    /// <summary>
+    /// Whether the selected action may be used on this target. Public so UI feedback
+    /// (ActionTargetingLine) asks the same authority that execution does, rather than keeping a
+    /// second copy of the targeting rules that could drift out of step.
+    /// </summary>
+    public bool IsValidTarget(CharacterManager targetManager)
     {
         if (selectedAction == null)
             return false;

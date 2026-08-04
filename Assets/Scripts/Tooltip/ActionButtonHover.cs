@@ -9,6 +9,9 @@ public class ActionButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerEx
     // the CharacterManager rather than the shared Character asset.
     private CharacterManager ownerCharacter;
 
+    /// <summary>Read-only accessor used by ActionTargetingLine to find the button for an action.</summary>
+    public Action AssociatedAction => associatedAction;
+
     public void SetAction(Action action)
     {
         associatedAction = action;

@@ -44,11 +44,10 @@ The console states which path was taken on every play.
 GameObjects in `Encounter.unity` carrying missing scripts. Both are leaf objects holding nothing
 else — delete them.
 
-**Open proposal:** a **2.5D presentation refactor** (combatants become sprites in world space rather
-than UI objects under a Canvas) is written up in §6. Not committed to. The **camera is decided —
-orthographic, with scripted parallax and Sorting Layer ordering** — and background parallax is
-*separable* from the combatant conversion, so it can land on its own. Doing either means re-authoring
-spawn point positions, so both are still cheapest before Phase 3 adds map UI.
+**The 2.5D presentation refactor is DONE** (§6). Combatants are world sprites with a World Space
+`CharacterUI` canvas each, the camera is orthographic, parallax layers are in, and spawn points have
+moved out of the Canvas into a world-space `Combatants` root. Phase 3's map UI can now be authored
+against a settled convention.
 
 ---
 
@@ -362,14 +361,39 @@ Leaving the definition empty falls back to hand-placed enemies, so the scene sta
 
 ---
 
-### ⟡ Optional interlude — 2.5D presentation refactor
+### ⟡ Interlude — 2.5D presentation refactor ✅ DONE
 
-**Not part of the meta plan, and not committed to.** Combatants are currently UI objects
-(`RectTransform` under a Canvas); this converts them to sprites in world space with a camera, for a
-2.5D look. Phase 2 is finished, so it's available as a standalone slice.
+**Landed as Option A** (sprite bodies + a world-space Canvas per character). Kept below because the
+findings explain *why* the current setup looks the way it does.
 
-The **camera question is settled — orthographic**, and background parallax turns out to be separable
-from this refactor entirely. See "Camera & parallax" below before costing anything else here.
+**What shipped:**
+
+- Combatants are `SpriteRenderer` bodies on Sorting Layer `Player + Enemies`. The prefab root stays
+  a `RectTransform` — a point-anchored RectTransform under a plain Transform behaves exactly like a
+  Transform, so rebuilding the root was unnecessary and the variant link survived.
+- The prefab already had a `CharacterUI` child Canvas; it became **World Space** at scale 0.01 and
+  now holds the health bar, drive meter, parry indicator and floating damage text.
+- Sorting layers authored back to front: `Default`, `Background Middle`, `Front Middle`,
+  `Player + Enemies`, `Front Near`. The scene Canvas is **Screen Space – Camera** on
+  `Player + Enemies`.
+- Parallax landed as its own slice: `Assets/Scripts/Environment/ParallaxController.cs` +
+  `ParallaxLayer.cs`, plus optional `SortingOrderFromPosition.cs`.
+- Spawn points moved out of the Canvas into a world-space `Combatants` root at scale 1.
+- Code cost was as predicted: `ClickableCharacter` gained `IPointerClickHandler`. Everything else
+  was Editor work.
+
+**Correction to the finding below:** the two prefabs do *not* each carry their own health bar and
+feedbacks — `EnemyCharacterVariant.prefab` is a **Prefab Variant of `PlayerCharacter.prefab`**, so
+the conversion was done once and inherited. (`EnemyCharacter[DEPRECIATED].prefab` is not its base.)
+
+**Three traps this cost time on, all recorded in `CLAUDE.md` and `TODO.md`:** reparenting writing
+compensating scale/position, prefab variants freezing overridden properties, and UGUI Graphics not
+rendering outside a Canvas.
+
+---
+
+**Original write-up, kept for the reasoning.** The **camera question is settled — orthographic**, and
+background parallax turned out to be separable from this refactor entirely.
 
 **Why it's cheaper than it sounds** — three things checked in the codebase, not assumed:
 
@@ -413,10 +437,8 @@ Nothing in the meta layer is blocked by this: `RunState` and spawning are data-o
 about presentation. The single point of contact is **spawn points** — 2a is where they get
 authored, and converting to 2.5D re-authors their positions.
 
-2a and 2b are both done and verified, so this is now a standalone slice whenever it's wanted. Doing
-it before Phase 3 still matters more than anything else about the ordering: ports, the voyage map and
-the loadout screen all add UI that would otherwise need reconciling with whatever convention this
-lands on. The one cost of deferring is that spawn point positions get re-authored.
+Done ahead of Phase 3, which was the right order: ports, the voyage map and the loadout screen all
+add UI that would otherwise have needed reconciling with whatever convention this landed on.
 
 #### Camera & parallax — decided (orthographic)
 
@@ -456,10 +478,10 @@ Two implementation details worth not rediscovering:
 - **Option A still holds.** A world-space Canvas has its own Sorting Layer / Order in Layer fields,
   so the per-character UI participates in exactly the same ordering scheme as `SpriteRenderer`s —
   one convention across both.
-- **Caveat to check first:** combatants currently live under a **Screen Space** Canvas, which doesn't
-  move with a world camera at all. Whatever camera the parallax uses, the Canvas render mode is the
-  thing that decides whether the fight sits in the parallaxed world or floats in front of it. Worth
-  settling before authoring layers.
+- **Caveat, now resolved:** combatants used to live under a **Screen Space – Overlay** Canvas, which
+  doesn't move with a world camera at all and composites above everything. Switching it to
+  **Screen Space – Camera** on the `Player + Enemies` sorting layer is what let the HUD interleave
+  with the sprite layers; the combatants then moved out of the Canvas entirely.
 - With orthographic, depth reads entirely from art, scale and parallax speed — the projection
   contributes no depth cue. That's the normal 2D trade, just worth stating.
 

@@ -309,7 +309,17 @@ public class TurnManager : MonoBehaviour
                 }
                 
                 currentCharacterTurn = turnOrder[currentTurnIndex].GetComponent<CharacterManager>();
-                
+
+                // A selection belongs to the turn it was made in. Without this, an action picked
+                // but never targeted stays live, and the next character to act — enemy or another
+                // crew member — could resolve an action that isn't theirs.
+                CombatController combatController = FindObjectOfType<CombatController>();
+                if (combatController != null)
+                {
+                    combatController.ClearSelection();
+                }
+
+
                 // ADD THIS: Set the current character for input handling
                 if (currentCharacterTurn.characterData.allegiance == Character.Allegiance.Player)
                 {

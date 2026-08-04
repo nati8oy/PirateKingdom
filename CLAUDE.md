@@ -54,9 +54,9 @@ third-party and should not be modified** unless explicitly requested:
   - `ClickableCharacter.cs` — target selection. Implements `IPointerClickHandler` (world sprite
     body + `Collider2D` + a `Physics2DRaycaster` on the camera). Its `CharacterClicked()` is still
     public so a UI Button's OnClick can drive it too.
-  - `ActionTargetingLine.cs` — **experimental, self-contained.** LineRenderer from the selected
-    action's source to a legal target, plus valid / invalid / default cursor swaps. Delete the
-    file and its GameObject to remove the feature entirely.
+  - `ActionTargetingLine.cs` — LineRenderer from the selected action's source to the legal target
+    under the cursor, plus valid / invalid / default cursor swaps. The line is a **player setting**
+    (`GameSettings.ShowTargetingLine`, default on); the cursor feedback is always on.
   - `ParryVisualFeedback.cs`.
 - `Generics and Managers/`
   - `TurnManager.cs` — **the heart of combat.** Initiative-based turn order (re-rolled each
@@ -78,6 +78,15 @@ third-party and should not be modified** unless explicitly requested:
     (`SetCursor` / `ResetToDefault`) — a component calling `Cursor.SetCursor(null, …)` directly
     restores the *system* cursor and silently discards the game's default.
   - `HealthManager.cs` — **currently an empty stub.**
+- `Settings/` — player-facing settings. See the "Settings & accessibility" section of `TODO.md`.
+  - `GameSettings.cs` — **static**, persisted in `PlayerPrefs`, with a `Changed` event. Deliberately
+    *not* part of `RunState`: a run is per-voyage and discarded on death, settings are per-player
+    and outlive every run. **Add new settings as properties here** rather than reading `PlayerPrefs`
+    at the call site, so keys, defaults and change notification stay in one place.
+  - `SettingsBridge.cs` — MonoBehaviour adapter, because a static class can't be a UnityEvent
+    target. Settings UI wires to this, not to `GameSettings` directly.
+  - Uses `System.Action` **fully qualified** — a bare `Action` is the game's own ability
+    ScriptableObject. Same rule as the `Meta/` files.
 - `Environment/` — 2D presentation helpers, independent of combat.
   - `ParallaxController.cs` + `ParallaxLayer.cs` — camera-referenced parallax with optional
     per-layer auto-scroll. One controller drives every layer so they share a `Depth Scale`.

@@ -9,8 +9,10 @@ using UnityEngine.InputSystem;
 /// Shows only while an action is selected — which, because TurnManager clears the selection on
 /// every turn change, means only during a player's own turn.
 ///
-/// Experimental / self-contained: the whole feature is this component plus one GameObject in the
-/// scene. Delete both and nothing else changes.
+/// The line is a **player setting** — <see cref="GameSettings.ShowTargetingLine"/>, on by default.
+/// It's a legibility aid for reading who is attacking whom, so anyone who finds it noisy can turn
+/// it off without losing information: the cursor still reports valid, invalid and empty-space
+/// targets, and it is never the only channel for anything.
 ///
 /// Everything is resolved through the camera into world space, which is exact for an orthographic
 /// camera, so the line joins a screen-space UI button to a world-space combatant correctly.
@@ -39,9 +41,6 @@ public class ActionTargetingLine : MonoBehaviour
     }
 
     [Header("Setup")]
-    [Tooltip("Draw the line at all. Turn this off to keep the cursor target feedback on its own — the two are independent.")]
-    [SerializeField] private bool showLine = true;
-
     [Tooltip("Camera used to convert screen positions to world space. Leave empty to use Camera.main.")]
     [SerializeField] private Camera viewCamera;
 
@@ -97,11 +96,40 @@ public class ActionTargetingLine : MonoBehaviour
     private CombatController combatController;
     private TargetState appliedCursorState = TargetState.None;
 
-    /// <summary>Toggle the line at runtime. The cursor feedback is unaffected either way.</summary>
+    // Mirrors GameSettings.ShowTargetingLine, refreshed on change rather than read per frame.
+    private bool showLine = true;
+
+    /// <summary>
+    /// The player-facing toggle, backed by <see cref="GameSettings.ShowTargetingLine"/> so it
+    /// persists across runs. Setting it writes through to the stored setting; the cursor target
+    /// feedback is independent and stays on either way.
+    /// </summary>
     public bool ShowLine
     {
         get => showLine;
-        set => showLine = value;
+        set => GameSettings.ShowTargetingLine = value;
+    }
+
+    private void OnEnable()
+    {
+        GameSettings.Changed += RefreshFromSettings;
+        RefreshFromSettings();
+    }
+
+    private void RefreshFromSettings()
+    {
+        showLine = GameSettings.ShowTargetingLine;
+    }
+
+    /// <summary>
+    /// Flips the setting from the component's ⋮ menu, including while playing. Here so the line
+    /// can be tested before any settings UI exists — the real toggle is the player-facing one.
+    /// </summary>
+    [ContextMenu("Toggle Targeting Line Setting")]
+    private void ToggleTargetingLineSetting()
+    {
+        GameSettings.ShowTargetingLine = !GameSettings.ShowTargetingLine;
+        Debug.Log($"[ActionTargetingLine] Show targeting line: {GameSettings.ShowTargetingLine}", this);
     }
 
     private void Awake()
@@ -127,6 +155,8 @@ public class ActionTargetingLine : MonoBehaviour
 
     private void OnDisable()
     {
+        GameSettings.Changed -= RefreshFromSettings;
+
         // Never leave a swapped cursor behind — it would persist past this component.
         ApplyCursor(TargetState.None, force: true);
 

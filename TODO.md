@@ -3,6 +3,10 @@
 Running backlog of unresolved issues found while working in this repo. Newest investigations at
 the top of each section. See `CLAUDE.md` for how the systems actually work.
 
+**Settings & accessibility** near the bottom is a *forward-looking* list rather than a bug list —
+things we expect to need, collected as they surface. Add to it in passing; don't treat it as work
+that's due.
+
 ---
 
 ## Outstanding right now
@@ -190,6 +194,75 @@ nothing should produce a second instance any more. The `OnEnable`/`OnDisable` gu
   (`Character.UpdateBuffsForNewRound()` was deleted in Phase 1a.)
 
 ---
+
+## Settings & accessibility
+
+A holding pen for things a player may reasonably want to change, so they're grouped rather than
+scattered across a dozen Inspectors. Add to it whenever a hard-coded value turns out to be a
+preference — that's cheaper than rediscovering the list later.
+
+**The settings *panel* is deliberately deferred.** The plumbing exists (`GameSettings`,
+`SettingsBridge`), but building UI for a single toggle isn't worth it — the panel gets built once
+several of these are ready, so it can be laid out for the real set rather than retrofitted. Until
+then each built setting gets a `[ContextMenu]` on its owning component for in-Editor testing;
+`ActionTargetingLine` has **Toggle Targeting Line Setting** on its ⋮ button.
+
+**Where settings live — decided.** `Assets/Scripts/Settings/GameSettings.cs`, a static class over
+`PlayerPrefs` with a `Changed` event. Explicitly *not* `RunState`, which is per-voyage and discarded
+on death. **Add each new setting as a property on `GameSettings`**, never by reading `PlayerPrefs`
+at the call site — that's what keeps keys, defaults and change notification in one place. UI wires
+to `SettingsBridge`, since a static class can't be a UnityEvent target.
+
+If settings ever outgrow a flat handful of scalars, `GameSettings` is the only thing that has to
+change to move them to a JSON file beside `run.json`.
+
+Also worth stating up front: **no setting should be the only channel for information.** Target
+validity currently reads through *both* colour (line tint) and shape (cursor image), which is the
+pattern to keep — a colour-blind player loses nothing, and so does a player who turns the line off.
+
+### Motion & visual feedback
+
+| Item | Existing hook |
+|---|---|
+| Show/hide the action targeting line | ✅ **Built.** `GameSettings.ShowTargetingLine`, default on, persisted. Needs only the UI toggle |
+| Parallax auto-scroll speed, incl. off | ✅ `ParallaxController.SetScrollMultiplier(0)` |
+| Screen shake / feedback intensity | None. MMF_Players are per-character on `CharacterManager`; needs a global scale or a Feel-level toggle |
+| Damage number size | None. `actionStatusText` (`UI_action_text`) is a plain TMP_Text |
+| Reduce or disable particle effects | None. `driveParticles` (ParticleImage) + `PF_PFX_hit` |
+
+### Timing & input
+
+The most important group — the parry is a real-time reflex check inside an otherwise turn-based
+game, so it's the single biggest accessibility barrier here.
+
+| Item | Existing hook |
+|---|---|
+| Parry window duration | `ParrySystem.parryWindowDuration` (0.3s) is serialized and has a public `ParryWindowDuration` getter, but nothing sets it at runtime |
+| Parry assist / auto-parry / disable | None. Would need a branch in `EnemyAttack.BeginParrySequence()` |
+| Drive stack input — hold instead of repeated presses | None. `PlayerInputHandler` maps one press to one stack |
+| Confirm-before-acting (guard against misclicks) | None |
+| Full remapping | Partial. `PlayerControls.inputactions` exists; no rebinding UI |
+
+### Cursor
+
+| Item | Existing hook |
+|---|---|
+| Custom cursor set | ✅ `CursorManager` owns all swaps |
+| Cursor size / high-contrast variant | Needs alternate textures; `CursorManager` already the single swap point |
+
+### Audio
+
+| Item | Existing hook |
+|---|---|
+| Master / SFX volume | None. AudioSources and MMF_Sound feedbacks are per-character, so this needs mixer groups rather than per-object volume |
+
+### Text & legibility
+
+| Item | Existing hook |
+|---|---|
+| Text size / dyslexia-friendly font | None. TMP throughout, so a shared font asset swap is feasible |
+| Tooltip dwell time / pin tooltips | None. `TooltipUI` shows on hover, hides on exit |
+| Combat log | None. Currently only `Debug.Log` tracing — a player-facing log would also help anyone who misses a fast feedback |
 
 ## Content gaps
 

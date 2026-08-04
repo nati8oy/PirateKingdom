@@ -9,8 +9,8 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 ## 0. Status — read this first
 
-**Phase 1 is complete and verified. Phase 2 is code-complete — 2a and 2b are verified in the Editor,
-2c and 2d are awaiting a play-test. Phase 3 (the voyage map) is the next new work.**
+**Phases 1 and 2 are complete and verified in the Editor, as is the 2.5D presentation refactor.
+Phase 3 (the voyage map) is the next new work, and nothing blocks it.**
 
 What exists and works today:
 
@@ -39,10 +39,6 @@ in the Inspector's ⋮ with the asset selected, and **never** on a Project-windo
 **Gotcha that has already cost time twice:** an existing save always beats the RunManager's
 `Debug Starting Crew` list, so edits to that list appear to do nothing until you delete the save.
 The console states which path was taken on every play.
-
-**Outstanding Editor step:** deleting `CrewManager`/`Debug_Crew` left the `Crew` and `Debugs`
-GameObjects in `Encounter.unity` carrying missing scripts. Both are leaf objects holding nothing
-else — delete them.
 
 **The 2.5D presentation refactor is DONE** (§6). Combatants are world sprites with a World Space
 `CharacterUI` canvas each, the camera is orthographic, parallax layers are in, and spawn points have
@@ -293,7 +289,7 @@ they finished on, visible live in the RunManager Inspector. Kill a crew member a
 `isDead` flips and persists. Confirm `Black Sam.asset` on disk is untouched throughout. Use
 **Delete Save** on the RunManager to reset.
 
-### Phase 2 — Parameterized encounters ⬅ NEXT, not started
+### Phase 2 — Parameterized encounters ✅ COMPLETE
 
 Goal: `Encounter.unity` stops being a hand-authored fight and starts **building itself** from
 (a) an `EncounterDefinition` for the enemies and (b) `RunState` for the crew. That's what lets one
@@ -487,7 +483,7 @@ Two implementation details worth not rediscovering:
 
 ---
 
-**2b — Crew spawned from `RunState`. Code done; Editor steps outstanding.**
+**2b — Crew spawned from `RunState`. ✅ DONE, verified in Editor.**
 `EncounterBootstrapper` now spawns living crew as well as enemies, sharing one staging area.
 `CharacterManager.AssignCrewState()` lets the spawner bind the record **explicitly**; the
 id-matching path in `BindToRunState()` is kept only as a fallback for hand-placed crew, clearly
@@ -529,7 +525,7 @@ read — see the open question in §7.
 missing scripts. Both are leaf objects with nothing but a Transform and the deleted component, so
 delete them outright.
 
-**2c — `EncounterResult`. Code done; Editor steps outstanding.**
+**2c — `EncounterResult`. ✅ DONE, verified in Editor.**
 `Assets/Scripts/Meta/EncounterResult.cs` is the report one encounter produces: survivors and their
 end health, this fight's casualties, and the plunder paid. Persistence now happens at exactly one
 boundary.
@@ -568,7 +564,7 @@ one `[TurnManager] Encounter complete — …` line whose numbers match what hap
 member and check they're listed as `died` and absent next encounter. Win with a `plunderReward` set
 and watch `plunder` climb in the RunManager Inspector; lose and confirm it doesn't.
 
-**2d — `GameManager` static-list refresh. ✅ DONE, code side.**
+**2d — `GameManager` static-list refresh. ✅ DONE, verified in Editor.**
 `GameManager` now re-populates on `SceneManager.sceneLoaded`, and `EncounterBootstrapper` calls
 `FindCharacters()` after spawning. `GetAlivePlayerCount()` / `GetAliveEnemyCount()` refresh before
 counting, since as static entry points they gave callers no way to know the cache was stale.
@@ -585,9 +581,15 @@ valid targets after a respawn.
 
 ---
 
-### Phase 3 — The voyage map
+### Phase 3 — The voyage map ⬅ NEXT, not started
 `MapGraph` + seeded generator, `Voyage.unity`, node selection, scene transitions, save/resume.
 Node types: Fight, Elite, Port, Event, Boss.
+
+This is the first phase with **two scenes**, so it's where the `DontDestroyOnLoad` singletons
+(`RunManager`, `CursorManager`) finally get exercised, and where `RunState` gains `seed`,
+`MapGraph map`, `currentNodeId` and `lootPool` (bump `CurrentSaveVersion` when it does).
+
+Answer **run length** (§7) before generating a map — node count drives all tuning.
 
 *Verify:* a full run start→boss, quit mid-run and resume from disk.
 

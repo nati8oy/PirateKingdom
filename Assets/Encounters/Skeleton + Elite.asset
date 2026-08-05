@@ -18,4 +18,4 @@ MonoBehaviour:
     count: 1
   - enemy: {fileID: 11400000, guid: a79b1411c0bcf4b509f78c464f3bdb03, type: 2}
     count: 0
-  plunderReward: 0
+  plunderReward: 75

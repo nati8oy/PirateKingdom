@@ -89,6 +89,9 @@ public class RunState
 
     public int plunder;
 
+    [Tooltip("Encounters won on this run. Additive field — old saves load it as 0, so no version bump.")]
+    public int encountersSurvived;
+
     public List<CrewMemberState> crew = new List<CrewMemberState>();
 
     /// <summary>Crew who can still fight — excludes the permanently dead.</summary>

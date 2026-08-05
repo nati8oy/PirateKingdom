@@ -136,7 +136,17 @@ third-party and should not be modified** unless explicitly requested:
       active spawn point. `DriveManager`, `ParrySystem` and `EnemyManager` all dereference
       `characterData` in `Awake()`, and the enemy prefab carries no default — a plain `Instantiate`
       throws before the data can be set.
-  - **Neither Meta file uses `using System;`** — it would make `System.Action` collide with the
+  - `EncounterFlow.cs` — buttons for the victory/defeat screens: `RestartEncounter()` reloads the
+    scene for another fight with the crew's carried damage, `StartNewRun()` rebuilds from Debug
+    Starting Crew. Gives a repeatable attrition loop, and `RunState.encountersSurvived` counts the
+    wins. **A stand-in for Phase 3's real scene transitions**, not a design.
+    - Reloading works only because persistence already happened: `CompleteEncounter()` wrote the
+      run once at `EndBattle`, and `RunManager` is `DontDestroyOnLoad` — its duplicate destroys
+      itself *before* `EnsureRunLoaded()`, so the live run survives the reload.
+    - `StartNewRun()` calls `RunManager.StartDebugRunNow()` rather than destroying the singleton.
+      Destroying it would leave the static `Instance` dangling until end of frame, racing the
+      queued scene load.
+  - **No Meta file uses `using System;`** — it would make `System.Action` collide with the
     game's own `Action` ScriptableObject. System types are fully qualified instead.
 - `Player/PlayerCombatController.cs`, `Tooltip/`, `Debugs/`, `PlayerControls.cs` (generated input).
 

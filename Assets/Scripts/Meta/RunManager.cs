@@ -221,6 +221,14 @@ public class RunManager : MonoBehaviour
             playerVictory = playerVictory
         };
 
+        // Counts survived encounters, so it only advances on a win — a wipe ends the run.
+        if (playerVictory)
+        {
+            current.encountersSurvived++;
+        }
+
+        result.encountersSurvived = current.encountersSurvived;
+
         // Rewards are for winning only. A missing definition just means no payout — the scene is
         // still playable with enemies placed by hand.
         if (playerVictory && encounter != null && encounter.plunderReward > 0)

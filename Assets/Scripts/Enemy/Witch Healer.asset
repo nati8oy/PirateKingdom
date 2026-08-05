@@ -35,6 +35,7 @@ MonoBehaviour:
   damageInflictedDriveMultiplier: 4
   damageTakenDriveMultiplier: 4
   parryBonusDriveMultiplier: 5
+  plunderReward: 15
   healThreshold: 0.3
   driveConfig:
     strategy: 0

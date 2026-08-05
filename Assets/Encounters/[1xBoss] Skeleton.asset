@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8e1eb69199ffd4fa4b550b9fb0748be8, type: 3}
-  m_Name: 2xSkeleton
+  m_Name: '[1xBoss] Skeleton'
   m_EditorClassIdentifier: Assembly-CSharp::EncounterDefinition
   displayName: Encounter
   enemies:
-  - enemy: {fileID: 11400000, guid: 2a8181bd0bad54fe995c0d2e7129221f, type: 2}
+  - enemy: {fileID: 11400000, guid: 87e6753ddfdd6433d8f42e2a073e0161, type: 2}
     count: 2
   bonusPlunder: 20

@@ -58,6 +58,32 @@ Consequences worth keeping in mind:
 
 ## Bugs
 
+### ~~Enemies could never miss~~ — DONE
+`EnemyManager` rolled a d20 for **crits only** (`RollForCritical`), with no to-hit check anywhere in
+the enemy path and no miss branch — every enemy attack landed unless parried. Two consequences that
+had gone unnoticed: `attackPower` on all four enemy assets was authored and never read, and
+`defenseValue` on **crew** was equally dead, since nothing ever rolled against it.
+
+`EnemyManager.RollToHit()` now mirrors `CombatController`'s rule exactly — natural 1 misses, natural
+20 hits, otherwise `roll + attackPower >= target defense` — and is applied on both the parryable and
+direct attack paths. `ResolveMiss()` plays the target's `Miss()` and consumes the enemy's drive
+stacks, matching the player's crit-miss branch.
+
+**A miss skips the parry sequence** rather than opening a window over an attack that can't connect:
+`EnemyAttack` spends the parry attempt on the first press whether or not it lands, so a window over
+a guaranteed miss would cost the player their attempt for nothing.
+
+*Balance note:* enemy attacks now land less often than they used to, so any tuning done before this
+was against enemies that hit 100% of the time. Crew `defenseValue` is now live and worth checking.
+
+### `GetModifiedAttackPower()` has no callers
+`CharacterManager.cs:466` applies the drive multiplier to attack power, and nothing invokes it.
+Drive reaches damage through `GetNextAttackDamageMultiplier()` instead, so `attackPower` affects
+**accuracy only** and drive has no effect on accuracy at all.
+
+Decide which is intended: either wire it into the to-hit rolls so drive also improves accuracy, or
+delete it. Leaving it implies a relationship between drive and accuracy that doesn't exist.
+
 ### ~~Player could act during the enemy's turn~~ — DONE
 `ActionsManager.LoadCharacterActions()` is called for enemies too, and buttons were enabled purely
 on cooldown (`button.interactable = isAvailable`), so the **enemy's own actions were clickable

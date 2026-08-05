@@ -92,6 +92,11 @@ public class RunState
     [Tooltip("Encounters won on this run. Additive field — old saves load it as 0, so no version bump.")]
     public int encountersSurvived;
 
+    [Tooltip("Position in the RunManager's EncounterSequence. Persists because the encounter loop " +
+             "is a scene reload — nothing in the scene survives to remember it. Phase 3 replaces " +
+             "this with currentNodeId.")]
+    public int sequenceIndex;
+
     public List<CrewMemberState> crew = new List<CrewMemberState>();
 
     /// <summary>Crew who can still fight — excludes the permanently dead.</summary>

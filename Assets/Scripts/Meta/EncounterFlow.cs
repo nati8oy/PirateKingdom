@@ -28,6 +28,23 @@ public class EncounterFlow : MonoBehaviour
     [Tooltip("Format for the label above. {0} is the count.")]
     [SerializeField] private string encountersSurvivedFormat = "Encounters survived: {0}";
 
+    [Tooltip("Filled with the run's total plunder when an encounter ends. Assign labels on the " +
+             "defeat and/or victory screens — each is updated before either panel is shown.")]
+    [SerializeField] private TMP_Text[] plunderTotalTexts;
+
+    [Tooltip("Format for the plunder labels. {0} is the run total, {1} is the amount awarded this encounter.")]
+    [SerializeField] private string plunderTotalFormat = "Plunder collected: {0}";
+
+    [Header("Balancing")]
+    [Tooltip("Log the crew's end-of-encounter health to the console. The attrition curve is what " +
+             "tells you whether a gauntlet is tuned, rather than just where the run ended.")]
+    [SerializeField] private bool logAttrition = true;
+
+    [Tooltip("Crew below this fraction of max health are flagged in the log, so a party that only " +
+             "just survived is visible at a glance.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float lowHealthWarning = 0.3f;
+
     private TurnManager turnManager;
 
     private void Start()
@@ -54,9 +71,74 @@ public class EncounterFlow : MonoBehaviour
 
     private void HandleEncounterComplete(EncounterResult result)
     {
-        if (encountersSurvivedText == null || result == null) return;
+        if (result == null) return;
 
-        encountersSurvivedText.text = string.Format(encountersSurvivedFormat, result.encountersSurvived);
+        if (encountersSurvivedText != null)
+        {
+            encountersSurvivedText.text = string.Format(encountersSurvivedFormat, result.encountersSurvived);
+        }
+
+        // Set on every encounter end, not just defeat: TurnManager fires this before it activates
+        // either panel, so whichever screen these labels live on is already correct when it opens.
+        if (plunderTotalTexts != null)
+        {
+            string plunderLabel = string.Format(plunderTotalFormat, result.plunderTotal, result.plunderAwarded);
+
+            foreach (TMP_Text label in plunderTotalTexts)
+            {
+                if (label != null) label.text = plunderLabel;
+            }
+        }
+
+        if (logAttrition) LogAttrition(result);
+    }
+
+    /// <summary>
+    /// One block per encounter: where the run is, and what state it left the crew in. Health is
+    /// shown as a fraction of max, resolved through <see cref="ContentDatabase"/>, because the raw
+    /// number means nothing across crew with different pools.
+    /// </summary>
+    private void LogAttrition(EncounterResult result)
+    {
+        var log = new System.Text.StringBuilder();
+
+        string position = RunManager.Instance != null ? RunManager.Instance.DescribeSequencePosition() : string.Empty;
+        string header = string.IsNullOrEmpty(position) ? $"#{result.encountersSurvived}" : position;
+
+        log.Append($"[Balance] Encounter {header} '{result.encounterName}' — ")
+           .Append(result.playerVictory ? "VICTORY" : "DEFEAT")
+           .Append($" | survivors {result.SurvivorCount}, deaths {result.DeathCount}")
+           .Append($" | plunder +{result.plunderAwarded} (total {result.plunderTotal})");
+
+        foreach (EncounterResult.CrewOutcome outcome in result.crew)
+        {
+            if (outcome == null) continue;
+
+            log.Append($"\n           {outcome.displayName,-14} ");
+
+            if (outcome.died)
+            {
+                log.Append("DIED");
+                continue;
+            }
+
+            Character authored = ContentDatabase.Instance != null
+                ? ContentDatabase.Instance.GetCharacter(outcome.characterId)
+                : null;
+
+            if (authored == null || authored.maxHealth <= 0)
+            {
+                log.Append($"{outcome.endHealth:0} hp");
+                continue;
+            }
+
+            float fraction = outcome.endHealth / authored.maxHealth;
+
+            log.Append($"{outcome.endHealth:0}/{authored.maxHealth:0} ({fraction:P0})");
+            if (fraction <= lowHealthWarning) log.Append("  <-- low");
+        }
+
+        Debug.Log(log.ToString());
     }
 
     /// <summary>

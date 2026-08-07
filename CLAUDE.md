@@ -136,7 +136,17 @@ third-party and should not be modified** unless explicitly requested:
       active spawn point. `DriveManager`, `ParrySystem` and `EnemyManager` all dereference
       `characterData` in `Awake()`, and the enemy prefab carries no default — a plain `Instantiate`
       throws before the data can be set.
-  - **Neither Meta file uses `using System;`** — it would make `System.Action` collide with the
+  - `EncounterFlow.cs` — buttons for the victory/defeat screens: `RestartEncounter()` reloads the
+    scene for another fight with the crew's carried damage, `StartNewRun()` rebuilds from Debug
+    Starting Crew. Gives a repeatable attrition loop, and `RunState.encountersSurvived` counts the
+    wins. **A stand-in for Phase 3's real scene transitions**, not a design.
+    - Reloading works only because persistence already happened: `CompleteEncounter()` wrote the
+      run once at `EndBattle`, and `RunManager` is `DontDestroyOnLoad` — its duplicate destroys
+      itself *before* `EnsureRunLoaded()`, so the live run survives the reload.
+    - `StartNewRun()` calls `RunManager.StartDebugRunNow()` rather than destroying the singleton.
+      Destroying it would leave the static `Instance` dangling until end of frame, racing the
+      queued scene load.
+  - **No Meta file uses `using System;`** — it would make `System.Action` collide with the
     game's own `Action` ScriptableObject. System types are fully qualified instead.
 - `Player/PlayerCombatController.cs`, `Tooltip/`, `Debugs/`, `PlayerControls.cs` (generated input).
 
@@ -153,8 +163,8 @@ third-party and should not be modified** unless explicitly requested:
     `Character` — `ActionsManager.IsActionAvailable()`, `ActionsManager.LoadCharacterActions()`,
     `TooltipUI.ShowActionTooltipWithCharacter()`, `ActionButtonHover.SetActionWithCharacter()`.
   - Buffed stats are computed in `CharacterManager.RefreshStats()` (authored base + this
-    instance's buffs). `CharacterManager.GetModifiedAttackPower()` is a *different* thing — it
-    applies the Drive multiplier on top of the already-buffed `AttackPower`.
+    instance's buffs). `CharacterManager.GetModifiedAttackPower()` applies the Drive multiplier on
+    top of the already-buffed `AttackPower`, but **nothing calls it** — see `TODO.md`.
   - `reputation` is still on `Character`; it's authored, zeroed, and never read.
 - **Stable asset ids.** `Character.Id` and `Action.Id` are serialized strings stamped once by
   `ContentDatabase`'s *Rebuild From Project*, derived from the asset name (`Black Sam` ->
@@ -209,7 +219,21 @@ third-party and should not be modified** unless explicitly requested:
     on the camera**. `IPointerEnterHandler`/`IPointerClickHandler` are EventSystem interfaces, not
     UI ones, so they work on sprites once a raycaster exists.
 - **d20 combat resolution:** roll 1–20. `1` = critical miss, `20` = critical hit (double dmg),
-  otherwise `roll + attackPower >= target defense` to hit. Same system for player and enemy.
+  otherwise `roll + attackPower >= target defense` to hit. Player side in
+  `CombatController.PerformAction()`, enemy side in `EnemyManager.RollToHit()` — keep the two rules
+  identical if you change either.
+  - **The enemy roll is separate from the crit roll.** `EnemyManager` rolls twice: `RollToHit()`
+    decides whether the attack lands, `RollForCritical()` decides whether it doubles.
+  - **A missed enemy attack skips the parry sequence entirely** rather than opening a window over
+    nothing. A parry attempt is spent whether or not it lands, so making the player burn theirs on
+    an attack that could never connect would be a loss with no decision in it.
+  - **`attackPower` affects accuracy only, never damage** — and so do `BuffType.Accuracy` buffs,
+    which stack onto it in `RefreshStats()`. **Damage bonuses are drive's job alone.** Keeping the
+    two disjoint is a deliberate decision: letting accuracy buffs also raise damage was tried and
+    reverted, because it let one character compound a buff and a drive spend into a single damage
+    number and duplicated a system that already worked.
+  - `CharacterManager.GetModifiedAttackPower()` applies the drive multiplier to attack power but
+    **has no callers**; drive reaches damage through `GetNextAttackDamageMultiplier()`. See `TODO.md`.
 - **Drive system:** a 4-segment meter (`DriveMeter`, max 400, +50/turn regen) that fills from
   dealing damage, taking damage, and **parries** (per-character multipliers on `Character`).
   - **Stacking buff (the main mechanic).** A character commits segments as **drive stacks**

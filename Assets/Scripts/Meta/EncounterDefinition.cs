@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// Describes one fight: which enemies show up and what it pays out. Authored per encounter, so a
@@ -32,8 +33,33 @@ public class EncounterDefinition : ScriptableObject
 
     [Header("Rewards")]
     [Min(0)]
-    [Tooltip("Plunder awarded on victory. Not yet paid out — Phase 2c's EncounterResult does that.")]
-    public int plunderReward;
+    [Tooltip("Flat bonus added on top of what the enemies are individually worth — for an elite or " +
+             "boss fight that should pay above the sum of its parts. Leave at 0 for a normal fight; " +
+             "the payout then follows from the enemies alone.")]
+    [FormerlySerializedAs("plunderReward")]
+    public int bonusPlunder;
+
+    /// <summary>
+    /// What victory pays: every spawned enemy's own <see cref="Enemy.plunderReward"/>, plus
+    /// <see cref="bonusPlunder"/>. Derived rather than authored, so adding an enemy to a fight
+    /// raises its payout automatically and two encounters with the same enemies can't drift apart.
+    /// </summary>
+    public int TotalPlunderReward
+    {
+        get
+        {
+            int total = bonusPlunder;
+
+            foreach (EnemyGroup group in enemies)
+            {
+                if (group == null || group.enemy == null) continue;
+
+                total += group.enemy.plunderReward * Mathf.Max(1, group.count);
+            }
+
+            return total;
+        }
+    }
 
     /// <summary>
     /// Flattens the groups into one entry per spawn slot, in order. Skips empty rows so a

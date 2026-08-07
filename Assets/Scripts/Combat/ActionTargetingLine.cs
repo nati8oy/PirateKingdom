@@ -92,12 +92,14 @@ public class ActionTargetingLine : MonoBehaviour
     [SerializeField] private string sortingLayer = "Front Near";
     [SerializeField] private int sortingOrder = 100;
 
+    [Header("Setting (mirror)")]
+    [Tooltip("Two-way mirror of GameSettings.ShowTargetingLine — the stored setting is the source of truth. " +
+             "While playing, this shows the stored value and ticking it writes through. Outside play mode it is inert.")]
+    [SerializeField] private bool showLine = true;
+
     private LineRenderer lineRenderer;
     private CombatController combatController;
     private TargetState appliedCursorState = TargetState.None;
-
-    // Mirrors GameSettings.ShowTargetingLine, refreshed on change rather than read per frame.
-    private bool showLine = true;
 
     /// <summary>
     /// The player-facing toggle, backed by <see cref="GameSettings.ShowTargetingLine"/> so it
@@ -122,14 +124,15 @@ public class ActionTargetingLine : MonoBehaviour
     }
 
     /// <summary>
-    /// Flips the setting from the component's ⋮ menu, including while playing. Here so the line
-    /// can be tested before any settings UI exists — the real toggle is the player-facing one.
+    /// Pushes an Inspector tick through to the stored setting, so the checkbox works while playing.
+    /// Guarded on play mode: outside it, OnValidate also fires on load and recompile, which would
+    /// write this component's serialized default over the player's saved choice.
     /// </summary>
-    [ContextMenu("Toggle Targeting Line Setting")]
-    private void ToggleTargetingLineSetting()
+    private void OnValidate()
     {
-        GameSettings.ShowTargetingLine = !GameSettings.ShowTargetingLine;
-        Debug.Log($"[ActionTargetingLine] Show targeting line: {GameSettings.ShowTargetingLine}", this);
+        if (!Application.isPlaying) return;
+
+        GameSettings.ShowTargetingLine = showLine;
     }
 
     private void Awake()

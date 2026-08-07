@@ -10,12 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8e1eb69199ffd4fa4b550b9fb0748be8, type: 3}
-  m_Name: Skeleton + Elite
+  m_Name: '[1x Elite] Skeleton'
   m_EditorClassIdentifier: Assembly-CSharp::EncounterDefinition
   displayName: Encounter
   enemies:
-  - enemy: {fileID: 11400000, guid: 2a8181bd0bad54fe995c0d2e7129221f, type: 2}
-    count: 1
   - enemy: {fileID: 11400000, guid: a79b1411c0bcf4b509f78c464f3bdb03, type: 2}
     count: 0
-  plunderReward: 0
+  bonusPlunder: 10

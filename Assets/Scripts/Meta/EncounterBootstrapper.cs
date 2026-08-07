@@ -24,7 +24,9 @@ using UnityEngine;
 public class EncounterBootstrapper : MonoBehaviour
 {
     [Header("What to fight")]
-    [Tooltip("Leave empty to use whatever enemies are already placed in the scene by hand.")]
+    [Tooltip("Fallback encounter, used when the RunManager has no EncounterSequence driving the run " +
+             "(or there's no run at all). The sequence wins when there is one. Leave empty to use " +
+             "whatever enemies are already placed in the scene by hand.")]
     [SerializeField] private EncounterDefinition encounter;
 
     [Header("Enemy spawning")]
@@ -49,6 +51,9 @@ public class EncounterBootstrapper : MonoBehaviour
     private readonly List<CharacterManager> spawnedEnemies = new List<CharacterManager>();
     private readonly List<CharacterManager> spawnedCrew = new List<CharacterManager>();
 
+    // Resolved once in Awake so spawning and SetEncounter can't disagree about which fight this is.
+    private EncounterDefinition activeEncounter;
+
     /// <summary>Enemies this bootstrapper spawned, in spawn order.</summary>
     public IReadOnlyList<CharacterManager> SpawnedEnemies => spawnedEnemies;
 
@@ -64,6 +69,8 @@ public class EncounterBootstrapper : MonoBehaviour
             Debug.LogError("[EncounterBootstrapper] No TurnManager in the scene — can't start a battle.");
             return;
         }
+
+        ResolveActiveEncounter();
 
         // One staging area for both: combatant components read characterData in Awake, so nothing
         // may wake until its data is assigned. See the class remarks.
@@ -179,12 +186,40 @@ public class EncounterBootstrapper : MonoBehaviour
         spawnedCrew.Add(manager);
     }
 
+    /// <summary>
+    /// The run's sequence decides the fight when there is one; otherwise the serialized fallback
+    /// keeps the scene playable on its own, which is the same "tolerate no run" rule the rest of
+    /// the meta layer follows.
+    /// </summary>
+    private void ResolveActiveEncounter()
+    {
+        activeEncounter = RunManager.Instance != null ? RunManager.Instance.GetCurrentEncounter() : null;
+
+        if (activeEncounter != null)
+        {
+            string position = RunManager.Instance.DescribeSequencePosition();
+            Debug.Log($"[EncounterBootstrapper] Encounter {position} from sequence " +
+                      $"'{RunManager.Instance.Sequence.DisplayName}': '{activeEncounter.displayName}'.");
+            return;
+        }
+
+        // A sequence that has run out (Stop) is a finished gauntlet, not a missing assignment.
+        if (RunManager.Instance != null && RunManager.Instance.Sequence != null && RunManager.Instance.HasActiveRun
+            && RunManager.Instance.Sequence.IsFinished(RunManager.Instance.Current.sequenceIndex))
+        {
+            Debug.Log($"[EncounterBootstrapper] Gauntlet '{RunManager.Instance.Sequence.DisplayName}' is complete — " +
+                      "falling back to the serialized encounter. Use Tools > Pirate Kingdom > Restart Gauntlet to run it again.");
+        }
+
+        activeEncounter = encounter;
+    }
+
     private void Start()
     {
         if (turnManager == null) return;
 
         // Set before BeginBattle so the reward is known when the battle ends.
-        turnManager.SetEncounter(encounter);
+        turnManager.SetEncounter(activeEncounter);
 
         // Every combatant exists by now (spawning happened in Awake), so the turn-order snapshot
         // is complete. BeginBattle is idempotent: if TurnManager.autoStartBattle is still ticked
@@ -194,7 +229,7 @@ public class EncounterBootstrapper : MonoBehaviour
 
     private void SpawnEnemies(Transform staging)
     {
-        if (encounter == null)
+        if (activeEncounter == null)
         {
             Debug.Log("[EncounterBootstrapper] No EncounterDefinition assigned — using the enemies already in the scene.");
             return;
@@ -206,11 +241,11 @@ public class EncounterBootstrapper : MonoBehaviour
             return;
         }
 
-        List<Enemy> toSpawn = encounter.BuildSpawnList();
+        List<Enemy> toSpawn = activeEncounter.BuildSpawnList();
 
         if (toSpawn.Count == 0)
         {
-            Debug.LogWarning($"[EncounterBootstrapper] '{encounter.displayName}' defines no enemies.");
+            Debug.LogWarning($"[EncounterBootstrapper] '{activeEncounter.displayName}' defines no enemies.");
             return;
         }
 
@@ -222,7 +257,7 @@ public class EncounterBootstrapper : MonoBehaviour
 
         if (toSpawn.Count > enemySpawnPoints.Length)
         {
-            Debug.LogWarning($"[EncounterBootstrapper] '{encounter.displayName}' wants {toSpawn.Count} enemies but " +
+            Debug.LogWarning($"[EncounterBootstrapper] '{activeEncounter.displayName}' wants {toSpawn.Count} enemies but " +
                              $"only {enemySpawnPoints.Length} spawn points exist. The extras won't appear.");
         }
 
@@ -241,7 +276,7 @@ public class EncounterBootstrapper : MonoBehaviour
             SpawnEnemy(toSpawn[i], spawnPoint, staging);
         }
 
-        Debug.Log($"[EncounterBootstrapper] Spawned {spawnedEnemies.Count} enemies for '{encounter.displayName}'.");
+        Debug.Log($"[EncounterBootstrapper] Spawned {spawnedEnemies.Count} enemies for '{activeEncounter.displayName}'.");
     }
 
     private void SpawnEnemy(Enemy enemyData, Transform spawnPoint, Transform staging)

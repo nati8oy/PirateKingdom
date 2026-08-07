@@ -42,6 +42,9 @@ public class EncounterResult
     /// <summary>The run's plunder total after <see cref="plunderAwarded"/> was added.</summary>
     public int plunderTotal;
 
+    /// <summary>Encounters won on this run, including this one. Unchanged by a defeat.</summary>
+    public int encountersSurvived;
+
     /// <summary>Survivors plus anyone who died here. Crew lost in earlier fights are excluded.</summary>
     public List<CrewOutcome> crew = new List<CrewOutcome>();
 

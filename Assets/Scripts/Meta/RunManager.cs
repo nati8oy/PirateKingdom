@@ -30,6 +30,11 @@ public class RunManager : MonoBehaviour
     [Tooltip("Crew the debug run begins with.")]
     [SerializeField] private List<Character> debugStartingCrew = new List<Character>();
 
+    [Header("Encounter Sequence")]
+    [Tooltip("Ordered gauntlet of encounters for balancing. Leave empty and the EncounterBootstrapper " +
+             "falls back to its own single EncounterDefinition. Position is RunState.sequenceIndex.")]
+    [SerializeField] private EncounterSequence encounterSequence;
+
     [Header("Run State — live, read-only")]
     [Tooltip("Serialized purely so you can watch it change in the Inspector during play. Don't hand-edit.")]
     [SerializeField] private RunState current;
@@ -62,6 +67,28 @@ public class RunManager : MonoBehaviour
 
     public RunState Current => current;
     public bool HasActiveRun => current != null;
+
+    public EncounterSequence Sequence => encounterSequence;
+
+    /// <summary>
+    /// The encounter this run is up to, or null if there's no sequence, no run, or the gauntlet has
+    /// ended. Callers fall back to their own authored definition, so the scene stays playable
+    /// without a sequence.
+    /// </summary>
+    public EncounterDefinition GetCurrentEncounter()
+    {
+        if (encounterSequence == null || current == null) return null;
+
+        return encounterSequence.GetAt(current.sequenceIndex);
+    }
+
+    /// <summary>"3/12" for logs and UI. Empty when no sequence is driving the run.</summary>
+    public string DescribeSequencePosition()
+    {
+        if (encounterSequence == null || current == null) return string.Empty;
+
+        return encounterSequence.DescribePosition(current.sequenceIndex);
+    }
 
     private bool runLoaded;
 
@@ -221,12 +248,29 @@ public class RunManager : MonoBehaviour
             playerVictory = playerVictory
         };
 
+        // Both only advance on a win — a wipe ends the run, and a retry after defeat should
+        // re-serve the encounter that killed them rather than skipping it.
+        if (playerVictory)
+        {
+            current.encountersSurvived++;
+            current.sequenceIndex++;
+        }
+
+        result.encountersSurvived = current.encountersSurvived;
+
         // Rewards are for winning only. A missing definition just means no payout — the scene is
         // still playable with enemies placed by hand.
-        if (playerVictory && encounter != null && encounter.plunderReward > 0)
+        // TotalPlunderReward sums each spawned enemy's own worth plus the encounter's bonus, so
+        // payouts follow from what was actually fought.
+        if (playerVictory && encounter != null)
         {
-            current.plunder += encounter.plunderReward;
-            result.plunderAwarded = encounter.plunderReward;
+            int payout = encounter.TotalPlunderReward;
+
+            if (payout > 0)
+            {
+                current.plunder += payout;
+                result.plunderAwarded = payout;
+            }
         }
 
         result.plunderTotal = current.plunder;
@@ -371,6 +415,57 @@ public class RunManager : MonoBehaviour
 
         File.Delete(SavePath);
         Debug.Log($"[RunManager] Save deleted. Press Play to start a fresh run from 'Debug Starting Crew'.");
+    }
+
+    /// <summary>
+    /// Editor-only. Sends the run back to the first encounter without touching the crew, so a
+    /// gauntlet can be re-run against the same party — or against an edited sequence.
+    /// </summary>
+    /// <remarks>
+    /// Exists because <c>sequenceIndex</c> persists in the save, which makes edits to the sequence
+    /// asset look like they do nothing — the same trap as 'Debug Starting Crew'. Works while
+    /// playing (patches the live run) and while stopped (patches the file), because you'll want it
+    /// in both.
+    /// </remarks>
+    [MenuItem("Tools/Pirate Kingdom/Restart Gauntlet (keep crew)")]
+    private static void RestartGauntletFromMenu()
+    {
+        if (_instance != null && _instance.current != null)
+        {
+            _instance.current.sequenceIndex = 0;
+            _instance.current.encountersSurvived = 0;
+            _instance.SaveRun();
+
+            Debug.Log("[RunManager] Gauntlet restarted on the live run — crew and their damage are untouched.");
+            return;
+        }
+
+        if (!File.Exists(SavePath))
+        {
+            Debug.Log($"[RunManager] No save at {SavePath} — nothing to restart. The next Play starts at the first encounter anyway.");
+            return;
+        }
+
+        try
+        {
+            RunState saved = JsonUtility.FromJson<RunState>(File.ReadAllText(SavePath));
+
+            if (saved == null)
+            {
+                Debug.LogWarning("[RunManager] Save could not be read — use 'Delete Run Save' instead.");
+                return;
+            }
+
+            saved.sequenceIndex = 0;
+            saved.encountersSurvived = 0;
+            File.WriteAllText(SavePath, JsonUtility.ToJson(saved, true));
+
+            Debug.Log("[RunManager] Gauntlet restarted in the save file — crew and their carried damage are untouched.");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[RunManager] Could not restart the gauntlet: {e.Message}");
+        }
     }
 
     [MenuItem("Tools/Pirate Kingdom/Log Run Save Path")]

@@ -28,13 +28,14 @@ MonoBehaviour:
   characterClass: 0
   allegiance: 1
   maxHealth: 20
-  attackPower: 10
-  defenseValue: 5
-  speed: 5
+  attackPower: 8
+  defenseValue: 11
+  speed: 6
   buffNextActionMultiplier: 2
   damageInflictedDriveMultiplier: 2.5
   damageTakenDriveMultiplier: 5
   parryBonusDriveMultiplier: 2.5
+  plunderReward: 5
   healThreshold: 0.3
   driveConfig:
     strategy: 1

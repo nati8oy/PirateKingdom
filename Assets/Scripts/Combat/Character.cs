@@ -59,9 +59,19 @@ public class Character : ScriptableObject
     [Tooltip("Drive gained on a successful parry = damage prevented x this value. Target is ~25 drive (a quarter segment) for a typical 5-damage hit.")]
     [SerializeField] public float parryBonusDriveMultiplier = 5f;
     
+    /// <remarks>
+    /// Unity serializes enums by their integer value, so these may be renamed but **must not be
+    /// reordered** — moving a member silently repoints every authored Action asset at a different
+    /// buff. Append new types at the end.
+    /// </remarks>
     public enum BuffType
     {
-        Attack,
+        /// <summary>
+        /// Modifies the to-hit roll only, never damage. Damage bonuses are drive's job — keeping
+        /// the two separate is deliberate, so a character can't stack an accuracy buff and a drive
+        /// spend into one compounded damage number.
+        /// </summary>
+        Accuracy,
         Defense,
         Health,
         Speed

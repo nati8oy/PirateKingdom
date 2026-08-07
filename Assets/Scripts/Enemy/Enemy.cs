@@ -6,8 +6,14 @@ public class Enemy : Character
     
     private EnemyDriveManager enemyDriveManager;
 
+    [Header("Rewards")]
+    [Min(0)]
+    [Tooltip("Plunder this enemy is worth. EncounterDefinition sums these across everything it " +
+             "spawns, so a fight's payout follows from what's in it rather than being set by hand.")]
+    public int plunderReward = 5;
+
     [Header("AI Behavior Settings")]
-    [SerializeField, Range(0.1f, 1.0f)] 
+    [SerializeField, Range(0.1f, 1.0f)]
     public float healThreshold = 0.3f;
     
     [Header("Drive Usage")]

@@ -1,4 +1,7 @@
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// Player-facing settings, persisted in <c>PlayerPrefs</c>.
@@ -58,4 +61,25 @@ public static class GameSettings
 
         Changed?.Invoke();
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Editor-only. Flips the setting from the top menu, playing or not — no object to select and
+    /// nothing to hunt for. `[ContextMenu]` entries on a component's ⋮ button are too easy to miss,
+    /// which is the same reason the RunManager tools live up here.
+    /// </summary>
+    [MenuItem("Tools/Pirate Kingdom/Toggle Targeting Line")]
+    private static void ToggleTargetingLineFromMenu()
+    {
+        ShowTargetingLine = !ShowTargetingLine;
+        Debug.Log($"[GameSettings] Show targeting line: {ShowTargetingLine}");
+    }
+
+    [MenuItem("Tools/Pirate Kingdom/Reset Settings To Defaults")]
+    private static void ResetSettingsFromMenu()
+    {
+        ResetToDefaults();
+        Debug.Log("[GameSettings] Settings reset to defaults.");
+    }
+#endif
 }

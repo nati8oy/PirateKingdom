@@ -12,6 +12,11 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 **Phases 1 and 2 are complete and verified in the Editor, as is the 2.5D presentation refactor.
 Phase 3 (the voyage map) is the next new work, and nothing blocks it.**
 
+**Phase B — Balancing & action additions** runs in parallel and is the user's track: combat content
+and tuning, with engineering help on request for anything needing new mechanics (damage over time,
+status effects) rather than new numbers. It's lettered, not numbered, because it has no ordering
+against 3–6.
+
 What exists and works today:
 
 | | |
@@ -578,6 +583,109 @@ a duplicate being destroyed in `Awake` would unsubscribe the real instance.
 
 *Verify:* `CombatController`'s automatic-targeting path (`useManualTargeting = false`) still finds
 valid targets after a respawn.
+
+---
+
+### Phase B — Balancing & action additions (ongoing, parallel to 3–6)
+
+**Yours, not a blocking phase.** Combat content and tuning: authoring new `Action` assets, setting
+attack/defense/health across the roster, and finding out what a crew can actually survive. It runs
+alongside the numbered phases rather than in front of them — nothing here blocks Phase 3, and
+Phase 3 doesn't block any of it.
+
+Lettered rather than numbered on purpose, so it doesn't imply an ordering against 3–6.
+
+**My side is on request.** Anything needing new mechanics rather than new numbers — damage over
+time, status effects, new `ActionType`s — comes to me. Everything authored in the Inspector is
+yours.
+
+#### Tooling that already exists for this
+
+| | |
+|---|---|
+| `EncounterSequence` | Ordered gauntlet of encounters. `repeat` per row, `RepeatLast` to hold at the hardest fight. Assign on `RunManager`. |
+| Attrition log | `EncounterFlow` logs each encounter's end health per crew member as a fraction of max, flagging anyone under `lowHealthWarning`. The curve is the thing to read, not the run length. |
+| **Tools > Pirate Kingdom > Restart Gauntlet** | Back to encounter one, crew and their damage untouched. `sequenceIndex` persists, so editing a sequence otherwise looks like it does nothing. |
+| `Enemy.plunderReward` | Per-enemy; `EncounterDefinition.TotalPlunderReward` sums them plus `bonusPlunder`. Payouts follow from what's in a fight. |
+
+#### The starting point for attack/defense
+
+The only number that matters is the **gap** between attacker and target:
+
+```
+minimum roll to hit = defenseValue - attackPower + 1     (floored at 2, since 1 always misses)
+hit chance          = (21 - minimum roll) / 20
+```
+
+**As authored today every `defenseValue` (3–5) sits below every `attackPower` (5–11), so the
+subtraction clamps and everything hits 95%.** Defense is inert, and the only misses in the game are
+natural 1s. Enemies gaining the ability to miss (see `TODO.md`) changed nothing on its own for the
+same reason.
+
+A worked baseline, anchored on **crew defense ≈ 13, crew attack ≈ 10–11**:
+
+| | Skeleton | Skeleton Elite | Skeleton Boss 2 |
+|---|---|---|---|
+| Role | Chaff / tempo | Evasive threat | Attrition wall |
+| `maxHealth` | 20 | 40 | 90 |
+| `attackPower` | 8 | 10 | 12 |
+| `defenseValue` | 11 | 17 | 14 |
+| `speed` | 6 | 12 | 4 |
+| `plunderReward` | 5 | 15 | 50 |
+| Hits crew | 75% | 85% | 95% |
+| Crew hit it | 95% | 65–70% | 80–85% |
+
+Two cautions from deriving those: **accuracy is a far sharper dial than health** at this damage
+scale, so reach for `attackPower` before `maxHealth` when something feels oppressive; and don't
+push crew hit rates far below ~60%, because with 3–4 combatants a miss costs a whole turn and
+fights get long and swingy fast.
+
+#### Damage over time — what it would touch
+
+Sketched so the cost is known, not designed. The per-turn tick it needs already exists.
+
+- `CharacterManager.activeBuffs` + `UpdateBuffsForTurn()` is the existing per-turn hook, called from
+  `TurnManager.SetCharacterTurn()`. DoT ticks belong there.
+- `Character.BuffType` currently means *stat modifier*. Recurring damage is a different kind of
+  thing and probably wants its own list rather than overloading buffs — the stacking, refresh and
+  display rules differ.
+- Ticks must go through `CharacterManager.TakeDamage()` so feedbacks, drive gain and the death path
+  all behave. **Death mid-tick is the sharp edge:** a dying `CharacterManager` destroys its
+  GameObject immediately, so anything iterating combatants while ticking has to tolerate one
+  vanishing mid-loop.
+- `Action` needs the authoring fields (damage per turn, duration, whether it stacks or refreshes).
+- Enemy AI weighting: `EnemyManager.ChooseBestAction()` scores by `ActionType`, so a new type needs
+  a weight or enemies will never pick it.
+
+#### Open items belonging to this phase
+
+Detail in `TODO.md`:
+
+- **Parry drive retune** — Inspector values still unapplied (Tephi 40→5, Black Sam 10→5, Kolo Aka 5→2.5).
+- **Tephi is undertuned** — attack 5 and the roster's lowest `buffNextActionMultiplier` (1.5).
+- **`Skelly Spear` (5–10) is in no enemy's `actionSlots`** — the Elite is its natural home.
+- **`GetModifiedAttackPower()` has no callers** — decide whether drive should affect accuracy, or delete it.
+- **Crit asymmetry** — the player's natural 20 both hits and crits; enemies roll to-hit and crit separately.
+- **Drive multipliers below ~1.5 vanish into `Mathf.Round`** on small damage ranges. Sanity-check new
+  tuning against `minDamage`, not the midpoint.
+
+**Buff actions — read these three before authoring any.** The player path works and new buff/debuff
+`Action` assets need no code, but:
+
+- **Enemy buff/debuff actions silently no-op** — `EnemyManager` applies them through a `SendMessage`
+  call that can't bind, swallowed by a bare `catch`. Fix before slotting a buff onto an enemy.
+- **`BuffType.Health` grants max health but no actual health**, and can leave a character above
+  100% when it expires. Avoid the type until it's decided; Attack, Defense and Speed are safe.
+- **`BuffType.Attack` is now `BuffType.Accuracy`** — it feeds the to-hit roll only. Damage bonuses
+  stay drive's job so the two don't compound. **Defense buffs still do nothing at all** until
+  defense values move into the band above — the to-hit roll clamps. Speed buffs work as expected.
+
+Buff icons are built — `BuffIconDisplay` on the combatant root, driven by
+`CharacterManager.BuffsChanged`. One slot per buff type, sprite plus optional turns text.
+
+*Verify:* run a gauntlet and read the attrition log — a tuned fight should cost health without
+routinely killing, and the curve across a sequence should trend downward rather than falling off a
+cliff at one encounter.
 
 ---
 

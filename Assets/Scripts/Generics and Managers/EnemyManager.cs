@@ -473,9 +473,22 @@ public class EnemyManager : MonoBehaviour
             return;
         }
     
+        // To-hit is resolved before the attack sequence starts. A miss skips the parry window
+        // entirely rather than opening one over nothing — a parry attempt is spent whether or not
+        // it lands, so making the player burn theirs on an attack that was never going to connect
+        // would be a straight loss for no decision.
+        if (!RollToHit(targetManager, out int toHitRoll))
+        {
+            ResolveMiss(targetManager, toHitRoll);
+
+            _isShowingEnemyTooltip = false;
+            _turnManager.CompleteTurn();
+            return;
+        }
+
         // Calculate damage first (before potential parry)
         float damage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
-    
+
         // Check for critical hit
         int critRoll = RollForCritical();
         if (critRoll == 20) // Natural 20 is a crit
@@ -527,8 +540,14 @@ public class EnemyManager : MonoBehaviour
         switch (_selectedAction.actionType)
         {
             case Action.ActionType.Attack:
+                if (!RollToHit(targetManager, out int toHitRoll))
+                {
+                    ResolveMiss(targetManager, toHitRoll);
+                    break;
+                }
+
                 float damage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
-                
+
                 // Check for critical hit
                 int critRoll = RollForCritical();
                 if (critRoll == 20)
@@ -668,6 +687,41 @@ public class EnemyManager : MonoBehaviour
     private int RollForCritical()
     {
         return Random.Range(1, 21); // d20 roll
+    }
+
+    /// <summary>
+    /// Enemy to-hit roll. Mirrors <see cref="CombatController"/>'s player-side rule exactly:
+    /// natural 1 always misses, natural 20 always hits, otherwise
+    /// <c>roll + attackPower >= target defense</c>.
+    /// </summary>
+    /// <remarks>
+    /// Enemies previously could not miss — they rolled a d20 for crits only, so every attack landed
+    /// unless parried. That left <c>attackPower</c> on enemy assets and <c>defenseValue</c> on crew
+    /// authored but never read.
+    /// </remarks>
+    private bool RollToHit(CharacterManager targetManager, out int attackRoll)
+    {
+        attackRoll = Random.Range(1, 21);
+
+        if (attackRoll == 1) return false;
+        if (attackRoll == 20) return true;
+
+        return attackRoll + _characterManager.AttackPower >= targetManager.DefenseValue;
+    }
+
+    /// <summary>
+    /// Shared miss resolution: tells the target, and spends any drive the enemy had committed —
+    /// a miss consumes stacks on the player's side too, so whiffing has the same cost either way.
+    /// </summary>
+    private void ResolveMiss(CharacterManager targetManager, int attackRoll)
+    {
+        Debug.Log($"[EnemyManager] {gameObject.name} rolled {attackRoll} and missed " +
+                  $"{targetManager.characterData?.characterName} (defense {targetManager.DefenseValue}).");
+
+        targetManager.Miss();
+
+        DriveManager enemyDriveManager = _characterManager.GetComponent<DriveManager>();
+        enemyDriveManager?.OnAttackPerformed();
     }
     
     // Add this method to initialize the drive manager (call it in Awake or Start)

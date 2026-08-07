@@ -227,10 +227,13 @@ third-party and should not be modified** unless explicitly requested:
   - **A missed enemy attack skips the parry sequence entirely** rather than opening a window over
     nothing. A parry attempt is spent whether or not it lands, so making the player burn theirs on
     an attack that could never connect would be a loss with no decision in it.
-  - `attackPower` affects **accuracy only, never damage** — damage comes from the action's
-    `minDamage`/`maxDamage` and drive stacks. `CharacterManager.GetModifiedAttackPower()` applies
-    the drive multiplier to attack power but **has no callers**; drive reaches damage through
-    `GetNextAttackDamageMultiplier()` instead. See `TODO.md`.
+  - **`attackPower` affects accuracy only, never damage** — and so do `BuffType.Accuracy` buffs,
+    which stack onto it in `RefreshStats()`. **Damage bonuses are drive's job alone.** Keeping the
+    two disjoint is a deliberate decision: letting accuracy buffs also raise damage was tried and
+    reverted, because it let one character compound a buff and a drive spend into a single damage
+    number and duplicated a system that already worked.
+  - `CharacterManager.GetModifiedAttackPower()` applies the drive multiplier to attack power but
+    **has no callers**; drive reaches damage through `GetNextAttackDamageMultiplier()`. See `TODO.md`.
 - **Drive system:** a 4-segment meter (`DriveMeter`, max 400, +50/turn regen) that fills from
   dealing damage, taking damage, and **parries** (per-character multipliers on `Character`).
   - **Stacking buff (the main mechanic).** A character commits segments as **drive stacks**

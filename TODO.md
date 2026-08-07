@@ -31,6 +31,29 @@ Target: a clean parry pays ~25 drive (a quarter segment) for a typical ~5-damage
 Notes on values that are *correct in code* but read as broken in play. Worth checking before
 debugging a system that "doesn't work".
 
+### ~~An "Attack" buff sounded like damage but changed accuracy~~ — RESOLVED by renaming
+`BuffType.Attack` is now **`BuffType.Accuracy`**, which is what it has always done: it feeds the
+to-hit roll and nothing else. `UpdateBuffDisplay()` and the tooltip both use `Type.ToString()`, so
+the in-game label now reads "Accuracy: +2" and stops implying damage.
+
+**Damage buffs are drive's job, deliberately.** Making accuracy buffs also raise damage was tried
+and reverted — it would have let a character stack an accuracy buff and a drive spend into one
+compounded damage number, and duplicated a system that already works. The two stay disjoint:
+
+| | Affects |
+|---|---|
+| Drive stacks | Damage — multiplicative, 1.5×–2.0× |
+| Accuracy buffs | To-hit roll — flat, additive |
+
+**Renaming enum members is safe; reordering is not.** Unity serializes enums by integer value, so
+`Accuracy` staying at position 0 keeps every authored Action asset pointing at the right buff.
+Append new types at the end — a remark on the enum says so.
+
+Still true: a *Defense* buff has a related problem — with every `defenseValue` currently below every `attackPower`
+the to-hit roll clamps at "2+", so a Defense buff changes **nothing at all** until the values move
+into the band described in `META.md` Phase B. Speed buffs work as expected — initiative is
+`Speed + Random(1,9)`, re-rolled each round.
+
 ### A low `buffNextActionMultiplier` reads as a broken drive system — resolved for Black Sam
 Black Sam was authored at **1.25** against **2.0** on Kolo Aka, Biku Bale, Skeleton and Skeleton
 Elite. Since `baseBonus = buffNextActionMultiplier - 1`, that gave him **1.25×** on the first stack
@@ -75,6 +98,42 @@ a guaranteed miss would cost the player their attempt for nothing.
 
 *Balance note:* enemy attacks now land less often than they used to, so any tuning done before this
 was against enemies that hit 100% of the time. Crew `defenseValue` is now live and worth checking.
+
+### Enemy buff and debuff actions silently do nothing
+`EnemyManager.cs:608-625` applies buffs by reflection: `HasMethod(buffTarget, "ApplyBuff")` then
+`buffTarget.SendMessage("ApplyBuff", new object[] { … })` with **four** arguments, falling back to
+`"AddBuff"` with **three**.
+
+`SendMessage` only ever passes a **single** argument. Passing an `object[]` hands the array itself
+as one parameter, which matches neither `AddBuff(BuffType, float, float)` nor any `ApplyBuff`
+overload — and `ApplyBuff` doesn't exist on `CharacterManager` at all. The call fails and the bare
+`catch` below swallows it, so there isn't even a log line.
+
+The player's path is fine: `CombatController.cs:391-398` calls `AddBuff` directly.
+
+Masked today only because no enemy has a buff or debuff in its `actionSlots`. Slot one onto the
+Elite and it no-ops. **Fix:** delete the reflection and call `buffTarget.AddBuff(...)` directly,
+matching the player path, with `-buffValue` for the debuff case. `HasMethod()` then has no callers
+and should go too.
+
+### `BuffType.Health` grants max health but no actual health
+`CharacterManager.cs:260` folds Health buffs into `MaxHealth`, and nothing adjusts `CurrentHealth`.
+So a `+10` Health buff widens the bar without healing anyone, and on expiry `MaxHealth` drops back
+with `CurrentHealth` possibly left above it — every later `TakeDamage` then reads as a character
+sitting over 100%.
+
+Decide which it should be: a shield that grants the health too (raise `CurrentHealth` by the same
+amount on apply, and clamp on expiry), or drop `Health` from the enum. **Until then don't author
+actions using it** — the other three types are safe.
+
+### `CombatController`'s buff branch dereferences `buffEffectText` unguarded
+`CombatController.cs:392` does `currentTargetManager.buffEffectText.text = …` with no null check,
+then the *next* line applies the buff. Any character whose `txt_buff_amount` reference is unassigned
+throws before `AddBuff` runs, so the buff is lost as well as the display.
+
+Worth checking on `PlayerCharacter.prefab` specifically — `txt_buff_amount` was one of the objects
+reparented under `CharacterUI` during the 2.5D conversion. Guard the line, or move the display
+update into `AddBuff` where `UpdateBuffDisplay()` already runs.
 
 ### `GetModifiedAttackPower()` has no callers
 `CharacterManager.cs:466` applies the drive multiplier to attack power, and nothing invokes it.

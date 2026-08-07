@@ -45,10 +45,16 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Feedback player for missing or dodges")]
     public MMF_Player missFeedback;
     [SerializeField] private MMF_Player parryFeedback;
+    [Tooltip("Feedback player for a buff landing on this character — the one-shot cast burst.")]
+    public MMF_Player buffFeedback;
     public MMF_Player feedbackPlayer;
 
-    
+
     public ParticleImage driveParticles;
+
+    [Tooltip("Particle shown continuously while any buff is active on this character, and stopped " +
+             "when the last one expires. Same Play/Stop pattern as driveParticles.")]
+    public ParticleImage buffParticles;
     
     [Header("Character-Specific Audio")]
     [Tooltip("MMF_Player for this character's attack audio (configure with MMF_AudioSource)")]
@@ -258,7 +264,7 @@ public class CharacterManager : MonoBehaviour
             // Authored base from the ScriptableObject + this instance's own buffs. Clamps match
             // the ones the Character asset used to apply.
             MaxHealth = Mathf.Max(1f, characterData.maxHealth + SumBuffValue(Character.BuffType.Health));
-            AttackPower = Mathf.Max(0f, characterData.attackPower + SumBuffValue(Character.BuffType.Attack));
+            AttackPower = Mathf.Max(0f, characterData.attackPower + SumBuffValue(Character.BuffType.Accuracy));
             DefenseValue = Mathf.Max(0f, characterData.defenseValue + SumBuffValue(Character.BuffType.Defense));
             Speed = Mathf.Max(0.1f, characterData.speed + SumBuffValue(Character.BuffType.Speed));
             UpdateBuffDisplay();
@@ -356,6 +362,69 @@ public class CharacterManager : MonoBehaviour
     public List<Character.ActiveBuff> GetActiveBuffs()
     {
         return new List<Character.ActiveBuff>(activeBuffs);
+    }
+
+    /// <summary>
+    /// Raised whenever this character's buffs change — applied, expired, or refreshed at a turn
+    /// boundary. Driven from <see cref="UpdateBuffDisplay"/>, which <see cref="RefreshStats"/>
+    /// already calls on every one of those paths, so displays never poll.
+    /// </summary>
+    public event System.Action BuffsChanged;
+
+    /// <summary>
+    /// Net effect of every buff and debuff of one type. Positive is a buff, negative a debuff,
+    /// zero means none active — a +2 and a -2 of the same type cancel and read as nothing.
+    /// </summary>
+    public float GetNetBuffValue(Character.BuffType type)
+    {
+        return SumBuffValue(type);
+    }
+
+    // Tracks whether buffParticles is currently running, so the sustained effect isn't restarted
+    // on every buff refresh — UpdateBuffDisplay runs on each turn boundary, not only on change.
+    private bool buffParticlesPlaying;
+
+    /// <summary>
+    /// Starts or stops the sustained buff particle to match the character's current state.
+    ///
+    /// Driven from <see cref="UpdateBuffDisplay"/> rather than from the cast site, so it stays
+    /// correct however a buff arrives or leaves — applied, expired at a turn boundary, or stripped
+    /// by drive's RemoveDebuff. Only positive buffs light it; a debuff shouldn't glow.
+    /// </summary>
+    private void RefreshBuffParticles()
+    {
+        if (buffParticles == null) return;
+
+        bool shouldPlay = false;
+
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Value > 0f)
+            {
+                shouldPlay = true;
+                break;
+            }
+        }
+
+        if (shouldPlay == buffParticlesPlaying) return;
+
+        buffParticlesPlaying = shouldPlay;
+
+        if (shouldPlay) buffParticles.Play();
+        else buffParticles.Stop();
+    }
+
+    /// <summary>Longest remaining duration among buffs of one type, or 0 if none are active.</summary>
+    public int GetBuffTurnsRemaining(Character.BuffType type)
+    {
+        int longest = 0;
+
+        foreach (var buff in activeBuffs)
+        {
+            if (buff.Type == type && buff.TurnsRemaining > longest) longest = buff.TurnsRemaining;
+        }
+
+        return longest;
     }
 
     // Call this at the beginning of each character's turn to update buffs and refresh stats
@@ -532,6 +601,14 @@ public class CharacterManager : MonoBehaviour
         // Convert float duration to turns (assuming 1 duration = 1 turn)
         int turns = Mathf.RoundToInt(duration);
         activeBuffs.Add(new Character.ActiveBuff(type, amount, turns));
+
+        // One-shot cast burst, mirroring DriveManager's driveFeedbacks. Buffs only — a debuff
+        // landing shouldn't play the "you got stronger" flourish. The sustained particle is not
+        // started here: RefreshStats below reaches UpdateBuffDisplay, which owns that state.
+        if (amount > 0f && buffFeedback != null)
+        {
+            buffFeedback.PlayFeedbacks();
+        }
         Debug.Log($"Added {(amount > 0 ? "buff" : "debuff")} to {characterData?.characterName}: {type} {amount:+0;-0} for {turns} turns");
         RefreshStats(); // Immediately update stats to reflect the new buff
     }
@@ -588,6 +665,12 @@ public class CharacterManager : MonoBehaviour
 
     public void UpdateBuffDisplay()
     {
+        // Both of these sit above the buffEffectText guard on purpose: the icons and the sustained
+        // particle must not depend on the text label being assigned. Fully qualified System.Action
+        // — a bare Action is the game's own ability ScriptableObject.
+        BuffsChanged?.Invoke();
+        RefreshBuffParticles();
+
         if (buffEffectText == null || characterData == null) return;
 
         if (activeBuffs.Count == 0)

@@ -316,9 +316,10 @@ public class CombatController : MonoBehaviour
             if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
             {
                 float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
-                
-                
-                
+
+                // Damage bonuses come from drive alone — Accuracy buffs deliberately do not touch
+                // damage, so the two systems don't stack into one another. See CLAUDE.md.
+
                 // Apply drive mode multiplier if the attacker is in drive mode
                 DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
                 if (attackerDriveManager != null)
@@ -347,7 +348,7 @@ public class CombatController : MonoBehaviour
                     Debug.Log("Critical Hit! Double damage!");
                     damage *= 2;
                 }
-                
+
                 Debug.Log($"Final damage dealt: {damage}");
                 Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
                 targetManager.TakeDamage(damage);

@@ -390,7 +390,6 @@ public class CombatController : MonoBehaviour
             break;
 
         case Action.ActionType.Buff:
-            currentTargetManager.buffEffectText.text = selectedAction.buffType.ToString() + " +" + selectedAction.buffValue;
             targetManager.AddBuff(selectedAction.buffType, selectedAction.buffValue, selectedAction.duration);
             break;
 

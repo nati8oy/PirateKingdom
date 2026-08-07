@@ -126,14 +126,19 @@ Decide which it should be: a shield that grants the health too (raise `CurrentHe
 amount on apply, and clamp on expiry), or drop `Health` from the enum. **Until then don't author
 actions using it** — the other three types are safe.
 
-### `CombatController`'s buff branch dereferences `buffEffectText` unguarded
-`CombatController.cs:392` does `currentTargetManager.buffEffectText.text = …` with no null check,
-then the *next* line applies the buff. Any character whose `txt_buff_amount` reference is unassigned
-throws before `AddBuff` runs, so the buff is lost as well as the display.
+### ~~`CombatController`'s buff branch dereferences `buffEffectText` unguarded~~ — DONE
+Fixed by deleting the text display outright. `buffEffectText` listed each buff and its remaining
+turns; `BuffIconDisplay` now shows the same information as icons, and carries the turn count next
+to each one if its optional `turnsText` is wired.
 
-Worth checking on `PlayerCharacter.prefab` specifically — `txt_buff_amount` was one of the objects
-reparented under `CharacterUI` during the 2.5D conversion. Guard the line, or move the display
-update into `AddBuff` where `UpdateBuffDisplay()` already runs.
+The field is gone from `CharacterManager`, along with the string building in `UpdateBuffDisplay()`
+and the unguarded write in `CombatController`'s Buff branch — which ran *before* `AddBuff`, so a
+missing reference lost the buff itself, not just the display.
+
+`UpdateBuffDisplay()` is now just the `BuffsChanged` event plus the sustained-particle refresh.
+
+*Editor step:* the `txt_buff_amount` GameObject under `CharacterUI` on `PlayerCharacter.prefab` is
+now unreferenced — delete it.
 
 ### `GetModifiedAttackPower()` has no callers
 `CharacterManager.cs:466` applies the drive multiplier to attack power, and nothing invokes it.

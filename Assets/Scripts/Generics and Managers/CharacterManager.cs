@@ -26,9 +26,7 @@ public class CharacterManager : MonoBehaviour
     public float Speed;
     [Tooltip("Character's position in the battle formation")]
     public int Position;
-    [Tooltip("Current buff attribute and it's amount")]
-    public TMP_Text buffEffectText;
-    
+
     [Header("UI Elements")]
     [SerializeField] private Slider healthBar;
     [SerializeField] TMP_Text characterName;
@@ -663,31 +661,20 @@ public class CharacterManager : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// Tells buff displays this character's buffs changed. Called from <see cref="RefreshStats"/>,
+    /// which runs on every path that adds, expires or strips one — so displays never poll.
+    /// </summary>
+    /// <remarks>
+    /// This used to write a text label listing each buff and its remaining turns. That was removed
+    /// in favour of <see cref="BuffIconDisplay"/>, which shows the same information as icons and
+    /// can carry the turn count next to each one via its optional turnsText.
+    /// Fully qualified System.Action — a bare Action is the game's own ability ScriptableObject.
+    /// </remarks>
     public void UpdateBuffDisplay()
     {
-        // Both of these sit above the buffEffectText guard on purpose: the icons and the sustained
-        // particle must not depend on the text label being assigned. Fully qualified System.Action
-        // — a bare Action is the game's own ability ScriptableObject.
         BuffsChanged?.Invoke();
         RefreshBuffParticles();
-
-        if (buffEffectText == null || characterData == null) return;
-
-        if (activeBuffs.Count == 0)
-        {
-            buffEffectText.text = "";
-            return;
-        }
-    
-        string buffText = "";
-        foreach (var buff in activeBuffs)
-        {
-            string buffName = buff.Type.ToString();
-            string sign = buff.Value > 0 ? "+" : "";
-            buffText += $"{buffName}: {sign}{buff.Value} ({buff.TurnsRemaining}t)\n";
-        }
-    
-        buffEffectText.text = buffText.TrimEnd('\n');
     }
     
     // Public getter for the drive manager

@@ -63,9 +63,29 @@ public class ParryVisualFeedback : MonoBehaviour
         // Initialize UI state
         if (parryWindowIndicator != null)
             parryWindowIndicator.SetActive(false);
-            
+
+        // The timer bar is a sibling of the indicator, not a child, so hiding the indicator does
+        // not hide it. Without this it sits at the fillAmount the prefab authored — a full yellow
+        // bar — because Update() only writes to it while an attack is actually incoming.
+        SetTimerBarVisible(false);
+
         if (parryStatusText != null)
             parryStatusText.text = "";
+    }
+
+    /// <summary>
+    /// Shows or hides the whole timer bar. Kept in lockstep with <see cref="parryWindowIndicator"/>
+    /// so the bar is only ever on screen while an attack is actually coming in.
+    /// </summary>
+    private void SetTimerBarVisible(bool visible)
+    {
+        if (parryTimerBar == null) return;
+
+        // Emptied on the way out so a stale fill can't flash on the next attack before
+        // StartAttackCountdown sets it.
+        if (!visible) parryTimerBar.fillAmount = 0f;
+
+        parryTimerBar.gameObject.SetActive(visible);
     }
     
     private void OnDestroy()
@@ -133,12 +153,9 @@ public class ParryVisualFeedback : MonoBehaviour
         {
             parryWindowIndicator.SetActive(false);
         }
-        
-        if (parryTimerBar != null)
-        {
-            parryTimerBar.fillAmount = 0.0f;
-        }
-        
+
+        SetTimerBarVisible(false);
+
         // Delay clearing the flag to allow success/failed events to process
         StartCoroutine(ClearParryWindowFlagDelayed());
     }
@@ -176,6 +193,9 @@ public class ParryVisualFeedback : MonoBehaviour
                 parryWindowIndicator.SetActive(false);
             }
 
+            isTrackingAttack = false;
+            SetTimerBarVisible(false);
+
             Debug.Log($"[ParryVisualFeedback] Showing PARRY FAILED on {gameObject.name}");
         }
         else
@@ -197,18 +217,20 @@ public class ParryVisualFeedback : MonoBehaviour
         // now be spent (and failed) before the window is ever open.
         isMyAttackIncoming = true;
         
+        SetTimerBarVisible(true);
+
         if (parryTimerBar != null)
         {
             parryTimerBar.fillAmount = 1.0f;
             parryTimerBar.color = parryActiveColor;
         }
-        
+
         if (parryWindowIndicator != null)
         {
             parryWindowIndicator.SetActive(true);
         }
     }
-    
+
     private void ShowFeedbackMessage(string message, Color color)
     {
         if (parryStatusText != null)
@@ -244,17 +266,14 @@ public class ParryVisualFeedback : MonoBehaviour
     public void StopAttackCountdown()
     {
         isTrackingAttack = false;
-        
-        if (parryTimerBar != null)
-        {
-            parryTimerBar.fillAmount = 0.0f;
-        }
-        
+
+        SetTimerBarVisible(false);
+
         if (parryWindowIndicator != null)
         {
             parryWindowIndicator.SetActive(false);
         }
-        
+
         Debug.Log($"[ParryVisualFeedback] Stopped attack countdown on {gameObject.name}");
     }
 }

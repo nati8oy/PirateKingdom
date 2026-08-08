@@ -27,6 +27,11 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Character's position in the battle formation")]
     public int Position;
 
+    [Header("Art")]
+    [Tooltip("The body SpriteRenderer — img_character on the prefab. Left empty, the first " +
+             "SpriteRenderer in children is used.")]
+    [SerializeField] private SpriteRenderer bodyRenderer;
+
     [Header("UI Elements")]
     [SerializeField] private Slider healthBar;
     [SerializeField] TMP_Text characterName;
@@ -105,6 +110,48 @@ public class CharacterManager : MonoBehaviour
         // reaches driveManager via UpdateBuffsForTurn(). If this were assigned in Start, whichever
         // Start happened to run second would silently skip the first turn's drive regen.
         driveManager = GetComponent<DriveManager>();
+
+        ApplyCharacterArt();
+    }
+
+    /// <summary>
+    /// Copies <see cref="Character.characterSprite"/> and <see cref="Character.characterTint"/> onto
+    /// the body renderer, so one prefab can serve every character. Safe in <c>Awake</c> because
+    /// <see cref="EncounterBootstrapper"/> assigns <c>characterData</c> under an inactive staging
+    /// parent *before* the object wakes.
+    /// </summary>
+    /// <remarks>
+    /// A null sprite deliberately leaves the renderer's art alone rather than blanking it — an
+    /// unassigned Character asset should look wrong in the Inspector, not turn the combatant
+    /// invisible mid-fight.
+    ///
+    /// The tint is written **unconditionally**, white included. That's what makes the asset the
+    /// single source of truth: a colour override left on a prefab variant no longer wins. Stop-gap
+    /// until characters are animated.
+    /// </remarks>
+    public void ApplyCharacterArt()
+    {
+        if (characterData == null) return;
+
+        if (bodyRenderer == null) bodyRenderer = GetComponentInChildren<SpriteRenderer>();
+
+        if (bodyRenderer == null)
+        {
+            if (characterData.characterSprite != null)
+            {
+                Debug.LogWarning($"[CharacterManager] '{gameObject.name}' has character art but no " +
+                                 "SpriteRenderer to put it on — assign Body Renderer, or leave the sprite empty.", this);
+            }
+
+            return;
+        }
+
+        if (characterData.characterSprite != null)
+        {
+            bodyRenderer.sprite = characterData.characterSprite;
+        }
+
+        bodyRenderer.color = characterData.characterTint;
     }
 
 

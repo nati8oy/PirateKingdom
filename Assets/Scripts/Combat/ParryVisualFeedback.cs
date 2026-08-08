@@ -185,7 +185,9 @@ public class ParryVisualFeedback : MonoBehaviour
     {
         if (isMyAttackIncoming)
         {
-            ShowFeedbackMessage("FAILED", parryFailedColor);
+            // No on-screen message for a failed parry — that was test scaffolding. A missed parry
+            // reads through the damage landing normally. Success still shows "Parry!", written by
+            // CharacterManager.Parry() to actionStatusText, which is a separate field.
 
             // The attempt is gone — stop advertising a window they can't use.
             if (parryWindowIndicator != null)
@@ -196,11 +198,11 @@ public class ParryVisualFeedback : MonoBehaviour
             isTrackingAttack = false;
             SetTimerBarVisible(false);
 
-            Debug.Log($"[ParryVisualFeedback] Showing PARRY FAILED on {gameObject.name}");
+            Debug.Log($"[ParryVisualFeedback] Parry failed on {gameObject.name}");
         }
         else
         {
-            Debug.Log($"[ParryVisualFeedback] Not showing PARRY FAILED on {gameObject.name} - isMyAttackIncoming: {isMyAttackIncoming}");
+            Debug.Log($"[ParryVisualFeedback] Ignoring parry-failed on {gameObject.name} — not this character's incoming attack.");
         }
     }
     

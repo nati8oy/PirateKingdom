@@ -45,7 +45,17 @@ public class Character : ScriptableObject
 
     [SerializeField] public CharacterClass characterClass;
     [SerializeField] public Allegiance allegiance;
-    
+
+    [Header("Art")]
+    [Tooltip("Body sprite, applied to the combatant's SpriteRenderer on spawn. Shared by crew and " +
+             "enemies since Enemy subclasses Character. Leave empty to keep whatever the prefab has.")]
+    [SerializeField] public Sprite characterSprite;
+
+    [Tooltip("Multiplied over the sprite. White is untinted. Lets several characters share one " +
+             "sprite and still read as different — a red Skeleton Elite against a grey Skeleton.")]
+    [SerializeField] public Color characterTint = Color.white;
+
+
     [Header("Stats")]
     [SerializeField] public float maxHealth = 100f;
     [SerializeField] public float attackPower = 10f;

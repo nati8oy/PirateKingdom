@@ -27,6 +27,8 @@ MonoBehaviour:
   deathSoundEffect: {fileID: 0}
   characterClass: 2
   allegiance: 0
+  characterSprite: {fileID: -779178000821955330, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
+  characterTint: {r: 1, g: 1, b: 1, a: 1}
   maxHealth: 26
   attackPower: 11
   defenseValue: 13

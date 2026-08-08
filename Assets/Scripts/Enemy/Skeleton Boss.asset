@@ -13,18 +13,18 @@ MonoBehaviour:
   m_Name: Skeleton Boss
   m_EditorClassIdentifier: 
   id: skeleton_boss_2
-  characterName: Killswitch
+  characterName: Marauder
   actionSlots:
   - {fileID: 11400000, guid: 73a4ecfd977dd472f9765f6ca8453fcf, type: 2}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: 9e8bb39a465cb4802bf54505ff6f6780, type: 2}
+  - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
   availableActions: []
   level: 1
   reputation: 0
-  deathSoundEffect: {fileID: 0}
+  deathSoundEffect: {fileID: 8300000, guid: 875d9a7457f5d4337b5ff614ebfeb3fb, type: 3}
   characterClass: 0
   allegiance: 1
   characterSprite: {fileID: -3247113975369345124, guid: 7d0b53df382fd499da11fc49389a692a, type: 3}
@@ -40,16 +40,16 @@ MonoBehaviour:
   plunderReward: 50
   healThreshold: 0.3
   driveConfig:
-    strategy: 0
-    healthThreshold: 0.5
-    usageChance: 0.5
+    strategy: 1
+    healthThreshold: 0.25
+    usageChance: 0.4
     preferredAction: 0
     minimumSegmentsToUse: 1
     stacksPerBuff: 2
   showDebugInfo: 0
-  targetingStrategy: 0
+  targetingStrategy: 2
   attackWeight: 0.7
-  healWeight: 0.9
+  healWeight: 0.25
   buffWeight: 0.15
   debuffWeight: 0.2
   randomnessAmount: 0.1

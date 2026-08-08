@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5389001eb578f43918865af7cc0f8a4e, type: 3}
-  m_Name: Skelly Spear
+  m_Name: Kill Switch
   m_EditorClassIdentifier: 
   id: skelly_spear
-  actionName: Skelly Spear
+  actionName: Kill Switch
   actionType: 0
   targetType: 0
-  cooldown: 1
-  actionIcon: {fileID: 0}
-  attackWindupTime: 2
-  minDamage: 5
-  maxDamage: 10
+  cooldown: 2
+  actionIcon: {fileID: -5445213938275925332, guid: 921627bbf9e17494c9462e2da1acb238, type: 3}
+  attackWindupTime: 1.25
+  minDamage: 10
+  maxDamage: 15
   minHeal: 0
   maxHeal: 0
   buffValue: 0

@@ -82,6 +82,13 @@ public class TurnManager : MonoBehaviour
         }
 
         battleStarted = true;
+        battleEnded = false;
+
+        // A fight starts with no end screen, always. Don't rely on the scene's authored state:
+        // these panels are turned on at runtime, and anything that restarts a battle without a
+        // fresh scene load (or reloads into a surviving Canvas) would otherwise begin with the
+        // previous result still on screen.
+        HideEndBattleUI();
 
         // Opened here rather than in the bootstrapper so it happens exactly once per fight whether
         // the bootstrapper or autoStartBattle owns the start.
@@ -117,6 +124,20 @@ public class TurnManager : MonoBehaviour
             playerTurn.text = currentCharacterTurn.characterData.name + "'s" + " Turn";
         }
         roundCounter.text = "Round " + roundCounterInt;
+    }
+
+    /// <summary>
+    /// Clears both end-of-battle panels and their shared result text, plus re-enables the action
+    /// bar that <see cref="EndBattle"/> switches off.
+    /// </summary>
+    private void HideEndBattleUI()
+    {
+        if (victoryUI != null) victoryUI.SetActive(false);
+        if (defeatUI != null) defeatUI.SetActive(false);
+        if (battleResultText != null) battleResultText.gameObject.SetActive(false);
+
+        // EndBattle() disables this and nothing turned it back on.
+        if (actionsManager != null) actionsManager.gameObject.SetActive(true);
     }
 
     private void CheckBattleEndConditions()

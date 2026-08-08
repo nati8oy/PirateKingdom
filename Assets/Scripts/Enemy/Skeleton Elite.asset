@@ -24,7 +24,7 @@ MonoBehaviour:
   availableActions: []
   level: 1
   reputation: 0
-  deathSoundEffect: {fileID: 0}
+  deathSoundEffect: {fileID: 8300000, guid: 614d38b7e72914c12b227e2a87b44442, type: 3}
   characterClass: 0
   allegiance: 1
   characterSprite: {fileID: 3671900364904746485, guid: 7d0b53df382fd499da11fc49389a692a, type: 3}

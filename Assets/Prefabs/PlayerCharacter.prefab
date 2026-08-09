@@ -8181,6 +8181,7 @@ MonoBehaviour:
   characterName: {fileID: 628673213663764507}
   actionStatusText: {fileID: 1656511942984017652}
   turnMarker: {fileID: 5687122472208313648}
+  targetIndicator: {fileID: 8680402382813641507}
   dealDamageFeedback: {fileID: 885933774631715721}
   healFeedback: {fileID: 4983943415798328104}
   missFeedback: {fileID: 8656548966867776500}

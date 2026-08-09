@@ -40,6 +40,19 @@ public class CharacterManager : MonoBehaviour
     
     public Image turnMarker;
 
+    [Tooltip("img_target_indicator on the prefab. Shown while an enemy is telegraphing an attack on " +
+             "this character, hidden once the attack resolves.")]
+    [SerializeField] private GameObject targetIndicator;
+
+    /// <summary>
+    /// Marks this character as the victim of an incoming attack. Called by the attacking
+    /// <see cref="EnemyManager"/> before its windup, and cleared when the attack resolves.
+    /// </summary>
+    public void SetTargeted(bool targeted)
+    {
+        if (targetIndicator != null) targetIndicator.SetActive(targeted);
+    }
+
     [Header("Feedback Players")]
     [Tooltip("Feeback player for damage")]
     public MMF_Player dealDamageFeedback;

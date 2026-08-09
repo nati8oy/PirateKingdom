@@ -234,8 +234,14 @@ third-party and should not be modified** unless explicitly requested:
     number and duplicated a system that already worked.
   - `CharacterManager.GetModifiedAttackPower()` applies the drive multiplier to attack power but
     **has no callers**; drive reaches damage through `GetNextAttackDamageMultiplier()`. See `TODO.md`.
-- **Drive system:** a 4-segment meter (`DriveMeter`, max 400, +50/turn regen) that fills from
-  dealing damage, taking damage, and **parries** (per-character multipliers on `Character`).
+- **Drive system:** a 4-segment meter that fills from dealing damage, taking damage, and **parries**
+  (per-character multipliers on `Character`).
+  - **`DriveMeter` is a serialized field inside `DriveManager`, so its values live on the prefab, not
+    in code.** `PlayerCharacter.prefab` currently has `maxDriveValue 400`, `totalSegments 4`,
+    `regenerationPerTurn 32` — note the regen differs from the class default of 50, which is the
+    proof that editing `DriveMeter.cs` does nothing to existing prefabs. Change the meter on the
+    prefab. Segment size is `maxDriveValue / totalSegments`, so changing the segment count without
+    changing the max silently rescales every drive-gain value in the game.
   - **Stacking buff (the main mechanic).** A character commits segments as **drive stacks**
     (`DriveManager.driveStacks`, one segment each via `TryAddDriveStack()`) before acting. Stacks
     apply a **diminishing-returns multiplier** to the next **attack _or_ heal**:
@@ -254,11 +260,24 @@ third-party and should not be modified** unless explicitly requested:
     the start of the enemy turn) picks how many stacks to commit per its `EnemyDriveConfig`
     (`strategy`, `stacksPerBuff`, `minimumSegmentsToUse`, `healthThreshold`, `usageChance`) authored
     on the `Enemy` ScriptableObject.
-  - **Utility `DriveAction`s** (`HealSelf` / `RemoveDebuff` / `ReduceCooldown`) still exist as
-    separate one-shot spends via `TryUseDriveAction()` (used by `DriveUI` buttons and the enemy
-    low-health heal branch). `BuffNextAttack` now just adds a stack. `IsDriveMode` /
-    `NextAttackBuffed` / `EnterDriveMode()` are retained only as `driveStacks`-backed shims —
-    prefer the stacking API.
+  - **Utility `DriveAction`s are effectively unreachable.** `HealSelf` / `RemoveDebuff` /
+    `ReduceCooldown` exist as one-shot spends via `TryUseDriveAction()`, but the only player-facing
+    route — `DriveUI.CreateActionButtons()` — **has no callers**, and `DriveUI` isn't in the scene.
+    The only live caller is `EnemyDriveManager`'s low-health heal branch. `ExecuteReduceCooldown()`
+    is additionally a **stub** that charges segments and changes nothing. See `TODO.md`, and
+    "Different ways to use drive" there for the direction this could go.
+  - `BuffNextAttack` now just adds a stack. `IsDriveMode` / `NextAttackBuffed` / `EnterDriveMode()`
+    are retained only as `driveStacks`-backed shims — prefer the stacking API.
+- **Target telegraph:** before an enemy attacks, it shows `img_target_indicator` on its victim for
+  `EnemyManager.targetHighlightDuration`, then starts the attack.
+  - The pause sits **before** the attack, not inside it. The windup is already the parry cue; this
+    is the separate "who" cue, and folding them together blurs two signals into one.
+  - `EnemyManager.TelegraphThenAct()` is **the first place an enemy turn yields**, so it's the first
+    that has to cope with the target dying or the battle ending mid-flight.
+  - `CharacterManager.SetTargeted()` is the only thing that touches the indicator. `ClearHighlight()`
+    runs on every exit — attack resolved, attack missed, target died during the telegraph, no
+    pending target, and `OnDisable`. That last one matters: an enemy killed mid-telegraph would
+    otherwise leave its victim highlighted permanently.
 - **Parry:** enemy attacks have a windup; `EnemyAttack` opens a `ParrySystem` window on the target.
   A well-timed parry input (routed through the singleton `ParryInputManager`) negates most damage
   (**25% still lands**) and grants bonus drive.

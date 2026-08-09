@@ -8,6 +8,11 @@ public class EnemyManager : MonoBehaviour
     // second, name-keyed cooldown dictionary that nothing ever called.
     [SerializeField] private Enemy enemyData;
     [SerializeField] private float enemyActionDelay = 1.25f;
+
+    [Tooltip("Seconds the target indicator shows on the victim before this enemy starts its attack. " +
+             "0 skips the telegraph entirely.")]
+    [SerializeField] private float targetHighlightDuration = 0.6f;
+
     [Header("Attack System")]
     [SerializeField] private bool useParrySystem = true;
     private readonly List<GameObject> _playerCharacters = new List<GameObject>();
@@ -15,6 +20,9 @@ public class EnemyManager : MonoBehaviour
     private TurnManager _turnManager;
     private EnemyAttack _enemyAttack;
     private CharacterManager _characterManager;
+
+    // Who this enemy is currently telegraphing at, so the indicator can be cleared on every exit.
+    private CharacterManager _highlightedTarget;
 
     // Add flag to track if we're currently showing enemy tooltip
     private bool _isShowingEnemyTooltip = false;
@@ -177,7 +185,7 @@ public class EnemyManager : MonoBehaviour
             // parryable path finishes asynchronously.
             _characterManager.UseAction(_selectedAction);
 
-            PerformAction(target);
+            StartCoroutine(TelegraphThenAct(target));
         }
         else
         {
@@ -187,6 +195,53 @@ public class EnemyManager : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Marks the victim, holds for <see cref="targetHighlightDuration"/> so the player can read who
+    /// is about to be hit, then runs the action. The pause sits before the attack rather than
+    /// inside it so it reads as a separate beat from the windup — the windup is the parry cue, this
+    /// is the "who" cue.
+    /// </summary>
+    private System.Collections.IEnumerator TelegraphThenAct(CharacterManager target)
+    {
+        HighlightTarget(target);
+
+        if (targetHighlightDuration > 0f)
+        {
+            yield return new WaitForSeconds(targetHighlightDuration);
+        }
+
+        // The target can die, or the battle can end, during the pause — this is the first place in
+        // the enemy turn that yields, so it's the first place that has to cope with it.
+        if (target == null || target.gameObject == null)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name}'s target vanished during the telegraph — completing turn.");
+            ClearHighlight();
+            _isShowingEnemyTooltip = false;
+            _turnManager.CompleteTurn();
+            yield break;
+        }
+
+        PerformAction(target);
+    }
+
+    private void HighlightTarget(CharacterManager target)
+    {
+        ClearHighlight();
+
+        _highlightedTarget = target;
+        if (target != null) target.SetTargeted(true);
+    }
+
+    /// <summary>Clears this enemy's highlight. Safe to call when nothing is highlighted.</summary>
+    private void ClearHighlight()
+    {
+        if (_highlightedTarget != null) _highlightedTarget.SetTargeted(false);
+        _highlightedTarget = null;
+    }
+
+    // An enemy killed mid-telegraph would otherwise leave its victim highlighted for good.
+    private void OnDisable() => ClearHighlight();
+
     public void RefreshTargetList()
     {
         _playerCharacters.Clear();
@@ -481,6 +536,7 @@ public class EnemyManager : MonoBehaviour
         {
             ResolveMiss(targetManager, toHitRoll);
 
+            ClearHighlight();
             _isShowingEnemyTooltip = false;
             _turnManager.CompleteTurn();
             return;
@@ -635,10 +691,11 @@ public class EnemyManager : MonoBehaviour
         }
         
         // Clear tooltip flag and complete turn after action
+        ClearHighlight();
         _isShowingEnemyTooltip = false;
         _turnManager.CompleteTurn();
     }
-    
+
     private bool HasMethod(object obj, string methodName)
     {
         return obj.GetType().GetMethod(methodName) != null;
@@ -654,6 +711,7 @@ public class EnemyManager : MonoBehaviour
         if (_pendingTarget == null)
         {
             Debug.LogWarning("[EnemyManager] OnAttackComplete called but no pending target!");
+            ClearHighlight();
             _isShowingEnemyTooltip = false;
             _turnManager.CompleteTurn();
             return;
@@ -675,7 +733,8 @@ public class EnemyManager : MonoBehaviour
             Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried! Reduced damage: {reducedDamage:F1} ({parryDamageReduction * 100}% of {_pendingDamage:F1})");
         }
 
-        // Clear pending data and tooltip flag
+        // Clear pending data, the target highlight and the tooltip flag
+        ClearHighlight();
         _pendingDamage = 0f;
         _pendingTarget = null;
         _isShowingEnemyTooltip = false;

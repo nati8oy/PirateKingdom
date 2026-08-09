@@ -9,13 +9,20 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 ## 0. Status — read this first
 
-**Phases 1 and 2 are complete and verified in the Editor, as is the 2.5D presentation refactor.
-Phase 3 (the voyage map) is the next new work, and nothing blocks it.**
+**Phases 1 and 2 are complete and verified in the Editor, as is the 2.5D presentation refactor.**
+
+**Phase C — Turn sequencing & impact effects is the next work.** Tunable time in combat: an authored
+per-turn rhythm every character follows, and an authored impact (sprite animation, feedback, or both)
+when an attack lands or is parried. Deliberately scoped to add time *around* resolution rather than
+refactor it, so it doesn't touch damage, death or the parry system.
+
+**Phase 3 — the voyage map** is the next *meta-layer* work and nothing blocks it; it's simply queued
+behind C.
 
 **Phase B — Balancing & action additions** runs in parallel and is the user's track: combat content
 and tuning, with engineering help on request for anything needing new mechanics (damage over time,
-status effects) rather than new numbers. It's lettered, not numbered, because it has no ordering
-against 3–6.
+status effects) rather than new numbers. B and C are lettered, not numbered, because neither has an
+ordering against 3–6.
 
 What exists and works today:
 
@@ -586,6 +593,121 @@ valid targets after a respawn.
 
 ---
 
+### Phase C — Turn sequencing & impact effects ⬅ NEXT
+
+**Goal:** put tunable time into combat. Every character's turn follows the same authored rhythm —
+action, attack animation, a beat to show lasting effects, a beat before the next character — and the
+moment an attack lands or is parried plays an authored impact that can be a sprite animation, a
+feedback, or both.
+
+Lettered like Phase B because it's combat presentation, not part of the meta-layer sequence. It
+doesn't block Phase 3 and Phase 3 doesn't block it, but it's the next thing being worked on.
+
+#### What already exists (this is a unification, not a new system)
+
+Three sequencers are already in the project and none of them talk to each other:
+
+| Where | What it does |
+|---|---|
+| `MMF_Player` | A real sequencer already — every feedback has `Timing.InitialDelay`, plus `MMF_Pause` and `MMF_Events`. ~25 on the character prefab. |
+| `EnemyAttack.ExecuteAttackSequence()` | A hand-written coroutine timeline: windup → parry window offset → resolve. Hardcoded. |
+| `TurnManager.actionDelay` | Serialized and **never read**. Dead field, and exactly the hook this phase needs. |
+
+The player's attack has no timeline at all — `CombatController.PerformAction()` rolls, damages, plays
+feedbacks and completes the turn inside one frame.
+
+#### The design boundary — read before building
+
+**Presentation order is tunable. Resolution order is not.** Gameplay resolution stays exactly where
+it is today; this phase only adds *time around it*. If the asset ever lets you drag "apply damage"
+above "roll to hit", you get bugs that present as timing problems and are miserable to diagnose.
+
+That constraint is what keeps this a tuning tool rather than a scripting language, and it's why this
+phase is roughly a day rather than a week: **no async refactor of damage, death or the parry
+system.**
+
+#### C1 — `TurnSequence`
+
+One ScriptableObject on `TurnManager`, reused by every character so the whole fight keeps one
+rhythm. An ordered list of phases, each with a `duration`:
+
+| Kind | What it does |
+|---|---|
+| `PlayFeedback` | Plays a named MMF slot on the acting character (attack / heal / buff / …), optionally waiting for completion |
+| `Hold` | Waits. The space between characters, and where lasting effects on the target are shown. |
+| `Upkeep` | Runs the existing `CharacterManager.OnTurnComplete()` — buffs tick and expire, cooldowns, drive — and fires expiry feedbacks |
+
+Authoring the sequence from the brief looks like:
+
+```
+1. PlayFeedback  attack   0.8s
+2. Hold                   0.6s   <- lasting effects (stun, DoT) show here
+3. Upkeep                 0.4s   <- "buff expired" plays here
+```
+
+Rows can be reordered, retimed, added or removed. **Handover is implicit at the end of the list**
+rather than a phase, so it can't be accidentally reordered into the middle.
+
+`CompleteTurn()` becomes a coroutine that walks the sequence and then does the existing advance.
+Three guards, all small:
+
+- **Re-entrancy.** A second `CompleteTurn()` while a sequence runs would double-advance
+  `currentTurnIndex`. One bool.
+- **Battle end mid-sequence.** If the last enemy dies during the gap, the sequence must stop rather
+  than start the next character's turn.
+- **`OnTurnComplete()` moves** out of the top of `CompleteTurn()` into the `Upkeep` phase, so buff
+  expiry happens at the beat its feedback plays on. Nothing else runs in between, so it's safe.
+
+Plus one new MMF slot on `CharacterManager` for the buff-expiry feedback, wired like `buffFeedback`.
+
+#### C2 — Impact effects
+
+A separate beat from turn handover: impacts fire **when an attack resolves**, which can happen more
+than once per turn and, for enemies, mid-windup. So it can't live on `TurnSequence`.
+
+`CombatFeel` ScriptableObject at `Assets/Resources/CombatFeel.asset`, reached via
+`CombatFeel.Instance` — same `Resources.Load` pattern as `ContentDatabase`, so `CharacterManager`
+finds it without per-prefab wiring. Maps outcome to effect:
+
+| Outcome | Fires from |
+|---|---|
+| `Hit` | `CharacterManager.TakeDamage()` |
+| `Crit` | same, when the attack rolled a natural 20 |
+| `Parry` | `TakeDamage(wasParried: true)` / `CharacterManager.Parry()` |
+| `Miss` | `CharacterManager.Miss()` |
+
+Each entry is an **`ImpactEffect`**, and every field is optional so it can be a sprite animation, a
+feedback, or both:
+
+- `impactPrefab` — spawned at the target, self-destructing after `lifetime`. Carries whatever you
+  want: an `Animator`, a sprite sequence, a `ParticleSystem`, its own `MMF_Player`.
+  `PF_PFX_hit.prefab` is the existing example of this idiom.
+- `feedbackSlot` — an MMF_Player already on the target's `CharacterManager`
+- `lifetime`, `offset`
+
+**Deliberately not built now:** per-character or per-weapon impact overrides (a pistol shot vs a
+cutlass). The `Action` asset is the natural place for an override field when it's wanted — the
+lookup is written so adding one later doesn't change call sites.
+
+#### What this phase deliberately does not do
+
+No async refactor of combat resolution. Damage, death, drive and the parry system keep their current
+synchronous flow. `EnemyAttack`'s coroutine already calls `CompleteTurn()` when it finishes, so the
+turn sequence runs *after* it and the two never collide — **nothing about parry needs touching.**
+
+#### Known sharp edge
+
+**Death destroys the GameObject immediately.** A sequence or impact holding a target reference must
+tolerate it vanishing mid-run. Same edge already flagged for damage over time in Phase B.
+
+*Verify:* every character's turn should have the same visible rhythm, with a readable gap between
+characters rather than an instant cut. Reordering rows in the `TurnSequence` asset should visibly
+change that rhythm with no code edit. Landing a hit and parrying one should play different impacts,
+and killing the last enemy mid-sequence should end the battle cleanly rather than starting another
+character's turn.
+
+---
+
 ### Phase B — Balancing & action additions (ongoing, parallel to 3–6)
 
 **Yours, not a blocking phase.** Combat content and tuning: authoring new `Action` assets, setting
@@ -689,7 +811,7 @@ cliff at one encounter.
 
 ---
 
-### Phase 3 — The voyage map ⬅ NEXT, not started
+### Phase 3 — The voyage map — queued behind Phase C, not started
 `MapGraph` + seeded generator, `Voyage.unity`, node selection, scene transitions, save/resume.
 Node types: Fight, Elite, Port, Event, Boss.
 

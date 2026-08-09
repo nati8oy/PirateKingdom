@@ -265,6 +265,20 @@ nothing should produce a second instance any more. The `OnEnable`/`OnDisable` gu
 - `Players characters` (the old `GridLayoutGroup` container in `Encounter.unity`) is disabled rather
   than deleted, and `Player Crew` is an empty leftover RectTransform root. Both can go.
 
+### `ParryVisualFeedback`'s message path is now unused
+Removing the test-only "FAILED" message left `ShowFeedbackMessage()`, `DisplayFeedbackCoroutine()`
+and four serialized fields (`parryStatusText`, `parrySuccessColor`, `parryFailedColor`,
+`feedbackDisplayTime`) with no live caller — the success `PARRY!` line above it was already
+commented out.
+
+**Not deleted on purpose:** `parryStatusText` is wired to `txt_parry_status` under `CharacterUI` on
+the prefab, and removing the field would silently orphan a UI object that's the user's to manage.
+Either delete both together, or keep the path for Phase C, where an authored impact effect on a
+parry is a natural place to reuse it.
+
+Note the successful-parry `"Parry!"` text is **not** part of this path — it comes from
+`CharacterManager.Parry()` writing `actionStatusText`, a separate field.
+
 ### Dead code and data
 - `ParrySystem.parryDriveBonus` / `ParryDriveBonus` (`ParrySystem.cs:8,32,51`) is cached in
   `Awake` but never used — `PerformSuccessfulParry` re-reads `characterData` directly. Delete.

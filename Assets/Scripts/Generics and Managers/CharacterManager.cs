@@ -27,6 +27,11 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Character's position in the battle formation")]
     public int Position;
 
+    [Header("Art")]
+    [Tooltip("The body SpriteRenderer — img_character on the prefab. Left empty, the first " +
+             "SpriteRenderer in children is used.")]
+    [SerializeField] private SpriteRenderer bodyRenderer;
+
     [Header("UI Elements")]
     [SerializeField] private Slider healthBar;
     [SerializeField] TMP_Text characterName;
@@ -105,6 +110,48 @@ public class CharacterManager : MonoBehaviour
         // reaches driveManager via UpdateBuffsForTurn(). If this were assigned in Start, whichever
         // Start happened to run second would silently skip the first turn's drive regen.
         driveManager = GetComponent<DriveManager>();
+
+        ApplyCharacterArt();
+    }
+
+    /// <summary>
+    /// Copies <see cref="Character.characterSprite"/> and <see cref="Character.characterTint"/> onto
+    /// the body renderer, so one prefab can serve every character. Safe in <c>Awake</c> because
+    /// <see cref="EncounterBootstrapper"/> assigns <c>characterData</c> under an inactive staging
+    /// parent *before* the object wakes.
+    /// </summary>
+    /// <remarks>
+    /// A null sprite deliberately leaves the renderer's art alone rather than blanking it — an
+    /// unassigned Character asset should look wrong in the Inspector, not turn the combatant
+    /// invisible mid-fight.
+    ///
+    /// The tint is written **unconditionally**, white included. That's what makes the asset the
+    /// single source of truth: a colour override left on a prefab variant no longer wins. Stop-gap
+    /// until characters are animated.
+    /// </remarks>
+    public void ApplyCharacterArt()
+    {
+        if (characterData == null) return;
+
+        if (bodyRenderer == null) bodyRenderer = GetComponentInChildren<SpriteRenderer>();
+
+        if (bodyRenderer == null)
+        {
+            if (characterData.characterSprite != null)
+            {
+                Debug.LogWarning($"[CharacterManager] '{gameObject.name}' has character art but no " +
+                                 "SpriteRenderer to put it on — assign Body Renderer, or leave the sprite empty.", this);
+            }
+
+            return;
+        }
+
+        if (characterData.characterSprite != null)
+        {
+            bodyRenderer.sprite = characterData.characterSprite;
+        }
+
+        bodyRenderer.color = characterData.characterTint;
     }
 
 
@@ -179,26 +226,52 @@ public class CharacterManager : MonoBehaviour
         // First try to use the AudioClip from the Character scriptable object
         if (characterData != null && characterData.deathSoundEffect != null)
         {
-            // Get or create an AudioSource component
-            AudioSource audioSource = GetComponent<AudioSource>();
-            if (audioSource == null)
-            {
-                audioSource = gameObject.AddComponent<AudioSource>();
-            }
-            
-            audioSource.PlayOneShot(characterData.deathSoundEffect);
+            // Played on a detached object, NOT an AudioSource on this one: the caller destroys this
+            // GameObject on the next line, which would kill the clip a few milliseconds in. Delaying
+            // the destroy instead is not an option — battle-end polling counts living combatants by
+            // tag, so a lingering corpse would read as still alive.
+            PlayDetachedOneShot(characterData.deathSoundEffect, transform.position);
             Debug.Log($"Playing death sound from scriptable object for {characterData.characterName}");
         }
         // Fallback to MMF_Player if no AudioClip is set in scriptable object
         else if (deathAudioFeedback != null)
         {
+            // Known limitation: this player lives on the dying object, so it has the same problem
+            // the branch above solves and will usually be cut off. Assign deathSoundEffect on the
+            // Character asset to get a reliable death sound.
             deathAudioFeedback.PlayFeedbacks();
-            Debug.Log($"Playing death sound from MMF_Player for {characterData?.characterName ?? gameObject.name}");
+            Debug.Log($"Playing death sound from MMF_Player for {characterData?.characterName ?? gameObject.name} " +
+                      "— this is cut short by the object being destroyed; prefer deathSoundEffect on the asset.");
         }
         else
         {
             Debug.LogWarning($"No death sound configured for {characterData?.characterName ?? gameObject.name}");
         }
+    }
+
+    /// <summary>
+    /// Plays a clip on a throwaway GameObject that outlives the caller, then cleans itself up.
+    /// For sounds that fire as their own object is destroyed.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>AudioSource.PlayClipAtPoint</c>, which spawns a 3D source: the camera sits 10 units
+    /// off the combat plane, so a positional source would be attenuated by distance for no reason.
+    /// This matches the character prefab's own audio, which is 2D (<c>SpatialBlend: 0</c>).
+    /// </remarks>
+    private static void PlayDetachedOneShot(AudioClip clip, Vector3 position, float volume = 1f)
+    {
+        if (clip == null) return;
+
+        GameObject holder = new GameObject($"~OneShot_{clip.name}");
+        holder.transform.position = position;
+
+        AudioSource source = holder.AddComponent<AudioSource>();
+        source.clip = clip;
+        source.volume = volume;
+        source.spatialBlend = 0f;
+        source.Play();
+
+        Destroy(holder, clip.length + 0.1f);
     }
 
     /// <summary>

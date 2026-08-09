@@ -24,9 +24,11 @@ MonoBehaviour:
   availableActions: []
   level: 1
   reputation: 0
-  deathSoundEffect: {fileID: 0}
+  deathSoundEffect: {fileID: 8300000, guid: 65f754434b55a4f009463d476f5e14e1, type: 3}
   characterClass: 2
   allegiance: 0
+  characterSprite: {fileID: -779178000821955330, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
+  characterTint: {r: 1, g: 1, b: 1, a: 1}
   maxHealth: 26
   attackPower: 11
   defenseValue: 13

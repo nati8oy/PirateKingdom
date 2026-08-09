@@ -1,10 +1,25 @@
 fileFormatVersion: 2
-guid: 4d22cd99bb40d4439a5a2bab8e187e7d
+guid: 921627bbf9e17494c9462e2da1acb238
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -673306825874429820
-    second: Salt_0
+      213: -5445213938275925332
+    second: william-tell-skull_0
+  - first:
+      213: 6505964382562396999
+    second: william-tell-skull_1
+  - first:
+      213: 8570324790139808609
+    second: william-tell-skull_2
+  - first:
+      213: -367360485004128811
+    second: william-tell-skull_3
+  - first:
+      213: -5360446617800934645
+    second: william-tell-skull_4
+  - first:
+      213: 8447072083551266627
+    second: william-tell-skull_5
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -51,7 +66,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 16
+  spritePixelsToUnits: 100
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -100,23 +115,23 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Salt_0
+      name: william-tell-skull_0
       rect:
         serializedVersion: 2
-        x: 8
+        x: 0
         y: 0
-        width: 96
-        height: 200
+        width: 512
+        height: 512
       alignment: 0
       pivot: {x: 0.5, y: 0.5}
-      border: {x: 13, y: 0, z: 14, w: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
-      tessellationDetail: -1
+      tessellationDetail: 0
       bones: []
-      spriteID: 488a8ea520fe7a6f0800000000000000
-      internalID: -673306825874429820
+      spriteID: a4817d2f604d749a2b042fea4f94a874
+      internalID: -5445213938275925332
       vertices: []
       indices: 
       edges: []
@@ -125,7 +140,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 9019f43b64f5e4da294d5fb52c96a808
+    spriteID: caef817c90da34542b26a0c8d5b546cc
     internalID: 0
     vertices: []
     indices: 
@@ -133,9 +148,11 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries: []
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":512.0,"y":512.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":2,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
-      Salt_0: -673306825874429820
+      william-tell-skull_0: -5445213938275925332
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

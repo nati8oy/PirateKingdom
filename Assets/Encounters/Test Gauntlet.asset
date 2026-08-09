@@ -14,6 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EncounterSequence
   displayName: Gauntlet
   steps:
+  - encounter: {fileID: 11400000, guid: 6d09f4639cfbd41f7b0154bccdc9b7e8, type: 2}
+    repeat: 0
   - encounter: {fileID: 11400000, guid: aa4805fb2fd6b4c5089dce5229109168, type: 2}
     repeat: 0
   - encounter: {fileID: 11400000, guid: 7567e7eb88cc84c0ba1a52c8bf37a553, type: 2}

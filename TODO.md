@@ -11,18 +11,20 @@ that's due.
 
 ## Outstanding right now
 
-### Parry drive retune — Inspector values not yet applied
-The code side is done (`Character.cs` default is now `5f`), but **existing assets keep their
-serialized values**, so these must be set by hand in the Inspector:
+### Parry drive retune — mostly applied, one asset left
+`Character.cs`'s default is `5f`, but existing assets keep their serialized values, so each has to be
+set by hand. Current state:
 
-| Asset | `parryBonusDriveMultiplier` | From → To |
+| Asset | `parryBonusDriveMultiplier` | Note |
 |---|---|---|
-| `Assets/Scripts/Characters/Tephi.asset` | was the untouched `40f` default | 40 → **5** |
-| `Assets/Scripts/Characters/Black Sam.asset` | 2× over target | 10 → **5** |
-| `Assets/Scripts/Characters/Kolo Aka.asset` | offsets his `damageTakenDriveMultiplier` of 10 | 5 → **2.5** |
-| `Assets/Scripts/Characters/Biku Bale.asset` | already correct | 5 → no change |
+| `Tephi.asset` | **8** | was the untouched `40f` default — brought down, above the 5 baseline by choice |
+| `Black Sam.asset` | **7** | was 10 |
+| `Biku Bale.asset` | **5** | baseline |
+| `Kolo Aka.asset` | **5** | **still unadjusted.** Target ~2.5, because his `damageTakenDriveMultiplier` of 10 means a parry already pays him twice — see "A parry pays out drive twice" below |
 
-Target: a clean parry pays ~25 drive (a quarter segment) for a typical ~5-damage hit.
+Reference point: a clean parry pays ~25 drive (a quarter segment at the current 100-per-segment) for
+a typical ~5-damage hit. Tephi and Black Sam now sit deliberately above that; only Kolo Aka is
+outstanding, and only because of the double-payout interaction rather than the baseline.
 
 ---
 
@@ -53,6 +55,19 @@ Still true: a *Defense* buff has a related problem — with every `defenseValue`
 the to-hit roll clamps at "2+", so a Defense buff changes **nothing at all** until the values move
 into the band described in `META.md` Phase B. Speed buffs work as expected — initiative is
 `Speed + Random(1,9)`, re-rolled each round.
+
+### Most of the roster caps on the *first* drive stack
+The multiplier is `1 + baseBonus·(1 + d + d² + …)` where `baseBonus = buffNextActionMultiplier - 1`,
+hard-capped at 2.0×. At `buffNextActionMultiplier: 2.0`, one stack already computes `1 + 1.0 = 2.0`
+and hits the cap — so **stacks 2, 3 and 4 do literally nothing** for Kolo Aka, Biku Bale, Skeleton
+and Skeleton Elite.
+
+Only Tephi (1.5) sees the intended 1.50 / 1.75 / 1.875 / 1.9375 curve.
+
+The stacking system is therefore a one-stack system for most of the game, and committing further
+segments is a pure loss. Either bring `buffNextActionMultiplier` down to roughly 1.4-1.6 across the
+roster so the curve has room, or raise the cap. Worth settling before tuning the meter's size — and
+it's an argument for spending drive *sideways* rather than deeper, see "Different ways to use drive".
 
 ### A low `buffNextActionMultiplier` reads as a broken drive system — resolved for Black Sam
 Black Sam was authored at **1.25** against **2.0** on Kolo Aka, Biku Bale, Skeleton and Skeleton
@@ -192,6 +207,23 @@ available. `EnemyManager` also carried a second, name-keyed cooldown dictionary 
 That duplicate system is deleted, and enemies now call `CharacterManager.UseAction()` on the same
 path as the player. Masked until now because no enemy action has a `cooldown` above 0.
 
+### `TooltipUI` carries the whole Canvas across scene loads — known, deferred
+`TooltipUI.Awake()` calls `DontDestroyOnLoad(gameObject)`, but it sits on `TooltipPanel`, a child of
+`Actions` under the **Canvas**. `DontDestroyOnLoad` on a non-root object acts on the root of that
+hierarchy, so the entire Canvas persists.
+
+After a scene reload (the restart button) you get two Canvases: the stale one with the victory panel
+still active and an empty action grid, and the fresh one `ActionsManager` correctly populated. The
+stale one renders over the top. That single cause produced both "the victory UI won't hide" and "the
+action bar is missing after the next encounter", and it's why stop-and-replay was the only thing that
+fixed it — a domain reload clears the static and there's only ever one Canvas on a fresh Play.
+
+The static `instance` is also never cleared in `OnDestroy`.
+
+**Fix when it's wanted:** drop `DontDestroyOnLoad` (a tooltip is only meaningful inside an encounter,
+same reasoning as `ParryInputManager`) and clear the static in `OnDestroy`. Deferred by choice — it
+matters again as soon as anything reloads a scene, so Phase 3 can't ship without it.
+
 ### `EnemyManager.Start()` initializes the drive manager off a stale field
 `EnemyManager.cs:75-84` calls `enemyDriveManager.Initialize(enemyData.driveConfig)` *before*
 `enemyData` is reassigned from `GetComponent<CharacterManager>().characterData`. It reads the
@@ -279,6 +311,28 @@ parry is a natural place to reuse it.
 Note the successful-parry `"Parry!"` text is **not** part of this path — it comes from
 `CharacterManager.Parry()` writing `actionStatusText`, a separate field.
 
+### The drive utility actions are unreachable, and one of them is a stub
+Two independent problems, either of which alone makes `ReduceCooldown` impossible to use.
+
+**Nothing ever builds the buttons.** `DriveUI.CreateActionButtons()` is the only player-facing route
+to `TryUseDriveAction()`, and it has **no callers** — it waits to be handed a container and a prefab,
+and nothing ever does. `DriveUI` is on `PlayerCharacter.prefab` but not in the scene, so the utility
+menu has never existed at runtime. `PlayerInputHandler` maps the Drive input to `TryAddDriveStack()`
+and nothing else. The only live caller of `TryUseDriveAction()` anywhere is `EnemyDriveManager`'s
+low-health heal branch.
+
+**`ExecuteReduceCooldown()` does nothing.** It logs, returns `true`, and never touches a cooldown —
+its own comment says it "would need to be implemented based on your action/cooldown system". Since
+`TryUseDriveAction()` charges the segments *before* dispatching and treats `true` as success, wiring
+a button to it today would spend 3 segments for a debug line. It's the only one of the four that's a
+stub; `HealSelf` and `RemoveDebuff` are real, which is why the enemy heal branch works.
+
+Consequence for tuning: **`reduceCooldownCost` is dead weight** and shouldn't influence decisions
+about the meter's size. `healSelfCost` is the one that matters, since enemies actually reach it.
+
+If it's revived, the cooldown reduction needs to act on `CharacterManager.actionCooldowns` — that
+comment predates cooldowns moving off the ScriptableObject. See "Different ways to use drive" below.
+
 ### Dead code and data
 - `ParrySystem.parryDriveBonus` / `ParryDriveBonus` (`ParrySystem.cs:8,32,51`) is cached in
   `Awake` but never used — `PerformSuccessfulParry` re-reads `characterData` directly. Delete.
@@ -298,6 +352,112 @@ Note the successful-parry `"Parry!"` text is **not** part of this path — it co
   (`Character.UpdateBuffsForNewRound()` was deleted in Phase 1a.)
 
 ---
+
+## Defining hero classes — area for exploration
+
+**Not a task list. A direction worth defining before Phase 4 needs it.**
+
+`Character.CharacterClass` already exists — **Duelist / Muscle / Musketeer / WitchDoctor** — and is
+authored on every character. **Nothing reads it.** The only other mention in the codebase is a
+commented-out hook in `Action.cs`:
+
+```csharp
+//[Header("Requirements")]
+//public int minimumLevel;
+//public Character.CharacterClass[] allowedClasses;
+```
+
+So the intent was there early and was never wired. Today two characters of different classes are
+distinguished only by stat values and which actions someone happened to slot.
+
+The direction: **classes should differ in what they can *do*, not just in their numbers.**
+
+### Active vs passive
+
+- **Active** — abilities only that class can use. The `allowedClasses` hook above is one shape
+  (gate an `Action` by class); a per-class action pool is another. Note `Character.availableActions`
+  already exists, unused, and was probably meant for exactly this.
+- **Passive** — always-on traits with no home in the codebase at all. Buffs are turn-limited by
+  design (`ActiveBuff.TurnsRemaining`), so passives can't reuse them without special-casing "never
+  expires". They'd need either a permanent modifier list on `CharacterManager` or to be folded into
+  `RefreshStats()` alongside the authored base.
+
+### The worked example: class-gated drive
+
+The clearest place classes could express themselves, because the machinery is already built and
+merely ungated — see "Different ways to use drive" below.
+
+| Class | Might spend drive on |
+|---|---|
+| WitchDoctor | `RemoveDebuff` — shake off what enemies apply |
+| Muscle | `BuffNextAttack` — the damage spike |
+| Musketeer | `ReduceCooldown` — reload the big shot |
+| Duelist | ? — parry-adjacent, given the parry system already rewards drive |
+
+`DriveManager.GetAvailableActions()` is the natural gate: it already decides what the utility menu
+would offer, so filtering it by `characterData.characterClass` is a small change once the menu exists.
+That makes drive read differently in each character's hands without new systems.
+
+### Things to settle
+
+- **Where gating lives.** Class on the `Action` (`allowedClasses`), class-specific pools, or class
+  filtering at the point of use. Picking one matters — gating by class *and* level *and* loadout
+  simultaneously means no single thing is the real constraint.
+- **Passives need a home** before any are authored, or each will be special-cased.
+- **Enemies share `Character`**, so they carry `characterClass` too. Decide whether it means anything
+  for them or is player-only — and if it's player-only, that's a reason to move it off the base.
+- **This is also the recruitment axis.** META.md §7 proposes a `CrewArchetype` per class for
+  generating rank-and-file crew, so whatever combat identity a class gets also defines what a
+  recruited crew member plays like. Worth designing once, for both.
+
+## Different ways to use drive — area for exploration
+
+**Not a task list. A direction worth returning to.**
+
+Drive was a stronger pillar in early development: a pool you *chose how to spend*, rather than one
+button that makes the next hit harder. The machinery for that still exists — `DriveAction` has four
+members and `TryUseDriveAction()` charges and dispatches them — but the choice was never surfaced,
+and today drive collapses to "add a stack, hit harder".
+
+Worth reopening because the interesting decision isn't *when* to spend, it's *what to spend on*.
+
+### What's already half-built
+
+| | State |
+|---|---|
+| `BuffNextAttack` | Live, and the only one players reach — it's what the Drive input does |
+| `HealSelf` | Implemented, reachable only by enemies (`EnemyDriveManager` low-health branch) |
+| `RemoveDebuff` | Implemented, unreachable |
+| `ReduceCooldown` | **Stub** — charges segments, changes nothing. See the section above. |
+
+So two of the four work and are simply not exposed. The gap is a menu, not a system.
+
+### Directions worth exploring
+
+- **Shake off debuffs.** `RemoveDebuff` exists and works. It only becomes meaningful once enemies
+  can actually apply debuffs — which they can't today, see the `SendMessage` bug above. Fixing that
+  gives this one an immediate reason to exist.
+- **Reset action cooldowns.** Needs real implementation against `CharacterManager.actionCooldowns`.
+  The design question is whether it clears one chosen action (a decision, needs target UI) or all of
+  them (simpler, blunter).
+- **Buff heals as well as attacks.** Already supported — `GetNextHealingMultiplier()` exists and
+  `Heal()` takes a caster multiplier — but nothing distinguishes "spend on damage" from "spend on
+  healing" at the point of choosing, so it isn't a decision the player makes.
+- **Spend on someone else.** Nothing in the model requires drive to be spent on its owner. A support
+  character donating a segment is the kind of thing that makes a party feel like a crew.
+
+### Constraints to design within
+
+- **Most of the roster caps on the first stack.** With `buffNextActionMultiplier` at 2.0, one stack
+  computes 2.0 and hits the hard cap, so stacks 2-4 do nothing for Kolo Aka, Biku Bale, Skeleton and
+  Skeleton Elite. Any "spend more for more damage" axis is already saturated — which is an argument
+  for spending *sideways* rather than deeper.
+- **A shorter meter makes each choice weightier.** See the 4-vs-3 segment notes; overflow is
+  discarded, so a big meter that only feeds one option mostly wastes drive.
+- **Enemies use the same system.** `EnemyDriveConfig` already has a `strategy` enum, so any new
+  option should be expressible as enemy behaviour too, or the two paths drift.
+- **The UI is the actual missing piece.** `DriveUI.CreateActionButtons()` is written and waiting for
+  a caller. Reviving this is mostly a UI and design job, not an engine one.
 
 ## Settings & accessibility
 

@@ -603,6 +603,11 @@ feedback, or both.
 Lettered like Phase B because it's combat presentation, not part of the meta-layer sequence. It
 doesn't block Phase 3 and Phase 3 doesn't block it, but it's the next thing being worked on.
 
+**Already shipped as a precursor:** the enemy **target telegraph** — `img_target_indicator` shows on
+the victim for `EnemyManager.targetHighlightDuration` before the attack starts. It's the pattern this
+phase generalises: a tunable pause carved out around resolution, with the presentation beat separate
+from the gameplay one. Worth reading `TelegraphThenAct()` before designing `TurnSequence`.
+
 #### What already exists (this is a unification, not a new system)
 
 Three sequencers are already in the project and none of them talk to each other:
@@ -852,6 +857,12 @@ Realistically you need **8-12 recruitable crew**. Two ways there:
 I'd recommend the hybrid: your 4 named crew as anchors, generated rank-and-file for the rest.
 It fits the fantasy (nobodies you pick up in port) and makes losing a generic crew member sting
 differently than losing Black Sam.
+
+> **This depends on classes meaning something first.** `Character.CharacterClass` exists on every
+> character and **nothing reads it** — two crew of different classes differ only in stat values
+> today. Generation bands are not worth building until a class implies actual capability: which
+> actions it can take, what it can spend drive on, what passives it has. See "Defining hero classes"
+> in `TODO.md`. Designing it once covers both recruitment and combat identity.
 
 **Run length.** Node count drives all tuning. 12-15 is the genre norm for a ~30-45 min run.
 

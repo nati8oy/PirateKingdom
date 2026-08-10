@@ -114,6 +114,22 @@ a guaranteed miss would cost the player their attempt for nothing.
 *Balance note:* enemy attacks now land less often than they used to, so any tuning done before this
 was against enemies that hit 100% of the time. Crew `defenseValue` is now live and worth checking.
 
+### `Action.TargetType` means different things to the player and to enemies
+Found while adding the drive actions. `CombatController.IsValidTarget()` reads it **absolutely** —
+`SingleEnemy` means "an object tagged `Enemy`". `EnemyManager.SelectTarget()` reads it
+**caster-relatively** — its `SingleEnemy` case is commented "Enemy targeting players" and returns
+players.
+
+So the same enum member resolves to opposite sides depending on who owns the asset. It happens to
+work out today because an action asset is only ever slotted on one side, and the two readings agree
+for the common cases (an enemy's `SingleEnemy` attack wants players; a player's wants enemies).
+
+**The authoring rule that follows:** `SingleEnemy` = "someone on the other side", `SingleAlly` =
+"my side", and an action asset is **not** portable between crew and enemies — a `DriveDrain`
+authored for the crew can't simply be dropped into an enemy's `actionSlots` and mean the same thing.
+
+Worth unifying eventually, but it's a rename-and-audit job across every authored asset, so not now.
+
 ### Enemy buff and debuff actions silently do nothing
 `EnemyManager.cs:608-625` applies buffs by reflection: `HasMethod(buffTarget, "ApplyBuff")` then
 `buffTarget.SendMessage("ApplyBuff", new object[] { … })` with **four** arguments, falling back to
@@ -431,6 +447,23 @@ Worth reopening because the interesting decision isn't *when* to spend, it's *wh
 | `ReduceCooldown` | **Stub** — charges segments, changes nothing. See the section above. |
 
 So two of the four work and are simply not exposed. The gap is a menu, not a system.
+
+**Partly answered by `DriveGrant` / `DriveDrain`.** "Spend on someone else" below is now built, from
+the other direction: rather than donating your own segments, an `Action` moves raw meter — onto an
+ally, or off an enemy. That makes drive a thing the party plays *with* rather than a private
+resource, and it needed no drive-menu UI, which is what had blocked every other option here.
+
+Follow-ups it opened:
+
+- ~~**No targeting strategy picks by drive.**~~ **DONE.** `Enemy.TargetingStrategy.HighestDrive`
+  added, resolved by `EnemyManager.GetHighestDriveTarget()`. Falls back to a random pick when every
+  candidate is at zero drive — without that the opening turn of every fight would be deterministic,
+  since an ordered pick over all-equal values always returns the same crew member.
+- **Drain can't touch committed stacks**, by design (see `CLAUDE.md`). A "disrupt" effect that
+  knocks the stacks off a charged-up enemy would be a genuinely different action, and it needs a
+  way to reach `DriveManager.ClearStacks()`, which is currently private.
+- **`HealthDrain` landed alongside it** — an attack that heals the attacker for a share of the
+  health the target actually lost. See the drive/health drain notes in `CLAUDE.md`.
 
 ### Directions worth exploring
 

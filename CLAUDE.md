@@ -46,8 +46,10 @@ third-party and should not be modified** unless explicitly requested:
 - `Combat/`
   - `Character.cs` — **ScriptableObject** base for all characters (stats, class, allegiance,
     buffs, per-action cooldowns). Enemies subclass this.
-  - `Action.cs` — ScriptableObject defining an ability (Attack/Heal/Buff/Debuff, target type,
-    damage/heal ranges, cooldown, windup, icon).
+  - `Action.cs` — ScriptableObject defining an ability (Attack/Heal/Buff/Debuff/DriveGrant/
+    DriveDrain/HealthDrain, target type, damage/heal ranges, drive amount, drain ratio, cooldown,
+    windup, icon). **`ActionType` is serialized by integer value — append new members, never
+    reorder them**, same rule as `Character.BuffType` and `Enemy.TargetingStrategy`.
   - `CombatController.cs` — resolves **player** actions on a target (d20 hit rolls, crits, drive
     multipliers) and calls `TurnManager.CompleteTurn()`.
   - `DriveManager.cs` / `DriveMeter.cs` / `DriveUI.cs` — the "Drive" super-meter resource system.
@@ -94,7 +96,11 @@ third-party and should not be modified** unless explicitly requested:
     in front. Optional; combatants spawn from one prefab and would otherwise share one order.
 - `Enemy/`
   - `Enemy.cs` — ScriptableObject subclass of `Character` with AI config (action weights,
-    targeting strategy, heal threshold, drive config).
+    targeting strategy, heal threshold, drive config). `TargetingStrategy` includes `HighestDrive`,
+    which is what makes a `DriveDrain` or `HealthDrain` feel aimed — the health-based strategies
+    would otherwise drain whoever happens to have the emptiest meter. It falls back to a random pick
+    when every candidate is at zero drive, so the opening turn isn't deterministic. **Append-only
+    enum**, like every other serialized enum here.
   - `EnemyManager.cs` — enemy AI turn logic: weighted action choice, target selection,
     parryable attack flow.
   - `EnemyAttack.cs` — coroutine attack sequence that opens the target's parry window. It does
@@ -234,6 +240,20 @@ third-party and should not be modified** unless explicitly requested:
     number and duplicated a system that already worked.
   - `CharacterManager.GetModifiedAttackPower()` applies the drive multiplier to attack power but
     **has no callers**; drive reaches damage through `GetNextAttackDamageMultiplier()`. See `TODO.md`.
+  - **`HealthDrain` uses the same d20 rule** — it's an attack that also heals, so the rule is
+    written out in full in `CombatController.PerformAction()` and reached via `RollToHit()` on the
+    enemy side, exactly like `Attack`. **If you change the to-hit rule, there are now four places to
+    keep identical, not two.**
+    - The heal is a share of the health the target **actually lost**, not of the damage rolled.
+      That's what `CharacterManager.TakeDamage()`'s return value is for — it reports rounded damage
+      capped by remaining health, so a killing blow on a 3hp target drains 3, not 20. Health moves
+      between the two combatants; it is never created.
+    - **Drive multiplies it exactly once.** Drive scales the damage, and the heal is derived from
+      the damage, so `Heal()` is deliberately called with the default `1f` multiplier. Passing
+      `GetNextHealingMultiplier()` as well would pay one drive spend out twice.
+    - Authored as `Action.healthDrainRatio` (0–1). **Rounding is the trap here** — `Heal()` rounds,
+      so a low ratio against a small damage range heals 0 and reads as broken. Sanity-check against
+      `minDamage`, not the midpoint. Same failure mode as the drive multipliers.
 - **Drive system:** a 4-segment meter that fills from dealing damage, taking damage, and **parries**
   (per-character multipliers on `Character`).
   - **`DriveMeter` is a serialized field inside `DriveManager`, so its values live on the prefab, not
@@ -256,6 +276,27 @@ third-party and should not be modified** unless explicitly requested:
       *target*, so doing so spent the healer's segments while consuming the target's idle stacks.
   - **Player input:** each press of the Drive action adds one stack to the selected crew member
     (`PlayerInputHandler` → `TryAddDriveStack()`). Sound + particles fire on **every** stack.
+  - **Drive manipulation actions (`DriveGrant` / `DriveDrain`).** An `Action` can move raw drive on
+    its target: grant it to yourself or a crewmate, or strip it from an enemy. Amount is authored
+    on `Action.driveAmount`, positive for both, negated by the drain case — the same idiom as
+    `Buff`/`Debuff`. Resolution is `CharacterManager.GainDrive()` / `LoseDrive()` → `DriveManager`
+    → `DriveMeter.AddDrive()` / `RemoveDrive()`.
+    - **Raw meter, never stacks.** Committing a stack stays the owner's own decision on their own
+      turn; a support character fills the meter, they don't spend it for you.
+    - **The caster's drive stacks deliberately do not multiply it.** A drive spend that makes more
+      drive is a feedback loop — same reasoning that keeps accuracy buffs out of damage.
+    - **Draining never claws back committed stacks.** `TryAddDriveStack()` spends the drive at
+      commit time, so a stack is already paid for. It can't come up anyway: enemies commit stacks
+      at the start of their own turn and spend them in the same turn, so a player's drain only ever
+      reaches banked meter.
+    - Both methods return the amount that **actually** moved, clamped by a full or empty meter, and
+      that's the number the floating text reports — a drain on an empty enemy must read as the
+      wasted turn it was. `TooltipUI.DescribeDriveOutcome()` previews the same clamped result plus
+      the segment change, because **segments are the unit that buys anything**: a grant that doesn't
+      cross a segment boundary gives the target nothing they can spend.
+    - Enemy AI weights them via `Enemy.driveGrantWeight` / `driveDrainWeight`, read by
+      `EnemyManager.GetBaseWeight()`. Without a weight entry an action still gets the `0.1f`
+      fallback, so a new `ActionType` is never truly unreachable for enemies.
   - **Enemies** use the *same* stacking system: `EnemyDriveManager.EvaluateDriveUsage()` (called at
     the start of the enemy turn) picks how many stacks to commit per its `EnemyDriveConfig`
     (`strategy`, `stacksPerBuff`, `minimumSegmentsToUse`, `healthThreshold`, `usageChance`) authored
@@ -278,7 +319,12 @@ third-party and should not be modified** unless explicitly requested:
     runs on every exit — attack resolved, attack missed, target died during the telegraph, no
     pending target, and `OnDisable`. That last one matters: an enemy killed mid-telegraph would
     otherwise leave its victim highlighted permanently.
-- **Parry:** enemy attacks have a windup; `EnemyAttack` opens a `ParrySystem` window on the target.
+- **Parry:** enemy `Attack` **and `HealthDrain`** actions have a windup; `EnemyAttack` opens a
+  `ParrySystem` window on the target. The routing test in `EnemyManager.PerformAction()` is
+  "is this a damaging swing", not "is this an Attack" — a damaging enemy action the player can't
+  parry reads as a bug. Parrying a drain cuts the enemy's *healing* as well as the damage, for free:
+  the siphon is applied in `OnAttackComplete()` from health actually lost, which the 25% chip
+  already accounts for.
   A well-timed parry input (routed through the singleton `ParryInputManager`) negates most damage
   (**25% still lands**) and grants bonus drive.
   - **One attempt per attack.** `EnemyAttack.BeginParrySequence()` arms a single attempt at the

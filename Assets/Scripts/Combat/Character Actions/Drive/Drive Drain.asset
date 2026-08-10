@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5389001eb578f43918865af7cc0f8a4e, type: 3}
+  m_Name: Drive Drain
+  m_EditorClassIdentifier: Assembly-CSharp::Action
+  id: drive_drain
+  actionName: Drain Drive
+  actionType: 5
+  targetType: 0
+  cooldown: 3
+  actionIcon: {fileID: -6599895244811192684, guid: ded976829f70d47bd846724356adf93d, type: 3}
+  attackWindupTime: 1
+  minDamage: 0
+  maxDamage: 0
+  minHeal: 0
+  maxHeal: 0
+  buffValue: 0
+  duration: 0
+  buffType: 0
+  healthDrainRatio: 0.5
+  driveAmount: 100

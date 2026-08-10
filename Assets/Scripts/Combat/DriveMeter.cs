@@ -72,15 +72,49 @@ public class DriveMeter
     {
         float previousDrive = currentDrive;
         int previousSegments = availableSegments;
-        
+
         currentDrive = Mathf.Min(maxDriveValue, currentDrive + amount);
         availableSegments = Mathf.FloorToInt(currentDrive / SegmentValue);
-        
+
         if (currentDrive != previousDrive)
             OnDriveChanged?.Invoke(currentDrive);
-            
+
         if (availableSegments != previousSegments)
             OnSegmentsChanged?.Invoke(availableSegments);
+    }
+
+    /// <summary>
+    /// Removes raw drive, floored at zero. Returns how much was <b>actually</b> removed, which is
+    /// less than <paramref name="amount"/> when the meter was already low — callers report the real
+    /// number rather than the one they asked for.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to <see cref="AddDrive"/>, and deliberately not <see cref="UseSegments"/>:
+    /// that spends whole segments as a cost, this strips raw meter as an effect.
+    ///
+    /// Drive stacks already committed are <b>not</b> touched. <c>TryAddDriveStack()</c> spends the
+    /// drive at the moment a stack is committed, so a stack is already paid for and draining the
+    /// meter afterwards can't retroactively take it back.
+    /// </remarks>
+    public float RemoveDrive(float amount)
+    {
+        if (amount <= 0f) return 0f;
+
+        float previousDrive = currentDrive;
+        int previousSegments = availableSegments;
+
+        currentDrive = Mathf.Max(0f, currentDrive - amount);
+        availableSegments = Mathf.FloorToInt(currentDrive / SegmentValue);
+
+        float removed = previousDrive - currentDrive;
+
+        if (removed > 0f)
+            OnDriveChanged?.Invoke(currentDrive);
+
+        if (availableSegments != previousSegments)
+            OnSegmentsChanged?.Invoke(availableSegments);
+
+        return removed;
     }
     
     public float GetDrivePercentage()

@@ -37,6 +37,12 @@ public class CharacterManager : MonoBehaviour
     [SerializeField] TMP_Text characterName;
     //[SerializeField] private TMP_Text hp;
     [FormerlySerializedAs("healthModifier")] [SerializeField] private TMP_Text actionStatusText;
+
+    [Tooltip("Seconds the '+N Drive' / '-N Drive' number stays up when NO drive feedback is wired " +
+             "above. Every other status number is cleared by its own MMF_Player (an MMF_Events " +
+             "calling HideHealthUI), so this is only the safety net for the unwired case — assign " +
+             "the feedback slots and this is never used.")]
+    [SerializeField] private float driveStatusTextDuration = 0.9f;
     
     public Image turnMarker;
 
@@ -63,6 +69,13 @@ public class CharacterManager : MonoBehaviour
     [SerializeField] private MMF_Player parryFeedback;
     [Tooltip("Feedback player for a buff landing on this character — the one-shot cast burst.")]
     public MMF_Player buffFeedback;
+
+    [Tooltip("Optional. Played when a DriveGrant action fills this character's drive meter.")]
+    public MMF_Player driveGrantedFeedback;
+
+    [Tooltip("Optional. Played when a DriveDrain action strips this character's drive meter.")]
+    public MMF_Player driveDrainedFeedback;
+
     public MMF_Player feedbackPlayer;
 
 
@@ -537,7 +550,19 @@ public class CharacterManager : MonoBehaviour
     }
 
     
-    public void TakeDamage(float damage, bool wasParried = false)
+    /// <summary>
+    /// Applies damage. Returns the health this character <b>actually lost</b>, which is not the
+    /// same as <paramref name="damage"/>: it's rounded, and it's capped by whatever health was left.
+    /// </summary>
+    /// <remarks>
+    /// The return value exists for HealthDrain actions, which heal the attacker by a share of what
+    /// the target lost. Deriving it from health genuinely removed rather than from the damage roll
+    /// is what stops a killing blow on a 3hp target from paying out as though it hit for 20 —
+    /// health should move between the two, not be created.
+    ///
+    /// Every other caller ignores it, which is why widening this from <c>void</c> was safe.
+    /// </remarks>
+    public float TakeDamage(float damage, bool wasParried = false)
     {
         // Only update the status text and play feedback if it wasn't a parry
         if (!wasParried)
@@ -547,9 +572,11 @@ public class CharacterManager : MonoBehaviour
             dealDamageFeedback.PlayFeedbacks();
             feedbackPlayer.PlayFeedbacks();
         }
-    
+
         float roundedDamage = Mathf.Round(damage);
+        float healthBefore = CurrentHealth;
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
+        float healthLost = healthBefore - CurrentHealth;
         UpdateHealthBar();
         SyncHealthToRunState();
 
@@ -566,6 +593,8 @@ public class CharacterManager : MonoBehaviour
             driveManager.Drive.AddDrive(driveIncrease);
             Debug.Log($"{characterData.characterName} took {damage} damage, drive increased by {driveIncrease}");
         }
+
+        return healthLost;
     }
     
     /// <summary>
@@ -678,6 +707,81 @@ public class CharacterManager : MonoBehaviour
         CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + roundedHeal);
         UpdateHealthBar();
         SyncHealthToRunState();
+    }
+
+    /// <summary>
+    /// Adds raw drive to this character's meter, from a <c>DriveGrant</c> action cast on them.
+    /// Returns how much actually landed — 0 if their meter was already full.
+    /// </summary>
+    /// <remarks>
+    /// The caster's own drive stacks deliberately do <b>not</b> multiply this. Letting a drive
+    /// spend produce more drive is a feedback loop, and it's the same reasoning that keeps
+    /// accuracy buffs out of damage: two multipliers that feed each other stop being tunable.
+    /// </remarks>
+    public float GainDrive(float amount)
+    {
+        if (driveManager == null)
+        {
+            Debug.LogWarning($"[CharacterManager] {characterData?.characterName ?? gameObject.name} has no " +
+                             "DriveManager, so a drive grant did nothing.", this);
+            return 0f;
+        }
+
+        float granted = driveManager.GrantDrive(amount);
+
+        ShowDriveStatus($"+{Mathf.Round(granted)} Drive", driveGrantedFeedback);
+
+        return granted;
+    }
+
+    /// <summary>
+    /// Strips raw drive from this character's meter, from a <c>DriveDrain</c> action cast on them.
+    /// Returns how much was actually removed, which is less than asked for on a near-empty meter.
+    /// </summary>
+    /// <remarks>
+    /// Reports the real number rather than the authored one, so draining an already-empty enemy
+    /// reads as the wasted turn it was instead of implying an effect that didn't happen.
+    /// </remarks>
+    public float LoseDrive(float amount)
+    {
+        if (driveManager == null)
+        {
+            Debug.LogWarning($"[CharacterManager] {characterData?.characterName ?? gameObject.name} has no " +
+                             "DriveManager, so a drive drain did nothing.", this);
+            return 0f;
+        }
+
+        float removed = driveManager.DrainDrive(amount);
+
+        ShowDriveStatus($"-{Mathf.Round(removed)} Drive", driveDrainedFeedback);
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Writes a drive number to the floating status text and plays its feedback.
+    /// </summary>
+    /// <remarks>
+    /// Every other status number (damage, heal, miss) is paired with an MMF_Player that clears the
+    /// text again on its way out. These two slots are new and start unassigned on the prefab, so
+    /// without the timed fallback the first drive action would leave a number stuck on the
+    /// character forever. Wire the feedback and the fallback never runs.
+    /// </remarks>
+    private void ShowDriveStatus(string text, MMF_Player feedback)
+    {
+        actionStatusText.enabled = true;
+        actionStatusText.text = text;
+
+        if (feedback != null)
+        {
+            feedback.PlayFeedbacks();
+            return;
+        }
+
+        // Deliberately not driveParticles: DriveManager owns that one as a sustained effect it
+        // starts per stack and stops in ClearStacks(), so playing it here would leave it running.
+        CancelInvoke(nameof(HideHealthUI));
+        Invoke(nameof(HideHealthUI), driveStatusTextDuration);
     }
 
     public void AddBuff(Character.BuffType type, float amount, float duration)

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Siphon
   m_EditorClassIdentifier: Assembly-CSharp::Action
   id: siphon
-  actionName: 
+  actionName: Siphon
   actionType: 6
   targetType: 0
   cooldown: 0

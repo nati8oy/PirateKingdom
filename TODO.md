@@ -96,6 +96,44 @@ Consequences worth keeping in mind:
 
 ## Bugs
 
+### A player action sometimes doesn't seem to end the turn — INTERMITTENT, unresolved
+**Status: partly fixed, root cause not established. Reported against `DriveGrant`, but nothing about
+the symptom is specific to that action type.**
+
+Symptom: after resolving an action the player appears to still be able to act, instead of the turn
+passing on. Now happens *unreliably* rather than every time, which is the main thing to explain.
+
+**Already fixed, don't re-fix:** `CombatController.PerformAction()` charges the cooldown and calls
+`CompleteTurn()` from a `finally` (see `CLAUDE.md`). Previously an exception while applying an effect
+skipped both, which doesn't stall the game — it hands out a **free, off-cooldown extra action**,
+because the selection is still live and the buttons are still interactable. That path is closed:
+entering `PerformAction` now always costs the turn. **So whatever remains is not this.**
+
+Three candidates, in the order they explain *intermittency*:
+
+1. **It may not be a bug at all — the turn is passing to another crew member.** Initiative is
+   `Speed + Random(1,9)`, re-rolled every round, so two crew frequently act back to back. When they
+   do, `CompleteTurn()` → `SetCharacterTurn()` repopulates the bar with the *next* crew member's
+   actions, still interactable, and from the player's seat that is indistinguishable from "my turn
+   didn't end". Frequency would track how often crew are adjacent in the turn order — which fits
+   "works, but unreliably" better than either option below.
+   **Discriminator:** the turn marker and the "X's Turn" label move, and the console logs
+   `<name> completed their turn, buffs updated`.
+2. **`PerformAction` is never reached.** `TryExecuteActionOnCurrentTarget()` returns early on an
+   invalid target, correctly leaving the turn open — a misclick must not cost a turn. Intermittent
+   if clicks sometimes land on the wrong combatant, or get eaten by UI over the sprite.
+   **Discriminator:** console shows `Invalid target for action <name>`.
+3. **An exception mid-resolution.** Now harmless to turn flow, but it would leave the effect
+   half-applied. Most likely source is an MMF_Player with an unassigned target — the
+   `driveGrantedFeedback` / `driveDrainedFeedback` slots are new and start empty.
+   **Discriminator:** a red error in the console.
+
+**Next step when picking this up:** it's intermittent, so catch it rather than reason about it —
+note the acting character's name and the turn order at the moment it happens, and grab the whole
+console rather than just the last line. A temporary log at the top of `SetCharacterTurn()` printing
+who just gained the turn would settle candidate 1 immediately, which is worth doing first because it
+is the cheapest to rule in or out and would mean there's no bug here at all.
+
 ### ~~Enemies could never miss~~ — DONE
 `EnemyManager` rolled a d20 for **crits only** (`RollForCritical`), with no to-hit check anywhere in
 the enemy path and no miss branch — every enemy attack landed unless parried. Two consequences that

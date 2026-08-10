@@ -191,6 +191,14 @@ third-party and should not be modified** unless explicitly requested:
     don't try to win that race with Script Execution Order.
   - `Update()` early-returns until the battle has begun. Without that guard a scene that spawns
     its combatants would count zero living players on frame one and instantly declare a defeat.
+  - **`CombatController.PerformAction()` charges the cooldown and calls `CompleteTurn()` from a
+    `finally`.** Resolution and handover used to be a plain sequence, so anything that threw while
+    applying an effect skipped both. That does not stall the game — it hands out a **free extra
+    action**: the selection is still live and the buttons are still interactable, so the player just
+    picks something else, off cooldown. A broken feedback reference on one `Action` therefore became
+    a balance exploit that also hid its own stack trace. Acting costs the turn whether or not the
+    effect resolved cleanly. The null-target guard sits *above* the try on purpose — a click that
+    never became an action must not cost anything.
 - **Turn ownership — the player may only act on their own turn.** Enforced in three places, and
   all three are load-bearing:
   - `ActionsManager.LoadCharacterActions()` sets `button.interactable = isAvailable && playerControlled`,

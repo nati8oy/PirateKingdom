@@ -47,8 +47,20 @@ public class CharacterManager : MonoBehaviour
     public Image turnMarker;
 
     [Tooltip("img_target_indicator on the prefab. Shown while an enemy is telegraphing an attack on " +
-             "this character, hidden once the attack resolves.")]
+             "this character, and while the player hovers this character as a legal target.")]
     [SerializeField] private GameObject targetIndicator;
+
+    // Two independent reasons the indicator can be lit, tracked separately so neither source can
+    // switch off the other's. A single bool would mean whichever finished last hid the marker —
+    // hovering a crew member mid-telegraph and moving away would cancel the enemy's "you are about
+    // to be hit" cue, and the enemy's attack resolving would drop a live hover highlight.
+    //
+    // The two happen to be disjoint in time today (hover targeting needs a selected action, which
+    // only exists on a player's turn; telegraphs only run on an enemy's), but that's a consequence
+    // of TurnManager clearing the selection on every turn change — an invariant living in another
+    // class. Not worth coupling this to.
+    private bool telegraphTargeted;
+    private bool hoverTargeted;
 
     /// <summary>
     /// Marks this character as the victim of an incoming attack. Called by the attacking
@@ -56,7 +68,28 @@ public class CharacterManager : MonoBehaviour
     /// </summary>
     public void SetTargeted(bool targeted)
     {
-        if (targetIndicator != null) targetIndicator.SetActive(targeted);
+        telegraphTargeted = targeted;
+        RefreshTargetIndicator();
+    }
+
+    /// <summary>
+    /// Marks this character as the target the player is currently hovering for their selected
+    /// action. Driven by <see cref="ActionTargetingLine"/>, which re-evaluates every frame.
+    /// </summary>
+    /// <remarks>
+    /// Reuses the enemy's telegraph indicator deliberately: "this character is about to be acted
+    /// on" is one idea, and giving it one visual keeps the player reading a single symbol rather
+    /// than learning two.
+    /// </remarks>
+    public void SetHoverTargeted(bool targeted)
+    {
+        hoverTargeted = targeted;
+        RefreshTargetIndicator();
+    }
+
+    private void RefreshTargetIndicator()
+    {
+        if (targetIndicator != null) targetIndicator.SetActive(telegraphTargeted || hoverTargeted);
     }
 
     [Header("Feedback Players")]

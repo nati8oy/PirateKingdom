@@ -57,8 +57,9 @@ third-party and should not be modified** unless explicitly requested:
     body + `Collider2D` + a `Physics2DRaycaster` on the camera). Its `CharacterClicked()` is still
     public so a UI Button's OnClick can drive it too.
   - `ActionTargetingLine.cs` — LineRenderer from the selected action's source to the legal target
-    under the cursor, plus valid / invalid / default cursor swaps. The line is a **player setting**
-    (`GameSettings.ShowTargetingLine`, default on); the cursor feedback is always on.
+    under the cursor, plus valid / invalid / default cursor swaps, plus lighting that target's
+    `img_target_indicator`. The line is a **player setting**
+    (`GameSettings.ShowTargetingLine`, default on); the cursor and indicator feedback are always on.
   - `ParryVisualFeedback.cs`.
 - `Generics and Managers/`
   - `TurnManager.cs` — **the heart of combat.** Initiative-based turn order (re-rolled each
@@ -323,10 +324,24 @@ third-party and should not be modified** unless explicitly requested:
     is the separate "who" cue, and folding them together blurs two signals into one.
   - `EnemyManager.TelegraphThenAct()` is **the first place an enemy turn yields**, so it's the first
     that has to cope with the target dying or the battle ending mid-flight.
-  - `CharacterManager.SetTargeted()` is the only thing that touches the indicator. `ClearHighlight()`
-    runs on every exit — attack resolved, attack missed, target died during the telegraph, no
-    pending target, and `OnDisable`. That last one matters: an enemy killed mid-telegraph would
-    otherwise leave its victim highlighted permanently.
+  - `ClearHighlight()` runs on every exit — attack resolved, attack missed, target died during the
+    telegraph, no pending target, and `OnDisable`. That last one matters: an enemy killed
+    mid-telegraph would otherwise leave its victim highlighted permanently.
+  - **The same indicator doubles as the player's hover target marker**, since "this character is
+    about to be acted on" is one idea and deserves one symbol. It therefore has **two independent
+    owners**, and `CharacterManager` tracks them as separate flags (`SetTargeted()` for the enemy
+    telegraph, `SetHoverTargeted()` for hover) with visibility derived from either being set.
+    **Don't collapse them back into one bool** — whichever finished last would hide the marker
+    while the other still wanted it.
+  - **Hover targeting is driven from `ActionTargetingLine`'s per-frame evaluation, not from
+    `TargetHoverHandler`'s pointer-enter/exit events.** Exit events only fire when the pointer
+    *moves*, and the normal case is clicking the target you're already hovering — so an
+    event-driven version leaves the marker lit on a character nobody is targeting any more, right
+    through the enemy's turn. Re-deriving it each frame from the live selection means it clears
+    itself the moment `TurnManager` clears the selection.
+  - **A self-cast shows no indicator.** The marker means "someone else is about to act on you";
+    aiming it at yourself while self-healing reads as an incoming threat. Suppressed by comparing
+    the hovered character against `CombatController.GetCurrentCharacter()`.
 - **Parry:** enemy `Attack` **and `HealthDrain`** actions have a windup; `EnemyAttack` opens a
   `ParrySystem` window on the target. The routing test in `EnemyManager.PerformAction()` is
   "is this a damaging swing", not "is this an Attack" — a damaging enemy action the player can't

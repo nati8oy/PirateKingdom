@@ -51,10 +51,16 @@ compounded damage number, and duplicated a system that already works. The two st
 `Accuracy` staying at position 0 keeps every authored Action asset pointing at the right buff.
 Append new types at the end — a remark on the enum says so.
 
-Still true: a *Defense* buff has a related problem — with every `defenseValue` currently below every `attackPower`
-the to-hit roll clamps at "2+", so a Defense buff changes **nothing at all** until the values move
-into the band described in `META.md` Phase B. Speed buffs work as expected — initiative is
-`Speed + Random(1,9)`, re-rolled each round.
+~~Still true: a *Defense* buff changes nothing, because the to-hit roll clamps.~~ **No longer true —
+the roster has been retuned into the Phase B band and Defense is live.** Crew sit at defense 13,
+enemies at 11/14/17 against attack powers of 5-15, so hit chances span 60-95% and there is real
+headroom for the roll to move in. A -3 Defense debuff is worth +10 to +15 percentage points in most
+matchups, in both directions.
+
+The one asset still outside the band is **`Witch Healer` (defense 3)**, which everything hits at the
+95% ceiling — a Defense debuff on it genuinely does nothing.
+
+Speed buffs work as expected — initiative is `Speed + Random(1,9)`, re-rolled each round.
 
 ### Most of the roster caps on the *first* drive stack
 The multiplier is `1 + baseBonus·(1 + d + d² + …)` where `baseBonus = buffNextActionMultiplier - 1`,

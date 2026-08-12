@@ -283,6 +283,10 @@ third-party and should not be modified** unless explicitly requested:
     back to manual targeting rather than erroring, because an action that eats the turn without
     resolving is worse than one that just asks for a target. Player-side only — enemies already
     resolve ally-targeted buffs onto themselves.
+  - **Every buff type has a working debuff form for free.** `ActionType.Debuff` negates `buffValue`
+    before calling `AddBuff`, on both the player and enemy paths, so Speed, Defense, Accuracy,
+    Crit Chance and Damage Reduction all debuff with no extra code — author them as `Debuff` with a
+    positive `buffValue`. There is no separate debuff enum and there should not be one.
   - **`attackPower` affects accuracy only, never damage** — and so do `BuffType.Accuracy` buffs,
     which stack onto it in `RefreshStats()`. **Damage bonuses are drive's job alone.** Keeping the
     two disjoint is a deliberate decision: letting accuracy buffs also raise damage was tried and

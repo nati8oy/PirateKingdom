@@ -1,5 +1,16 @@
 using UnityEngine;
 
+/// <summary>
+/// One ability: what it does, who it may be used on, and the numbers behind it.
+/// </summary>
+/// <remarks>
+/// <b>Only a few of the fields below apply to any one action.</b> <see cref="actionType"/> decides
+/// which, and each value section is headed with the action types that read it — so a Heal ignores
+/// everything under "Damage", and the Inspector showing a field does not mean that field is live.
+///
+/// Field ORDER here is Inspector layout only. Unity serializes by field name, so regrouping these
+/// can't disturb an authored asset; renaming one can, and needs <c>[FormerlySerializedAs]</c>.
+/// </remarks>
 [CreateAssetMenu(fileName = "Action", menuName = "Scriptable Objects/Action")]
 public class Action : ScriptableObject
 {
@@ -37,8 +48,10 @@ public class Action : ScriptableObject
         AllAllies,
         AllEnemies
     }
-    
-    
+
+    // ---------------------------------------------------------------------------------------
+    // IDENTITY
+    // ---------------------------------------------------------------------------------------
 
     [Header("Identity")]
     [Tooltip("Stable id used by save data. Stamped automatically by ContentDatabase's 'Rebuild From Project'. " +
@@ -53,24 +66,41 @@ public class Action : ScriptableObject
     public void EditorAssignId(string newId) => id = newId;
 #endif
 
-    [Header("Action Configuration")]
-    [Tooltip("Shown on the action button and in tooltips. Free text — nothing keys off it.")]
+    // ---------------------------------------------------------------------------------------
+    // PRESENTATION — what the player sees on the button
+    // ---------------------------------------------------------------------------------------
+
+    [Header("Presentation")]
+    [Tooltip("Shown on the action button and in tooltips. Free text — nothing keys off it, so it's " +
+             "safe to rename at any point. Save data uses the Id above.")]
     public string actionName;
 
-    [Tooltip("Decides which fields below are used, and how enemy AI weights this action.\n\n" +
+    [Tooltip("Icon on the action button. Greyed out automatically while on cooldown.")]
+    public Sprite actionIcon;
+
+    // ---------------------------------------------------------------------------------------
+    // BEHAVIOUR — what this does, to whom, and how often
+    // ---------------------------------------------------------------------------------------
+
+    [Header("Behaviour")]
+    [Tooltip("What this action does. Decides which value section below is actually read, and how " +
+             "enemy AI weights it.\n\n" +
              "Attack — rolls Min/Max Damage\n" +
              "Heal — rolls Min/Max Heal\n" +
              "Buff — applies Buff Value of Buff Type\n" +
              "Debuff — the same, negated\n" +
              "Drive Grant — adds Drive Amount to the target's drive meter\n" +
              "Drive Drain — removes Drive Amount from the target's drive meter\n" +
-             "Health Drain — rolls Min/Max Damage, then heals the attacker for Health Drain Ratio " +
+             "Health Drain — rolls Min/Max Damage, then heals the attacker for Life Steal Ratio " +
              "of what the target actually lost")]
     public ActionType actionType;
 
     [Tooltip("Who this may be used on. Enforced by CombatController.IsValidTarget, which also drives " +
-             "the targeting line's valid/invalid cursor.\n\n" +
-             "Note: All Allies / All Enemies currently resolve against a single clicked target.")]
+             "the targeting line's valid/invalid cursor and the hover target indicator.\n\n" +
+             "Note: All Allies / All Enemies currently resolve against a single clicked target.\n\n" +
+             "Read from the CASTER's point of view for enemy-owned actions — an enemy's Single Enemy " +
+             "action targets the crew. An action asset is therefore not portable between crew and " +
+             "enemies.")]
     public TargetType targetType;
 
     [Tooltip("Skip target selection and resolve this on whoever cast it, then end their turn.\n\n" +
@@ -86,45 +116,27 @@ public class Action : ScriptableObject
              "0 means always available. Applies to enemies as well as the player.")]
     public float cooldown;
 
-    [Tooltip("Icon on the action button. Greyed out automatically while on cooldown.")]
-    public Sprite actionIcon;
+    // ---------------------------------------------------------------------------------------
+    // VALUES — only the section matching Action Type above is read
+    // ---------------------------------------------------------------------------------------
 
-    [Header("Attack Timing")]
-    [Tooltip("Seconds an ENEMY spends winding up before this lands — the player's window to react. " +
-             "The parry window opens near the end of it.\n\n" +
-             "Applies to enemy Attack and Health Drain actions, which are the two that route through " +
-             "the parry system. Unused for every other action type, and unused for player actions, " +
-             "which resolve immediately.")]
-    [SerializeField] private float attackWindupTime = 1.0f; // Default 1 second
-
-    [Header("Spell Effects")]
-    [Tooltip("Damage roll, inclusive of min and exclusive of max. Used by Attack AND Health Drain " +
-             "actions — a Health Drain rolls its damage here and heals from what it takes.\n\n" +
+    [Header("Damage  (Attack, Health Drain)")]
+    [Tooltip("Damage roll, inclusive of min and exclusive of max.\n\n" +
+             "Read by Attack AND Health Drain — a Health Drain rolls its damage here and heals from " +
+             "what it takes. Ignored by every other action type.\n\n" +
              "Keep the range in mind when tuning drive, crit and buffs — damage is rounded, so " +
              "bonuses worth less than ~1 point on a low roll disappear entirely.")]
     public float minDamage;
     public float maxDamage;
 
-    [Tooltip("Healing roll. Used only by Heal actions. Rounded like damage, so the same rounding " +
-             "caveat applies.")]
+    [Header("Healing  (Heal)")]
+    [Tooltip("Healing roll. Read by Heal only — Health Drain heals from Life Steal Ratio instead. " +
+             "Rounded like damage, so the same rounding caveat applies.")]
     public float minHeal;
     public float maxHeal;
 
-    [Tooltip("Size of the change. Debuff actions negate this, so author it positive either way.\n\n" +
-             "Units depend on Buff Type — check before typing a number:\n" +
-             "Accuracy / Defense / Speed / Health — flat points (e.g. 2)\n" +
-             "Damage Reduction — a FRACTION, not points (0.25 = take 25% less damage)\n" +
-             "Crit Chance — flat points ON THE D20, where each point is +5% crit (so 2 = +10%)\n\n" +
-             "Getting the units wrong is silent rather than loud: 25 in a Damage Reduction action " +
-             "clamps to the 90% cap and reads as near-immunity, and 25 in a Crit Chance action " +
-             "clamps to the 50% cap.")]
-    public float buffValue;
-
-    [Tooltip("How many turns the buff lasts. Authored as a float but rounded to whole turns, ticked " +
-             "down at the end of the affected character's own turn.")]
-    public float duration;
-
-    [Tooltip("What the buff moves.\n\n" +
+    [Header("Buff / Debuff")]
+    [Tooltip("What the buff moves. A Debuff applies the same thing negated.\n\n" +
              "Accuracy — the to-hit roll only, never damage (damage bonuses are drive's job)\n" +
              "Defense — the number attackers must beat\n" +
              "Speed — initiative\n" +
@@ -137,18 +149,23 @@ public class Action : ScriptableObject
              "drains AND heals. Capped at 50%; as a Debuff it switches crits off entirely.")]
     public Character.BuffType buffType;
 
-    [Header("Health Drain")]
-    [Tooltip("Share of the health the target ACTUALLY LOST that the attacker heals back. Used only " +
-             "by Health Drain actions. 0.5 = half. Damage itself comes from Min/Max Damage above.\n\n" +
-             "Measured against health lost rather than damage rolled, so overkill isn't rewarded: " +
-             "a 20-damage hit on a target with 3hp left drains 3, not 20.\n\n" +
-             "Watch the rounding — healing is rounded like damage, so a low ratio on a small damage " +
-             "range heals 0 and the action reads as broken. Sanity-check against Min Damage: at " +
-             "Min Damage 3 a ratio below ~0.17 rounds away to nothing.")]
-    [Range(0f, 1f)]
-    public float healthDrainRatio = 0.5f;
+    [Tooltip("Size of the change. Debuff actions negate this, so author it POSITIVE either way.\n\n" +
+             "Units depend on Buff Type — check before typing a number:\n" +
+             "Accuracy / Defense / Speed / Health — flat points (e.g. 2)\n" +
+             "Damage Reduction — a FRACTION, not points (0.25 = take 25% less damage)\n" +
+             "Crit Chance — flat points ON THE D20, where each point is +5% crit (so 2 = +10%)\n\n" +
+             "Getting the units wrong is silent rather than loud: 25 in a Damage Reduction action " +
+             "clamps to the 90% cap and reads as near-immunity, and 25 in a Crit Chance action " +
+             "clamps to the 50% cap.")]
+    public float buffValue;
 
-    [Header("Drive Manipulation")]
+    [Tooltip("How many turns the buff lasts. Authored as a float but rounded to whole turns, ticked " +
+             "down at the end of the affected character's own turn.\n\n" +
+             "Note for Speed: turn order is re-rolled at the start of each round, so a 1-turn Speed " +
+             "buff or debuff only ever bends a single re-roll. 2 is the practical minimum.")]
+    public float duration;
+
+    [Header("Drive  (Drive Grant, Drive Drain)")]
     [Tooltip("Drive moved by a Drive Grant or Drive Drain action. Author it POSITIVE either way — " +
              "Drive Drain removes it, exactly as Debuff negates Buff Value.\n\n" +
              "This is RAW DRIVE, not segments. The meter lives on the character PREFAB, not in " +
@@ -158,10 +175,33 @@ public class Action : ScriptableObject
     [Min(0f)]
     public float driveAmount = 100f;
 
+    [Header("Life Steal  (Health Drain)")]
+    [Tooltip("Share of the health the target ACTUALLY LOST that the attacker heals back. 0.5 = half. " +
+             "Damage itself comes from the Damage section above.\n\n" +
+             "Measured against health lost rather than damage rolled, so overkill isn't rewarded: " +
+             "a 20-damage hit on a target with 3hp left drains 3, not 20.\n\n" +
+             "Watch the rounding — healing is rounded like damage, so a low ratio on a small damage " +
+             "range heals 0 and the action reads as broken. Sanity-check against Min Damage: at " +
+             "Min Damage 3 a ratio below ~0.17 rounds away to nothing.")]
+    [Range(0f, 1f)]
+    public float healthDrainRatio = 0.5f;
+
+    // ---------------------------------------------------------------------------------------
+    // TIMING — enemy-side presentation
+    // ---------------------------------------------------------------------------------------
+
+    [Header("Enemy Windup  (Attack, Health Drain)")]
+    [Tooltip("Seconds an ENEMY spends winding up before this lands — the player's window to react. " +
+             "The parry window opens near the end of it.\n\n" +
+             "Applies to enemy Attack and Health Drain actions, which are the two that route through " +
+             "the parry system. Unused for every other action type, and unused for player actions, " +
+             "which resolve immediately.")]
+    [SerializeField] private float attackWindupTime = 1.0f; // Default 1 second
+
     //[Header("Requirements")]
     //public int minimumLevel;
     //public Character.CharacterClass[] allowedClasses;
-    
+
     /// <summary>
     /// Get the attack windup time for this action
     /// </summary>

@@ -744,8 +744,15 @@ minimum roll to hit = defenseValue - attackPower + 1     (floored at 2, since 1 
 hit chance          = (21 - minimum roll) / 20
 ```
 
-**As authored today every `defenseValue` (3–5) sits below every `attackPower` (5–11), so the
-subtraction clamps and everything hits 95%.** Defense is inert, and the only misses in the game are
+**This has since been applied — the baseline below is the authored roster, not a proposal.** Crew sit
+at defense 13 / attack 11-15; Skeleton 8/11, Elite 10/17, Boss 12/14. Hit chances now span 60-95%
+rather than clamping at 95%, so **defense is live and misses are no longer only natural 1s.**
+
+The one asset still outside the band is `Witch Healer` (attack 5, defense 3), which everything hits
+at the ceiling.
+
+*Superseded, kept for the reasoning:* it used to be that every `defenseValue` (3-5) sat below every
+`attackPower` (5-11), so the subtraction clamped, defense was inert, and the only misses were
 natural 1s. Enemies gaining the ability to miss (see `TODO.md`) changed nothing on its own for the
 same reason.
 
@@ -878,8 +885,12 @@ Detail in `TODO.md`:
 - **`BuffType.Health` grants max health but no actual health**, and can leave a character above
   100% when it expires. Avoid the type until it's decided; the rest are safe.
 - **`BuffType.Attack` is now `BuffType.Accuracy`** — it feeds the to-hit roll only. Damage bonuses
-  stay drive's job so the two don't compound. **Defense buffs still do nothing at all** until
-  defense values move into the band above — the to-hit roll clamps. Speed buffs work as expected.
+  stay drive's job so the two don't compound. **Defense buffs and debuffs now work** — the roster has
+  been retuned into the band above, so the to-hit roll no longer clamps. A -3 Defense debuff is worth
+  +10 to +15 percentage points to whoever is attacking the target. Speed buffs work as expected.
+  - **Every debuff comes free from the buff it mirrors** — `ActionType.Debuff` negates `buffValue`,
+    so Speed, Defense, Accuracy, Crit Chance and Damage Reduction all have working debuff forms with
+    no extra code. Author them as `Debuff` with a positive `buffValue`.
 - **`BuffType.CritChance` is authored in flat d20 points** — each point is one more critting face,
   so `+1` is +5% and `+2` is +15% total. Capped at 50% (threshold 11); a negative value switches
   crits off entirely rather than wrapping. Applies to attacks, health drains **and heals**.
@@ -890,8 +901,9 @@ Detail in `TODO.md`:
   capped at 90% so protection can never reach immunity; as a Debuff it becomes a vulnerability,
   floored at -100%. It's the one buff type that isn't a stat, so it's applied in
   `CharacterManager.TakeDamage()` rather than `RefreshStats()`.
-  - **It's the reliable mitigation dial.** Unlike Defense, it works at the current stat spread
-    rather than waiting for defense values to move into the band above.
+  - **It's the mitigation dial that can't clamp.** Defense also works now that the roster is in
+    band, but Defense stops helping once a matchup is already at the 5% floor or 95% ceiling,
+    whereas protection scales the damage itself and always does something.
   - Watch the rounding, as ever: damage is rounded after reduction, so 25% off a 2-damage hit is
     invisible. Sanity-check against `minDamage`.
 

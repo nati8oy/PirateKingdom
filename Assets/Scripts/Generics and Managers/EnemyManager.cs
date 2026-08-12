@@ -601,8 +601,7 @@ public class EnemyManager : MonoBehaviour
         float damage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
 
         // Check for critical hit
-        int critRoll = RollForCritical();
-        if (critRoll == 20) // Natural 20 is a crit
+        if (RollForCritical())
         {
             damage *= 2;
             Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
@@ -664,8 +663,7 @@ public class EnemyManager : MonoBehaviour
                 float damage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
 
                 // Check for critical hit
-                int critRoll = RollForCritical();
-                if (critRoll == 20)
+                if (RollForCritical())
                 {
                     damage *= 2;
                     Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
@@ -713,8 +711,7 @@ public class EnemyManager : MonoBehaviour
                 break;
                 
             // Drive actions call the target's CharacterManager directly — the same path the player
-            // takes. Deliberately NOT the SendMessage reflection the buff branch below uses: that
-            // one can't bind and silently no-ops (see TODO.md), so it must not be copied.
+            // takes, and now the same path the buff branch below takes.
             //
             // targetManager is used as-is rather than being overridden to self for SingleAlly the
             // way the buff branch does, because SelectTarget already resolves SingleAlly to another
@@ -734,38 +731,34 @@ public class EnemyManager : MonoBehaviour
 
             case Action.ActionType.Buff:
             case Action.ActionType.Debuff:
-                // Apply buff/debuff - try different possible method names
-                CharacterManager buffTarget = _selectedAction.targetType == Action.TargetType.SingleAlly ? 
-                    _characterManager : targetManager;
-                
-                try
+                // Called directly, matching the player path in CombatController. This used to go
+                // through SendMessage with an object[] of three or four arguments — SendMessage only
+                // ever passes ONE, so it matched no overload, and the bare catch below swallowed the
+                // failure without even a log line. Every enemy buff and debuff silently did nothing.
+                // Don't reintroduce reflection here.
+                //
+                // SingleAlly resolves to this enemy rather than SelectTarget's pick, so a buff is a
+                // self-buff. That differs from the DriveGrant branch above, which honours the pick —
+                // deliberately: feeding an ally's meter is the interesting case for drive, whereas a
+                // protection or accuracy buff is almost always meant for the caster, and there is no
+                // Self target type to say so explicitly.
+                CharacterManager buffTarget = _selectedAction.targetType == Action.TargetType.SingleAlly
+                    ? _characterManager
+                    : targetManager;
+
+                if (buffTarget != null)
                 {
-                    // Try different possible buff method names
-                    if (HasMethod(buffTarget, "ApplyBuff"))
-                    {
-                        buffTarget.SendMessage("ApplyBuff", new object[] { 
-                            _selectedAction.buffType, 
-                            _selectedAction.buffValue, 
-                            Mathf.RoundToInt(_selectedAction.duration), 
-                            _selectedAction.actionType == Action.ActionType.Buff 
-                        });
-                    }
-                    else if (HasMethod(buffTarget, "AddBuff"))
-                    {
-                        buffTarget.SendMessage("AddBuff", new object[] { 
-                            _selectedAction.buffType, 
-                            _selectedAction.buffValue, 
-                            Mathf.RoundToInt(_selectedAction.duration) 
-                        });
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[EnemyManager] No suitable buff method found on {buffTarget.name}");
-                    }
+                    // Debuff negates, exactly as CombatController does — buffValue is authored
+                    // positive for both.
+                    float buffAmount = _selectedAction.actionType == Action.ActionType.Buff
+                        ? _selectedAction.buffValue
+                        : -_selectedAction.buffValue;
+
+                    buffTarget.AddBuff(_selectedAction.buffType, buffAmount, _selectedAction.duration);
                 }
-                catch
+                else
                 {
-                    Debug.LogWarning($"[EnemyManager] Error applying buff to {buffTarget.name}");
+                    Debug.LogWarning($"[EnemyManager] {gameObject.name} had no target for {_selectedAction.actionName}.");
                 }
                 break;
         }
@@ -776,11 +769,6 @@ public class EnemyManager : MonoBehaviour
         _turnManager.CompleteTurn();
     }
 
-    private bool HasMethod(object obj, string methodName)
-    {
-        return obj.GetType().GetMethod(methodName) != null;
-    }
-    
     // Store pending damage and target for parryable attacks
     private float _pendingDamage;
     private CharacterManager _pendingTarget;
@@ -854,9 +842,33 @@ public class EnemyManager : MonoBehaviour
                   $"({_selectedAction.healthDrainRatio:P0} of {healthLost:F1} taken)");
     }
 
-    private int RollForCritical()
+    /// <summary>
+    /// Rolls this enemy's critical hit, honouring any <see cref="Character.BuffType.CritChance"/>
+    /// buff via <c>CharacterManager.CritThreshold</c>. Returns true on a crit.
+    /// </summary>
+    /// <remarks>
+    /// Returns the verdict rather than the raw roll, so the threshold is applied in one place
+    /// instead of every call site re-testing <c>== 20</c> — which is exactly how the base crit rule
+    /// came to be duplicated across two branches in the first place.
+    ///
+    /// <b>Still a separate roll from the to-hit check</b>, unlike the player, whose single d20
+    /// decides both. That asymmetry predates this and is logged in <c>TODO.md</c>; a CritChance buff
+    /// makes it slightly more visible, because an enemy's crit is gated behind landing a separate
+    /// to-hit roll first while the player's buffed high roll both hits and crits by construction.
+    /// </remarks>
+    private bool RollForCritical()
     {
-        return Random.Range(1, 21); // d20 roll
+        int roll = Random.Range(1, 21); // d20 roll
+        int threshold = _characterManager != null ? _characterManager.CritThreshold : 20;
+
+        bool crit = roll >= threshold;
+
+        if (crit && enemyData != null && enemyData.showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} crit roll {roll} met threshold {threshold}");
+        }
+
+        return crit;
     }
 
     /// <summary>

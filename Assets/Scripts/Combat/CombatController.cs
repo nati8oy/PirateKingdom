@@ -71,6 +71,32 @@ public class CombatController : MonoBehaviour
         // Set the selected action
         selectedAction = action;
 
+        // Self-cast actions skip target selection entirely: one click on the button resolves them
+        // on the caster and ends the turn. Handled here rather than at the click site so it holds
+        // for every route into SelectAction, and checked before the automatic-targeting branch
+        // below because "cast on me" is a stronger statement than "pick something at random".
+        if (action != null && action.autoTargetSelf)
+        {
+            CharacterManager caster = turnManager != null ? turnManager.currentCharacterTurn : null;
+
+            // IsValidTarget reads selectedAction, which is assigned above.
+            if (caster != null && IsValidTarget(caster))
+            {
+                Debug.Log($"[CombatController] {action.actionName} is self-cast — resolving on " +
+                          $"{caster.characterData?.characterName ?? caster.name} without target selection.");
+
+                // Resolves, ends the turn and clears the selection, all inside PerformAction.
+                TryExecuteActionOnTarget(caster);
+                return;
+            }
+
+            // Degrade to manual targeting rather than erroring: an unusable action that eats the
+            // turn is worse than one that simply asks for a target the normal way.
+            Debug.LogWarning($"[CombatController] '{action.actionName}' has Auto Target Self ticked, but " +
+                             $"its Target Type ({action.targetType}) doesn't allow the caster as a target. " +
+                             "Falling back to manual targeting — set Target Type to Single Ally.", action);
+        }
+
         if (!useManualTargeting)
         {
             // Automatic targeting mode - find and execute on a random target immediately
@@ -364,9 +390,13 @@ public class CombatController : MonoBehaviour
                         Debug.Log($"No drive manager found for {currentCharacter.characterData.characterName}");
                     }
                 
-                    if (attackRoll == 20)
+                    // >= threshold rather than == 20, so a CritChance buff widens the window.
+                    // Note this is a different test from the "natural 20 always hits" check above,
+                    // which stays pinned at 20 — a buffed 18 can crit, but it still has to beat the
+                    // target's defense to land, so you can never crit on a miss.
+                    if (attackRoll >= currentCharacter.CritThreshold)
                     {
-                        Debug.Log("Critical Hit! Double damage!");
+                        Debug.Log($"Critical Hit! Double damage! (rolled {attackRoll} vs threshold {currentCharacter.CritThreshold})");
                         damage *= 2;
                     }
 
@@ -413,9 +443,9 @@ public class CombatController : MonoBehaviour
                         drainDriveManager.OnAttackPerformed();
                     }
 
-                    if (drainRoll == 20)
+                    if (drainRoll >= currentCharacter.CritThreshold)
                     {
-                        Debug.Log("Critical Hit! Double drain!");
+                        Debug.Log($"Critical Hit! Double drain! (rolled {drainRoll} vs threshold {currentCharacter.CritThreshold})");
                         drainDamage *= 2;
                     }
 
@@ -447,9 +477,11 @@ public class CombatController : MonoBehaviour
                 int healRoll = HitChanceRoll();
                 float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
             
-                if (healRoll == 20)
+                // Crit chance applies to healing too — a healer who buffs their crit should see it
+                // in their heals, or the buff silently means nothing in a support character's hands.
+                if (healRoll >= currentCharacter.CritThreshold)
                 {
-                    Debug.Log("Critical Heal! Double healing!");
+                    Debug.Log($"Critical Heal! Double healing! (rolled {healRoll} vs threshold {currentCharacter.CritThreshold})");
                     healAmount *= 2;
                 }
             

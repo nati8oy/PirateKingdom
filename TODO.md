@@ -168,22 +168,31 @@ authored for the crew can't simply be dropped into an enemy's `actionSlots` and 
 
 Worth unifying eventually, but it's a rename-and-audit job across every authored asset, so not now.
 
-### Enemy buff and debuff actions silently do nothing
-`EnemyManager.cs:608-625` applies buffs by reflection: `HasMethod(buffTarget, "ApplyBuff")` then
+**Multi-target attacks are what make this urgent.** While every action hits one target the two
+readings are merely confusing; once `AllEnemies` resolves against a whole side, one inverted read
+means an enemy's AoE hits its own allies or a crew AoE hits the party. See "Multi-target attacks —
+what it would touch" in `META.md` Phase B, which lists this as a prerequisite.
+
+### ~~Enemy buff and debuff actions silently do nothing~~ — DONE
+`EnemyManager` applied buffs by reflection: `HasMethod(buffTarget, "ApplyBuff")` then
 `buffTarget.SendMessage("ApplyBuff", new object[] { … })` with **four** arguments, falling back to
-`"AddBuff"` with **three**.
+`"AddBuff"` with **three**. `SendMessage` only ever passes a **single** argument, so the `object[]`
+went in as one parameter and matched neither `AddBuff(BuffType, float, float)` nor any `ApplyBuff`
+overload — and `ApplyBuff` never existed on `CharacterManager`. The bare `catch` swallowed the
+failure, so there wasn't even a log line.
 
-`SendMessage` only ever passes a **single** argument. Passing an `object[]` hands the array itself
-as one parameter, which matches neither `AddBuff(BuffType, float, float)` nor any `ApplyBuff`
-overload — and `ApplyBuff` doesn't exist on `CharacterManager` at all. The call fails and the bare
-`catch` below swallows it, so there isn't even a log line.
+Now calls `buffTarget.AddBuff(...)` directly, matching `CombatController`, negating `buffValue` for
+the debuff case. `HasMethod()` is deleted; there is no reflection left in the file.
 
-The player's path is fine: `CombatController.cs:391-398` calls `AddBuff` directly.
+Fixed as part of adding the protection buff (`BuffType.DamageReduction`) — that's the first buff
+anyone would realistically want on an enemy, so shipping it against a no-op path would have made the
+feature look broken on half the roster.
 
-Masked today only because no enemy has a buff or debuff in its `actionSlots`. Slot one onto the
-Elite and it no-ops. **Fix:** delete the reflection and call `buffTarget.AddBuff(...)` directly,
-matching the player path, with `-buffValue` for the debuff case. `HasMethod()` then has no callers
-and should go too.
+**Behaviour note kept deliberately:** `SingleAlly` still resolves to the casting enemy rather than
+`SelectTarget()`'s pick, so an enemy buff is a self-buff. That differs from the `DriveGrant` branch,
+which honours the pick. There is no `Self` target type to distinguish "me" from "an ally", and a
+protection or accuracy buff is almost always meant for the caster — adding one is the real fix if
+enemy support characters are ever wanted.
 
 ### `BuffType.Health` grants max health but no actual health
 `CharacterManager.cs:260` folds Health buffs into `MaxHealth`, and nothing adjusts `CurrentHealth`.

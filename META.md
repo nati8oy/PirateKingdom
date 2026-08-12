@@ -784,6 +784,76 @@ Sketched so the cost is known, not designed. The per-turn tick it needs already 
 - Enemy AI weighting: `EnemyManager.ChooseBestAction()` scores by `ActionType`, so a new type needs
   a weight or enemies will never pick it.
 
+#### Multi-target attacks — what it would touch
+
+Sketched so the cost is known, not designed. Wanted for both crew and enemies.
+
+**It's a half-built feature, and the slate is clean.** `Action.TargetType` already has `AllEnemies`
+and `AllAllies`, and both sides already accept them — they just resolve against one target
+(`CombatController.IsValidTarget()` accepts any enemy-tagged click; `EnemyManager.SelectTarget()`
+returns `_playerCharacters[0]`, with a comment saying as much). **All 13 authored Action assets are
+`SingleEnemy` or `SingleAlly`**, so implementing real multi-target semantics changes no existing
+asset's behaviour.
+
+**Two things to pay down first, because AoE is what makes them dangerous:**
+
+- **`TargetType` means two different things** — absolute in `CombatController`, caster-relative in
+  `EnemyManager` (see `TODO.md`). Benign while each asset lives on one side only. With AoE, one
+  inverted read means an enemy's "all enemies" resolves against its own side, or a crew AoE hits
+  the party.
+- **The d20 rule is already duplicated** across `CombatController.PerformAction()` and
+  `EnemyManager`, and `HealthDrain` made it four hand-synced copies. Adding per-target loops to both
+  writes the loop twice and then merges it. **Extract a shared resolver taking
+  `(caster, action, targets[])` first**, with single-target as the one-element case. This is the
+  call that shapes everything else.
+
+**The decision without a clean answer: parry.** Single-target at every level — `ParryInputManager`
+dispatches to exactly one `activeParrySystem`, `EnemyAttack.StartAttack()` takes one GameObject,
+`_pendingDamage`/`_pendingTarget` are single-valued, and one shared Parry input action means three
+crew physically cannot each parry their own hit. Two viable shapes:
+
+- *AoE enemy attacks are unparryable.* Simplest, and defensible design — AoE becomes the threat you
+  can't mitigate, only prevent or survive. Needs strong telegraphing or it reads as broken parry.
+- *One press mitigates party-wide.* Elegant, but the parry drive reward is
+  `damage prevented × parryBonusDriveMultiplier` **per character**, so one press paying out across
+  three crew is an enormous drive swing needing retune.
+
+Recommend the first, chosen explicitly rather than by default.
+
+**Drive economy scales with the target count, both ways.** `damageInflictedDriveMultiplier` is 4 and
+a segment is 100, so a 3-target AoE for 5 each generates **60 drive from one action** — over half a
+segment. Every victim separately gains `damageTakenDriveMultiplier`, so an enemy AoE tops up the
+whole party at once. And a drive stack spent on an AoE is worth N× one spent on a single target.
+Decide deliberately whether drive gain stays per-damage-point (scales with N) or becomes per-action.
+
+**Traps, all concrete:**
+
+- **`OnAttackPerformed()` must fire once per action, not per target** — inside the loop, target 1
+  consumes the stacks and targets 2+ silently lose the multiplier. Same for `UseAction()`.
+- **Turn completion exactly once.** Firing `EnemyAttack` per target makes `OnAttackComplete` fire N
+  times, and each calls `CompleteTurn()` — the enemy would burn N turns.
+- **Per-target rolls.** Roll to-hit *and* damage per target so each target's `defenseValue` and crits
+  matter; note it multiplies variance. The "single damage roll" rule in `CLAUDE.md` exists only to
+  keep the parry reward honest, so it doesn't bind if AoE is unparryable.
+- **Death mid-iteration is safe today and won't stay safe.** `TakeDamage` only fires `OnDeath`; the
+  `Destroy` happens in `CharacterManager.Update()` next frame, so a synchronous loop is fine. Phase C
+  staggers resolution across frames, at which point it isn't. Snapshot the list and null-check per
+  iteration regardless. (Aside: `OnDeath` fires twice per death — from `TakeDamage` and again from
+  `Update` — harmless only because nothing subscribes to it.)
+- **Enemy AI can't see how many an action would hit.** `ChooseBestAction()` weights purely by
+  `ActionType`, so an AoE is strictly better against 3 crew and worthless against 1 with no way to
+  tell. Needs a situational modifier scaling by living target count. `SelectTarget()` also returns a
+  single `CharacterManager`.
+
+**UI is single-target throughout.** `ActionTargetingLine.ApplyHoverTarget()` tracks exactly one
+`hoverTarget` (the per-character flag underneath handles multiples fine, so this is a set change),
+the line draws to one point, and `TooltipUI.ShowTargetTooltip()` previews one hit chance where an
+AoE has a different one per target.
+
+**Sequencing: do this after Phase C.** Three simultaneous damage feedbacks and floating numbers read
+as mush, and Phase C is precisely about putting authored time around resolution — building AoE first
+means redoing its presentation.
+
 #### Open items belonging to this phase
 
 Detail in `TODO.md`:
@@ -792,20 +862,38 @@ Detail in `TODO.md`:
 - **Tephi is undertuned** — attack 5 and the roster's lowest `buffNextActionMultiplier` (1.5).
 - **`Skelly Spear` (5–10) is in no enemy's `actionSlots`** — the Elite is its natural home.
 - **`GetModifiedAttackPower()` has no callers** — decide whether drive should affect accuracy, or delete it.
-- **Crit asymmetry** — the player's natural 20 both hits and crits; enemies roll to-hit and crit separately.
+- **Crit asymmetry** — the player's single roll both hits and crits; enemies roll to-hit and crit
+  separately. Slightly more visible now: with `BuffType.CritChance` widening the window, an enemy's
+  crit is gated behind passing a *separate* to-hit roll first, so the same buff value buys an enemy
+  marginally fewer crits than a crew member. Both sides now read `CharacterManager.CritThreshold`,
+  so unifying is a matter of deleting `RollForCritical()` and testing the to-hit roll instead.
 - **Drive multipliers below ~1.5 vanish into `Mathf.Round`** on small damage ranges. Sanity-check new
   tuning against `minDamage`, not the midpoint.
 
 **Buff actions — read these three before authoring any.** The player path works and new buff/debuff
 `Action` assets need no code, but:
 
-- **Enemy buff/debuff actions silently no-op** — `EnemyManager` applies them through a `SendMessage`
-  call that can't bind, swallowed by a bare `catch`. Fix before slotting a buff onto an enemy.
+- ~~**Enemy buff/debuff actions silently no-op**~~ — **fixed.** `EnemyManager` now calls `AddBuff`
+  directly instead of through an unbindable `SendMessage`. Enemy buffs work.
 - **`BuffType.Health` grants max health but no actual health**, and can leave a character above
-  100% when it expires. Avoid the type until it's decided; Attack, Defense and Speed are safe.
+  100% when it expires. Avoid the type until it's decided; the rest are safe.
 - **`BuffType.Attack` is now `BuffType.Accuracy`** — it feeds the to-hit roll only. Damage bonuses
   stay drive's job so the two don't compound. **Defense buffs still do nothing at all** until
   defense values move into the band above — the to-hit roll clamps. Speed buffs work as expected.
+- **`BuffType.CritChance` is authored in flat d20 points** — each point is one more critting face,
+  so `+1` is +5% and `+2` is +15% total. Capped at 50% (threshold 11); a negative value switches
+  crits off entirely rather than wrapping. Applies to attacks, health drains **and heals**.
+  - Cheapest damage dial that isn't drive: it multiplies existing damage rather than adding to it,
+    so it scales with whatever the weapon already does and doesn't need retuning per action.
+- **`BuffType.DamageReduction` is the protection buff, and is authored in different units** — a
+  FRACTION (0.25 = 25% less damage), where every other type is flat points. Stacks additively,
+  capped at 90% so protection can never reach immunity; as a Debuff it becomes a vulnerability,
+  floored at -100%. It's the one buff type that isn't a stat, so it's applied in
+  `CharacterManager.TakeDamage()` rather than `RefreshStats()`.
+  - **It's the reliable mitigation dial.** Unlike Defense, it works at the current stat spread
+    rather than waiting for defense values to move into the band above.
+  - Watch the rounding, as ever: damage is rounded after reduction, so 25% off a 2-damage hit is
+    invisible. Sanity-check against `minDamage`.
 
 Buff icons are built — `BuffIconDisplay` on the combatant root, driven by
 `CharacterManager.BuffsChanged`. One slot per buff type, sprite plus optional turns text.

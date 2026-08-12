@@ -47,11 +47,11 @@ public class TooltipUI : MonoBehaviour
                 tooltipContent += $"\nHealing: {action.minHeal:F0}-{action.maxHeal:F0}";
                 break;
             case Action.ActionType.Buff:
-                tooltipContent += $"\nBuff: {action.buffType} +{action.buffValue:F0}";
+                tooltipContent += $"\nBuff: {DescribeBuff(action.buffType, action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.Debuff:
-                tooltipContent += $"\nDebuff: {action.buffType} -{action.buffValue:F0}";
+                tooltipContent += $"\nDebuff: {DescribeBuff(action.buffType, -action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.DriveGrant:
@@ -66,6 +66,8 @@ public class TooltipUI : MonoBehaviour
                 break;
         }
 
+        tooltipContent += DescribeSelfCast(action);
+
         // Add cooldown information if applicable
         if (action.cooldown > 0)
         {
@@ -73,6 +75,57 @@ public class TooltipUI : MonoBehaviour
         }
 
         tooltipText.text = tooltipContent;
+    }
+
+    /// <summary>
+    /// Flags a self-cast action, or returns empty for a normal one.
+    /// </summary>
+    /// <remarks>
+    /// Worth its own line because it changes what clicking the button *does*: there's no target step
+    /// and no chance to reconsider, so the click commits the whole turn. A player who expects to
+    /// pick a target next has already spent it.
+    /// </remarks>
+    private static string DescribeSelfCast(Action action)
+    {
+        return action != null && action.autoTargetSelf
+            ? "\n<color=yellow>Self-cast — resolves at once and ends your turn</color>"
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// Formats a buff amount in the units that type is actually authored in — percent for
+    /// DamageReduction, signed flat points for everything else.
+    /// </summary>
+    /// <remarks>
+    /// Without this a 25% protection buff renders as "+0", because <c>buffValue</c> holds 0.25 and
+    /// every call site formatted it with <c>:F0</c>. Pass the SIGNED value: callers that negate for
+    /// a debuff must negate before calling, so a vulnerability reads as "-25%".
+    /// </remarks>
+    private static string DescribeBuffAmount(Character.BuffType type, float value)
+    {
+        return type == Character.BuffType.DamageReduction
+            ? $"{value:P0}"
+            : $"{value:+0;-0}";
+    }
+
+    /// <summary>Human-readable buff label, e.g. "Damage Reduction 25%" or "Accuracy +2".</summary>
+    private static string DescribeBuff(Character.BuffType type, float signedValue)
+    {
+        // Two-word types read badly as raw enum names. Everything else is already one word.
+        string label = type switch
+        {
+            Character.BuffType.DamageReduction => "Damage Reduction",
+            Character.BuffType.CritChance => "Crit Chance",
+            _ => type.ToString()
+        };
+
+        // Crit points are only meaningful as the chance they buy — +2 means nothing, +10% does.
+        if (type == Character.BuffType.CritChance)
+        {
+            return $"{label} {signedValue * 5f:+0;-0}%";
+        }
+
+        return $"{label} {DescribeBuffAmount(type, signedValue)}";
     }
 
     /// <summary>
@@ -125,12 +178,12 @@ public class TooltipUI : MonoBehaviour
                 break;
             case Action.ActionType.Buff:
                 tooltipContent += $"\n<color=cyan>Buff</color>";
-                tooltipContent += $"\nEffect: {action.buffType} +{action.buffValue:F0}";
+                tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.Debuff:
                 tooltipContent += $"\n<color=red>Debuff</color>";
-                tooltipContent += $"\nEffect: {action.buffType} -{action.buffValue:F0}";
+                tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, -action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.DriveGrant:
@@ -170,6 +223,8 @@ public class TooltipUI : MonoBehaviour
                 break;
         }
         
+        tooltipContent += DescribeSelfCast(action);
+
         // Show cooldown information with character-specific status
         if (action.cooldown > 0)
         {
@@ -221,12 +276,12 @@ public class TooltipUI : MonoBehaviour
                 break;
             case Action.ActionType.Buff:
                 tooltipContent += $"\n<color=cyan>Buff</color>";
-                tooltipContent += $"\nEffect: {action.buffType} +{action.buffValue:F0}";
+                tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.Debuff:
                 tooltipContent += $"\n<color=red>Debuff</color>";
-                tooltipContent += $"\nEffect: {action.buffType} -{action.buffValue:F0}";
+                tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, -action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.DriveGrant:
@@ -304,38 +359,46 @@ public class TooltipUI : MonoBehaviour
                 int hitChance = CalculateHitChance(attacker, target);
                 tooltipContent += $"Hit Chance: {hitChance}%\n";
                 
-                // Calculate crit chance (assuming crit on natural 20)
-                int critChance = 5; // 5% base crit chance (1 in 20)
-                tooltipContent += $"Crit Chance: {critChance}%\n";
-                
-                // Show damage range with potential drive multipliers
+                // Read off the attacker rather than hardcoded, so a CritChance buff shows up in the
+                // preview. 5% unbuffed.
+                tooltipContent += $"Crit Chance: {attacker.CritChancePercent}%\n";
+
                 float minDamage = selectedAction.minDamage;
                 float maxDamage = selectedAction.maxDamage;
-                
+
+                // Everything that will actually modify this damage gets applied here, in the same
+                // order combat applies it, so the preview can't promise a number that never lands.
                 DriveManager driveManager = attacker.GetComponent<DriveManager>();
-                if (driveManager != null)
+                float multiplier = driveManager != null ? driveManager.GetNextAttackDamageMultiplier() : 1f;
+
+                if (multiplier > 1f)
                 {
-                    float multiplier = driveManager.GetNextAttackDamageMultiplier();
-                    if (multiplier > 1f)
-                    {
-                        minDamage *= multiplier;
-                        maxDamage *= multiplier;
-                        tooltipContent += $"Damage: {minDamage:F0}-{maxDamage:F0} (x{multiplier:F1})";
-                    }
-                    else
-                    {
-                        tooltipContent += $"Damage: {minDamage:F0}-{maxDamage:F0}";
-                    }
+                    minDamage *= multiplier;
+                    maxDamage *= multiplier;
                 }
-                else
+
+                // The target's protection is part of the outcome too. Left out, a hover on a
+                // shielded enemy quotes full damage and the player reads the shortfall as a bug.
+                float protection = target.DamageReductionFraction;
+
+                if (!Mathf.Approximately(protection, 0f))
                 {
-                    tooltipContent += $"Damage: {minDamage:F0}-{maxDamage:F0}";
+                    minDamage *= 1f - protection;
+                    maxDamage *= 1f - protection;
                 }
+
+                tooltipContent += $"Damage: {minDamage:F0}-{maxDamage:F0}";
+
+                // Both annotations are shown, so a number that looks wrong always explains itself.
+                if (multiplier > 1f) tooltipContent += $" (drive x{multiplier:F1})";
+                if (protection > 0f) tooltipContent += $" (<color=cyan>-{protection:P0} protected</color>)";
+                else if (protection < 0f) tooltipContent += $" (<color=red>+{-protection:P0} vulnerable</color>)";
 
                 if (selectedAction.actionType == Action.ActionType.HealthDrain)
                 {
-                    // minDamage/maxDamage already carry the drive multiplier applied above, which is
-                    // right: the siphon is a share of damage dealt, so drive scales it too — once.
+                    // Derived from the numbers above, which already carry both the drive multiplier
+                    // and the target's protection — correct on both counts, because the siphon is a
+                    // share of health ACTUALLY LOST, and protection reduces that.
                     tooltipContent += $"\nHeals you: {minDamage * selectedAction.healthDrainRatio:F0}-" +
                                       $"{maxDamage * selectedAction.healthDrainRatio:F0}" +
                                       $" ({selectedAction.healthDrainRatio:P0} of health taken)";
@@ -345,7 +408,7 @@ public class TooltipUI : MonoBehaviour
             case Action.ActionType.Heal:
                 // Healing always succeeds, so 100% hit chance
                 tooltipContent += $"Success Chance: 100%\n";
-                tooltipContent += $"Crit Chance: 5%\n"; // Same crit chance as attacks
+                tooltipContent += $"Crit Chance: {attacker.CritChancePercent}%\n"; // Heals crit on the same threshold
                 
                 float minHeal = selectedAction.minHeal;
                 float maxHeal = selectedAction.maxHeal;
@@ -374,7 +437,7 @@ public class TooltipUI : MonoBehaviour
             case Action.ActionType.Buff:
             case Action.ActionType.Debuff:
                 tooltipContent += $"Success Chance: 100%\n";
-                tooltipContent += $"Effect: {selectedAction.buffType} {(selectedAction.actionType == Action.ActionType.Buff ? "+" : "-")}{selectedAction.buffValue:F0}\n";
+                tooltipContent += $"Effect: {DescribeBuff(selectedAction.buffType, selectedAction.actionType == Action.ActionType.Buff ? selectedAction.buffValue : -selectedAction.buffValue)}\n";
                 tooltipContent += $"Duration: {Mathf.RoundToInt(selectedAction.duration)} turns";
                 break;
 

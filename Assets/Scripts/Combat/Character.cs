@@ -109,7 +109,10 @@ public class Character : ScriptableObject
 
     [Tooltip("Drive gained per point of damage this character TAKES. A tank identity dial.\n\n" +
              "Note a parry pays out twice — the parry bonus below, plus this on the 25% that still " +
-             "lands.")]
+             "lands.\n\n" +
+             "Measured on damage ACTUALLY TAKEN, so anything that reduces the hit reduces the drive " +
+             "with it: a Damage Reduction buff cuts both. A tank built to farm drive by getting hit " +
+             "gets less of it while protected.")]
     [SerializeField] public float damageTakenDriveMultiplier = 4f;
     [Tooltip("Drive gained on a successful parry = damage prevented x this value. Target is ~25 drive (a quarter segment) for a typical 5-damage hit.")]
     [SerializeField] public float parryBonusDriveMultiplier = 5f;
@@ -129,7 +132,36 @@ public class Character : ScriptableObject
         Accuracy,
         Defense,
         Health,
-        Speed
+        Speed,
+
+        /// <summary>
+        /// Percentage mitigation applied to incoming damage — the "protection" buff. Authored as a
+        /// FRACTION (0.25 = take 25% less), unlike every type above, which are flat stat points.
+        /// </summary>
+        /// <remarks>
+        /// The odd one out, deliberately: the others are additive modifiers to a stat and are folded
+        /// into <c>CharacterManager.RefreshStats()</c>. This one isn't a stat at all — there is no
+        /// "damage taken" field to modify — so it's read in <c>CharacterManager.TakeDamage()</c>
+        /// instead, at the moment damage is applied. Don't try to route it through RefreshStats.
+        ///
+        /// Negative values are a vulnerability debuff (take MORE damage), which is what a Debuff
+        /// action authored against this type produces for free.
+        /// </remarks>
+        DamageReduction,
+
+        /// <summary>
+        /// Widens the critical hit window. Authored as FLAT POINTS on the d20, where each point is
+        /// one more face that crits — so +2 crits on 18-20, i.e. 15% instead of the base 5%.
+        /// </summary>
+        /// <remarks>
+        /// Points rather than a percentage because crits are decided by a d20 face, and a
+        /// percentage can only ever land on a multiple of 5 anyway — asking for "12%" would silently
+        /// become 10% or 15%. Read via <c>CharacterManager.CritThreshold</c>.
+        ///
+        /// Like the others, it is the ATTACKER's own stat: it never reads anything off the target,
+        /// so a negative value is self-inflicted clumsiness rather than crit resistance.
+        /// </remarks>
+        CritChance
     }
 
     public class ActiveBuff

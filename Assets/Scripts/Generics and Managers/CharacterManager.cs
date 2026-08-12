@@ -393,12 +393,76 @@ public class CharacterManager : MonoBehaviour
         {
             // Authored base from the ScriptableObject + this instance's own buffs. Clamps match
             // the ones the Character asset used to apply.
+            //
+            // BuffType.DamageReduction is absent on purpose — it isn't a stat, so there's nothing
+            // here for it to modify. It's read in TakeDamage() at the moment damage lands. See the
+            // remarks on the enum member.
             MaxHealth = Mathf.Max(1f, characterData.maxHealth + SumBuffValue(Character.BuffType.Health));
             AttackPower = Mathf.Max(0f, characterData.attackPower + SumBuffValue(Character.BuffType.Accuracy));
             DefenseValue = Mathf.Max(0f, characterData.defenseValue + SumBuffValue(Character.BuffType.Defense));
             Speed = Mathf.Max(0.1f, characterData.speed + SumBuffValue(Character.BuffType.Speed));
             UpdateBuffDisplay();
         }
+    }
+
+    // Ceiling on stacked protection. Without it two 50% buffs reach 1.0 and the character is simply
+    // immune, which is never a state a turn-based fight should be able to enter. The floor allows a
+    // vulnerability debuff to at most double incoming damage.
+    private const float MinDamageReduction = -1f;
+    private const float MaxDamageReduction = 0.9f;
+
+    /// <summary>
+    /// Net protection against incoming damage, as a fraction. 0.25 means take 25% less; a negative
+    /// value is a vulnerability and means take more. Clamped so stacked buffs can't reach immunity.
+    /// </summary>
+    /// <remarks>
+    /// Buffs and debuffs of this type sum before clamping, so a +40% protection and a -25%
+    /// vulnerability net out to +15% rather than cancelling to nothing — the same additive rule
+    /// every other buff type follows.
+    /// </remarks>
+    public float DamageReductionFraction => Mathf.Clamp(
+        SumBuffValue(Character.BuffType.DamageReduction), MinDamageReduction, MaxDamageReduction);
+
+    // The unbuffed crit rule: a natural 20 and nothing else, i.e. 5%.
+    private const int BaseCritThreshold = 20;
+
+    // Floor of 11 caps buffed crit chance at 50% — past that "critical" stops meaning anything and
+    // damage variance swamps every other dial. 21 is reachable and deliberate: no d20 face satisfies
+    // it, so a negative CritChance buff switches crits off entirely rather than wrapping around.
+    private const int MinCritThreshold = 11;
+    private const int MaxCritThreshold = 21;
+
+    /// <summary>
+    /// Lowest d20 roll that crits for this character. 20 unbuffed; each point of
+    /// <see cref="Character.BuffType.CritChance"/> lowers it by one, widening the window by 5%.
+    /// </summary>
+    /// <remarks>
+    /// Compare with <c>roll &gt;= CritThreshold</c>. This is separate from the "natural 20 always
+    /// hits" rule, which stays pinned at 20 — a buffed 18 can crit, but it still has to beat the
+    /// target's defense to land at all. You cannot crit on a miss.
+    /// </remarks>
+    public int CritThreshold => Mathf.Clamp(
+        BaseCritThreshold - Mathf.RoundToInt(SumBuffValue(Character.BuffType.CritChance)),
+        MinCritThreshold, MaxCritThreshold);
+
+    /// <summary>Crit chance as a percentage, for tooltips. 5 unbuffed, 0 when crits are switched off.</summary>
+    public int CritChancePercent => Mathf.Max(0, (21 - CritThreshold) * 5);
+
+    /// <summary>
+    /// Applies protection to an incoming damage figure. Returns what actually gets through.
+    /// </summary>
+    private float ApplyDamageReduction(float damage)
+    {
+        float reduction = DamageReductionFraction;
+
+        if (Mathf.Approximately(reduction, 0f) || damage <= 0f) return damage;
+
+        float reduced = damage * (1f - reduction);
+
+        Debug.Log($"{characterData?.characterName ?? gameObject.name} protection {reduction:P0}: " +
+                  $"incoming {damage:F1} reduced to {reduced:F1}");
+
+        return reduced;
     }
 
     private float SumBuffValue(Character.BuffType buffType)
@@ -597,6 +661,19 @@ public class CharacterManager : MonoBehaviour
     /// </remarks>
     public float TakeDamage(float damage, bool wasParried = false)
     {
+        // First thing, before anything reads `damage`: the floating number, the health loss, the
+        // drive gain and the return value must all agree on one figure — what actually got through.
+        //
+        // Deliberately multiplicative with a parry rather than special-cased. A parried hit arrives
+        // here already reduced to its 25% chip, so protection then applies to that; the two are
+        // independent mitigations and stacking them is the expected reading.
+        //
+        // It also intentionally reduces the drive earned from being hit, because the block below
+        // scales off this same figure. Protection that cut the damage but paid full drive would be
+        // a pure win, and the parry path already sets the precedent of paying drive on the damage
+        // actually taken rather than the damage swung.
+        damage = ApplyDamageReduction(damage);
+
         // Only update the status text and play feedback if it wasn't a parry
         if (!wasParried)
         {

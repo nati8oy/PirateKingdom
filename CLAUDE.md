@@ -233,15 +233,56 @@ third-party and should not be modified** unless explicitly requested:
   - Clicking and hovering both need a `Collider2D` on the combatant plus a **`Physics2DRaycaster`
     on the camera**. `IPointerEnterHandler`/`IPointerClickHandler` are EventSystem interfaces, not
     UI ones, so they work on sprites once a raycaster exists.
-- **d20 combat resolution:** roll 1–20. `1` = critical miss, `20` = critical hit (double dmg),
-  otherwise `roll + attackPower >= target defense` to hit. Player side in
-  `CombatController.PerformAction()`, enemy side in `EnemyManager.RollToHit()` — keep the two rules
-  identical if you change either.
+- **d20 combat resolution:** roll 1–20. `1` = critical miss, `20` always hits, otherwise
+  `roll + attackPower >= target defense` to hit. A hit crits (double dmg) when
+  `roll >= CharacterManager.CritThreshold`. Player side in `CombatController.PerformAction()`,
+  enemy side in `EnemyManager.RollToHit()` — keep the two rules identical if you change either.
+  - **"Natural 20 always hits" and "this roll crits" are two different tests**, and only the second
+    moves. The auto-hit check stays pinned at 20; `CritThreshold` starts at 20 and drops one per
+    point of `BuffType.CritChance`. So a buffed 18 can crit — but it still has to beat the target's
+    defense to land, which is what makes it impossible to crit on a miss.
+  - `CritThreshold` is clamped to `[11, 21]`: 11 caps buffed crit chance at 50%, and 21 is
+    deliberately reachable — no d20 face satisfies it, so a negative `CritChance` buff switches
+    crits off rather than wrapping around. `CritChancePercent` is the same thing for tooltips.
+  - **Crit applies to healing too**, on the same threshold, or the buff would silently mean nothing
+    in a support character's hands.
   - **The enemy roll is separate from the crit roll.** `EnemyManager` rolls twice: `RollToHit()`
-    decides whether the attack lands, `RollForCritical()` decides whether it doubles.
+    decides whether the attack lands, `RollForCritical()` decides whether it doubles — the latter
+    now returns a bool and applies the threshold itself, so no call site re-tests `== 20`. The
+    player's single roll decides both. That asymmetry is still logged in `TODO.md` and a
+    `CritChance` buff makes it slightly more visible: an enemy's crit is gated behind passing a
+    separate to-hit roll first.
   - **A missed enemy attack skips the parry sequence entirely** rather than opening a window over
     nothing. A parry attempt is spent whether or not it lands, so making the player burn theirs on
     an attack that could never connect would be a loss with no decision in it.
+  - **`BuffType.DamageReduction` is the protection buff and is the one buff type that isn't a stat.**
+    Every other type is a flat additive modifier folded into `CharacterManager.RefreshStats()`; this
+    one is a **fraction** applied in `TakeDamage()` at the moment damage lands, because there is no
+    "damage taken" stat for it to modify. **Don't route it through `RefreshStats()`.**
+    - Authored on `Action.buffValue` as a fraction (0.25 = 25% less), unlike the flat points every
+      other type uses. Stacks additively, clamped to `[-1, 0.9]` — protection can never reach
+      immunity, and a vulnerability (the negated Debuff case, which comes for free) can at worst
+      double incoming damage.
+    - Applied **first thing** in `TakeDamage`, so the floating number, the health loss, the drive
+      earned and the return value all agree on what actually got through. It therefore reduces the
+      drive gained from being hit as well — protection that cut damage but paid full drive would be
+      a pure win, and the parry path already pays drive on damage taken rather than damage swung.
+    - **Multiplicative with a parry, not special-cased.** A parried hit arrives already cut to its
+      25% chip and protection applies on top; they're independent mitigations.
+    - It also silently reduces what a `HealthDrain` attacker heals, since that's derived from health
+      actually lost. That's correct, and free.
+  - **`BuffType.CritChance` is authored in flat d20 points, not percent** — each point is one more
+    face that crits, so `+2` means 15% instead of 5%. Points rather than a percentage because a
+    percentage can only ever land on a multiple of 5, so "12%" would silently become 10% or 15%.
+    Tooltips render it as the percentage it buys, since `+2` means nothing to a player.
+  - **`Action.autoTargetSelf`** resolves an action on its caster with no target click and ends the
+    turn — for self-buffs and guard actions where clicking your own portrait is busywork. Handled in
+    `CombatController.SelectAction()` so it covers every route in, and checked *before* the
+    automatic-targeting branch, since "cast on me" is a stronger statement than "pick at random".
+    It needs a `TargetType` the caster is legal for; on a `SingleEnemy` action it warns and falls
+    back to manual targeting rather than erroring, because an action that eats the turn without
+    resolving is worse than one that just asks for a target. Player-side only — enemies already
+    resolve ally-targeted buffs onto themselves.
   - **`attackPower` affects accuracy only, never damage** — and so do `BuffType.Accuracy` buffs,
     which stack onto it in `RefreshStats()`. **Damage bonuses are drive's job alone.** Keeping the
     two disjoint is a deliberate decision: letting accuracy buffs also raise damage was tried and

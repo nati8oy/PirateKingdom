@@ -37,12 +37,30 @@ public class CharacterManager : MonoBehaviour
     [SerializeField] TMP_Text characterName;
     //[SerializeField] private TMP_Text hp;
     [FormerlySerializedAs("healthModifier")] [SerializeField] private TMP_Text actionStatusText;
+
+    [Tooltip("Seconds the '+N Drive' / '-N Drive' number stays up when NO drive feedback is wired " +
+             "above. Every other status number is cleared by its own MMF_Player (an MMF_Events " +
+             "calling HideHealthUI), so this is only the safety net for the unwired case — assign " +
+             "the feedback slots and this is never used.")]
+    [SerializeField] private float driveStatusTextDuration = 0.9f;
     
     public Image turnMarker;
 
     [Tooltip("img_target_indicator on the prefab. Shown while an enemy is telegraphing an attack on " +
-             "this character, hidden once the attack resolves.")]
+             "this character, and while the player hovers this character as a legal target.")]
     [SerializeField] private GameObject targetIndicator;
+
+    // Two independent reasons the indicator can be lit, tracked separately so neither source can
+    // switch off the other's. A single bool would mean whichever finished last hid the marker —
+    // hovering a crew member mid-telegraph and moving away would cancel the enemy's "you are about
+    // to be hit" cue, and the enemy's attack resolving would drop a live hover highlight.
+    //
+    // The two happen to be disjoint in time today (hover targeting needs a selected action, which
+    // only exists on a player's turn; telegraphs only run on an enemy's), but that's a consequence
+    // of TurnManager clearing the selection on every turn change — an invariant living in another
+    // class. Not worth coupling this to.
+    private bool telegraphTargeted;
+    private bool hoverTargeted;
 
     /// <summary>
     /// Marks this character as the victim of an incoming attack. Called by the attacking
@@ -50,7 +68,28 @@ public class CharacterManager : MonoBehaviour
     /// </summary>
     public void SetTargeted(bool targeted)
     {
-        if (targetIndicator != null) targetIndicator.SetActive(targeted);
+        telegraphTargeted = targeted;
+        RefreshTargetIndicator();
+    }
+
+    /// <summary>
+    /// Marks this character as the target the player is currently hovering for their selected
+    /// action. Driven by <see cref="ActionTargetingLine"/>, which re-evaluates every frame.
+    /// </summary>
+    /// <remarks>
+    /// Reuses the enemy's telegraph indicator deliberately: "this character is about to be acted
+    /// on" is one idea, and giving it one visual keeps the player reading a single symbol rather
+    /// than learning two.
+    /// </remarks>
+    public void SetHoverTargeted(bool targeted)
+    {
+        hoverTargeted = targeted;
+        RefreshTargetIndicator();
+    }
+
+    private void RefreshTargetIndicator()
+    {
+        if (targetIndicator != null) targetIndicator.SetActive(telegraphTargeted || hoverTargeted);
     }
 
     [Header("Feedback Players")]
@@ -63,6 +102,13 @@ public class CharacterManager : MonoBehaviour
     [SerializeField] private MMF_Player parryFeedback;
     [Tooltip("Feedback player for a buff landing on this character — the one-shot cast burst.")]
     public MMF_Player buffFeedback;
+
+    [Tooltip("Optional. Played when a DriveGrant action fills this character's drive meter.")]
+    public MMF_Player driveGrantedFeedback;
+
+    [Tooltip("Optional. Played when a DriveDrain action strips this character's drive meter.")]
+    public MMF_Player driveDrainedFeedback;
+
     public MMF_Player feedbackPlayer;
 
 
@@ -347,12 +393,76 @@ public class CharacterManager : MonoBehaviour
         {
             // Authored base from the ScriptableObject + this instance's own buffs. Clamps match
             // the ones the Character asset used to apply.
+            //
+            // BuffType.DamageReduction is absent on purpose — it isn't a stat, so there's nothing
+            // here for it to modify. It's read in TakeDamage() at the moment damage lands. See the
+            // remarks on the enum member.
             MaxHealth = Mathf.Max(1f, characterData.maxHealth + SumBuffValue(Character.BuffType.Health));
             AttackPower = Mathf.Max(0f, characterData.attackPower + SumBuffValue(Character.BuffType.Accuracy));
             DefenseValue = Mathf.Max(0f, characterData.defenseValue + SumBuffValue(Character.BuffType.Defense));
             Speed = Mathf.Max(0.1f, characterData.speed + SumBuffValue(Character.BuffType.Speed));
             UpdateBuffDisplay();
         }
+    }
+
+    // Ceiling on stacked protection. Without it two 50% buffs reach 1.0 and the character is simply
+    // immune, which is never a state a turn-based fight should be able to enter. The floor allows a
+    // vulnerability debuff to at most double incoming damage.
+    private const float MinDamageReduction = -1f;
+    private const float MaxDamageReduction = 0.9f;
+
+    /// <summary>
+    /// Net protection against incoming damage, as a fraction. 0.25 means take 25% less; a negative
+    /// value is a vulnerability and means take more. Clamped so stacked buffs can't reach immunity.
+    /// </summary>
+    /// <remarks>
+    /// Buffs and debuffs of this type sum before clamping, so a +40% protection and a -25%
+    /// vulnerability net out to +15% rather than cancelling to nothing — the same additive rule
+    /// every other buff type follows.
+    /// </remarks>
+    public float DamageReductionFraction => Mathf.Clamp(
+        SumBuffValue(Character.BuffType.DamageReduction), MinDamageReduction, MaxDamageReduction);
+
+    // The unbuffed crit rule: a natural 20 and nothing else, i.e. 5%.
+    private const int BaseCritThreshold = 20;
+
+    // Floor of 11 caps buffed crit chance at 50% — past that "critical" stops meaning anything and
+    // damage variance swamps every other dial. 21 is reachable and deliberate: no d20 face satisfies
+    // it, so a negative CritChance buff switches crits off entirely rather than wrapping around.
+    private const int MinCritThreshold = 11;
+    private const int MaxCritThreshold = 21;
+
+    /// <summary>
+    /// Lowest d20 roll that crits for this character. 20 unbuffed; each point of
+    /// <see cref="Character.BuffType.CritChance"/> lowers it by one, widening the window by 5%.
+    /// </summary>
+    /// <remarks>
+    /// Compare with <c>roll &gt;= CritThreshold</c>. This is separate from the "natural 20 always
+    /// hits" rule, which stays pinned at 20 — a buffed 18 can crit, but it still has to beat the
+    /// target's defense to land at all. You cannot crit on a miss.
+    /// </remarks>
+    public int CritThreshold => Mathf.Clamp(
+        BaseCritThreshold - Mathf.RoundToInt(SumBuffValue(Character.BuffType.CritChance)),
+        MinCritThreshold, MaxCritThreshold);
+
+    /// <summary>Crit chance as a percentage, for tooltips. 5 unbuffed, 0 when crits are switched off.</summary>
+    public int CritChancePercent => Mathf.Max(0, (21 - CritThreshold) * 5);
+
+    /// <summary>
+    /// Applies protection to an incoming damage figure. Returns what actually gets through.
+    /// </summary>
+    private float ApplyDamageReduction(float damage)
+    {
+        float reduction = DamageReductionFraction;
+
+        if (Mathf.Approximately(reduction, 0f) || damage <= 0f) return damage;
+
+        float reduced = damage * (1f - reduction);
+
+        Debug.Log($"{characterData?.characterName ?? gameObject.name} protection {reduction:P0}: " +
+                  $"incoming {damage:F1} reduced to {reduced:F1}");
+
+        return reduced;
     }
 
     private float SumBuffValue(Character.BuffType buffType)
@@ -537,8 +647,33 @@ public class CharacterManager : MonoBehaviour
     }
 
     
-    public void TakeDamage(float damage, bool wasParried = false)
+    /// <summary>
+    /// Applies damage. Returns the health this character <b>actually lost</b>, which is not the
+    /// same as <paramref name="damage"/>: it's rounded, and it's capped by whatever health was left.
+    /// </summary>
+    /// <remarks>
+    /// The return value exists for HealthDrain actions, which heal the attacker by a share of what
+    /// the target lost. Deriving it from health genuinely removed rather than from the damage roll
+    /// is what stops a killing blow on a 3hp target from paying out as though it hit for 20 —
+    /// health should move between the two, not be created.
+    ///
+    /// Every other caller ignores it, which is why widening this from <c>void</c> was safe.
+    /// </remarks>
+    public float TakeDamage(float damage, bool wasParried = false)
     {
+        // First thing, before anything reads `damage`: the floating number, the health loss, the
+        // drive gain and the return value must all agree on one figure — what actually got through.
+        //
+        // Deliberately multiplicative with a parry rather than special-cased. A parried hit arrives
+        // here already reduced to its 25% chip, so protection then applies to that; the two are
+        // independent mitigations and stacking them is the expected reading.
+        //
+        // It also intentionally reduces the drive earned from being hit, because the block below
+        // scales off this same figure. Protection that cut the damage but paid full drive would be
+        // a pure win, and the parry path already sets the precedent of paying drive on the damage
+        // actually taken rather than the damage swung.
+        damage = ApplyDamageReduction(damage);
+
         // Only update the status text and play feedback if it wasn't a parry
         if (!wasParried)
         {
@@ -547,9 +682,11 @@ public class CharacterManager : MonoBehaviour
             dealDamageFeedback.PlayFeedbacks();
             feedbackPlayer.PlayFeedbacks();
         }
-    
+
         float roundedDamage = Mathf.Round(damage);
+        float healthBefore = CurrentHealth;
         CurrentHealth = Mathf.Max(0, CurrentHealth - roundedDamage);
+        float healthLost = healthBefore - CurrentHealth;
         UpdateHealthBar();
         SyncHealthToRunState();
 
@@ -566,6 +703,8 @@ public class CharacterManager : MonoBehaviour
             driveManager.Drive.AddDrive(driveIncrease);
             Debug.Log($"{characterData.characterName} took {damage} damage, drive increased by {driveIncrease}");
         }
+
+        return healthLost;
     }
     
     /// <summary>
@@ -678,6 +817,81 @@ public class CharacterManager : MonoBehaviour
         CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + roundedHeal);
         UpdateHealthBar();
         SyncHealthToRunState();
+    }
+
+    /// <summary>
+    /// Adds raw drive to this character's meter, from a <c>DriveGrant</c> action cast on them.
+    /// Returns how much actually landed — 0 if their meter was already full.
+    /// </summary>
+    /// <remarks>
+    /// The caster's own drive stacks deliberately do <b>not</b> multiply this. Letting a drive
+    /// spend produce more drive is a feedback loop, and it's the same reasoning that keeps
+    /// accuracy buffs out of damage: two multipliers that feed each other stop being tunable.
+    /// </remarks>
+    public float GainDrive(float amount)
+    {
+        if (driveManager == null)
+        {
+            Debug.LogWarning($"[CharacterManager] {characterData?.characterName ?? gameObject.name} has no " +
+                             "DriveManager, so a drive grant did nothing.", this);
+            return 0f;
+        }
+
+        float granted = driveManager.GrantDrive(amount);
+
+        ShowDriveStatus($"+{Mathf.Round(granted)} Drive", driveGrantedFeedback);
+
+        return granted;
+    }
+
+    /// <summary>
+    /// Strips raw drive from this character's meter, from a <c>DriveDrain</c> action cast on them.
+    /// Returns how much was actually removed, which is less than asked for on a near-empty meter.
+    /// </summary>
+    /// <remarks>
+    /// Reports the real number rather than the authored one, so draining an already-empty enemy
+    /// reads as the wasted turn it was instead of implying an effect that didn't happen.
+    /// </remarks>
+    public float LoseDrive(float amount)
+    {
+        if (driveManager == null)
+        {
+            Debug.LogWarning($"[CharacterManager] {characterData?.characterName ?? gameObject.name} has no " +
+                             "DriveManager, so a drive drain did nothing.", this);
+            return 0f;
+        }
+
+        float removed = driveManager.DrainDrive(amount);
+
+        ShowDriveStatus($"-{Mathf.Round(removed)} Drive", driveDrainedFeedback);
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Writes a drive number to the floating status text and plays its feedback.
+    /// </summary>
+    /// <remarks>
+    /// Every other status number (damage, heal, miss) is paired with an MMF_Player that clears the
+    /// text again on its way out. These two slots are new and start unassigned on the prefab, so
+    /// without the timed fallback the first drive action would leave a number stuck on the
+    /// character forever. Wire the feedback and the fallback never runs.
+    /// </remarks>
+    private void ShowDriveStatus(string text, MMF_Player feedback)
+    {
+        actionStatusText.enabled = true;
+        actionStatusText.text = text;
+
+        if (feedback != null)
+        {
+            feedback.PlayFeedbacks();
+            return;
+        }
+
+        // Deliberately not driveParticles: DriveManager owns that one as a sustained effect it
+        // starts per stack and stops in ClearStacks(), so playing it here would leave it running.
+        CancelInvoke(nameof(HideHealthUI));
+        Invoke(nameof(HideHealthUI), driveStatusTextDuration);
     }
 
     public void AddBuff(Character.BuffType type, float amount, float duration)

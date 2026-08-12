@@ -240,6 +240,51 @@ public class DriveManager : MonoBehaviour
         return 1f + bonus;
     }
     
+    /// <summary>
+    /// Adds raw drive to this character's meter from an outside source — a <c>DriveGrant</c> action
+    /// cast on them. Returns how much was actually added (0 if the meter was already full).
+    /// </summary>
+    /// <remarks>
+    /// Grants raw meter, never stacks: committing a stack is the owner's own decision, made on
+    /// their turn. A support character fills the meter; what to spend it on stays with whoever
+    /// owns it.
+    /// </remarks>
+    public float GrantDrive(float amount)
+    {
+        if (amount <= 0f) return 0f;
+
+        float before = driveMeter.CurrentDrive;
+        driveMeter.AddDrive(amount);
+        float granted = driveMeter.CurrentDrive - before;
+
+        Debug.Log($"{characterManager?.characterData?.characterName ?? gameObject.name} was granted {granted} drive " +
+                  $"(asked for {amount}). Now {driveMeter.CurrentDrive}, {driveMeter.AvailableSegments} segment(s).");
+
+        return granted;
+    }
+
+    /// <summary>
+    /// Strips raw drive from this character's meter — a <c>DriveDrain</c> action cast on them.
+    /// Returns how much was actually removed, which is less than asked for on a near-empty meter.
+    /// </summary>
+    /// <remarks>
+    /// Stacks the character has already committed are not refunded or removed — see
+    /// <see cref="DriveMeter.RemoveDrive"/>. In practice a drain never races a committed stack:
+    /// enemies commit theirs at the start of their own turn and spend them in the same turn, so a
+    /// drain on the player's turn can only ever hit banked meter.
+    /// </remarks>
+    public float DrainDrive(float amount)
+    {
+        if (amount <= 0f) return 0f;
+
+        float removed = driveMeter.RemoveDrive(amount);
+
+        Debug.Log($"{characterManager?.characterData?.characterName ?? gameObject.name} lost {removed} drive " +
+                  $"(asked for {amount}). Now {driveMeter.CurrentDrive}, {driveMeter.AvailableSegments} segment(s).");
+
+        return removed;
+    }
+
     public bool TryUseDriveAction(DriveAction action)
     {
         int cost = GetActionCost(action);

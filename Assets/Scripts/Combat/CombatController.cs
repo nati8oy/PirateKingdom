@@ -71,6 +71,32 @@ public class CombatController : MonoBehaviour
         // Set the selected action
         selectedAction = action;
 
+        // Self-cast actions skip target selection entirely: one click on the button resolves them
+        // on the caster and ends the turn. Handled here rather than at the click site so it holds
+        // for every route into SelectAction, and checked before the automatic-targeting branch
+        // below because "cast on me" is a stronger statement than "pick something at random".
+        if (action != null && action.autoTargetSelf)
+        {
+            CharacterManager caster = turnManager != null ? turnManager.currentCharacterTurn : null;
+
+            // IsValidTarget reads selectedAction, which is assigned above.
+            if (caster != null && IsValidTarget(caster))
+            {
+                Debug.Log($"[CombatController] {action.actionName} is self-cast — resolving on " +
+                          $"{caster.characterData?.characterName ?? caster.name} without target selection.");
+
+                // Resolves, ends the turn and clears the selection, all inside PerformAction.
+                TryExecuteActionOnTarget(caster);
+                return;
+            }
+
+            // Degrade to manual targeting rather than erroring: an unusable action that eats the
+            // turn is worse than one that simply asks for a target the normal way.
+            Debug.LogWarning($"[CombatController] '{action.actionName}' has Auto Target Self ticked, but " +
+                             $"its Target Type ({action.targetType}) doesn't allow the caster as a target. " +
+                             "Falling back to manual targeting — set Target Type to Single Ally.", action);
+        }
+
         if (!useManualTargeting)
         {
             // Automatic targeting mode - find and execute on a random target immediately
@@ -282,6 +308,25 @@ public class CombatController : MonoBehaviour
         return Random.Range(1, 21);
     }
 
+    /// <summary>
+    /// Resolves the selected action on a target and ends the acting character's turn.
+    /// </summary>
+    /// <remarks>
+    /// <b>Turn completion is in a finally, and that is load-bearing.</b> Resolution and turn
+    /// handover used to be a plain sequence, so anything that threw while applying an effect
+    /// skipped <c>CompleteTurn()</c> — and a stranded turn is not a stalled game, it's a free extra
+    /// action: the selection is still live, the buttons are still interactable, and the player
+    /// simply picks something else. That turns a fault in one action into a balance exploit and
+    /// hides the original error behind it.
+    ///
+    /// Acting costs the turn whether or not the effect resolved cleanly. Note the null-target guard
+    /// deliberately sits *above* the try — that's a click that never became an action, so it must
+    /// not cost anything.
+    ///
+    /// This also closes the selection leak for free: <c>CompleteTurn()</c> reaches
+    /// <c>TurnManager.SetCharacterTurn()</c>, which calls <see cref="ClearSelection"/> on every turn
+    /// change, so a throw can't leave a live action for the next character to resolve.
+    /// </remarks>
     public void PerformAction(CharacterManager targetManager)
 {
     if (targetManager == null)
@@ -293,121 +338,218 @@ public class CombatController : MonoBehaviour
     // Get the current character performing the action
     CharacterManager currentCharacter = turnManager.currentCharacterTurn;
 
-    switch (selectedAction.actionType)
+    try
     {
-        case Action.ActionType.Attack:
-            // Play attack audio immediately when attack action starts
-            currentCharacter.PlayAttackAudio();
+        switch (selectedAction.actionType)
+        {
+            case Action.ActionType.Attack:
+                // Play attack audio immediately when attack action starts
+                currentCharacter.PlayAttackAudio();
             
-            int attackRoll = HitChanceRoll();
+                int attackRoll = HitChanceRoll();
             
-            if (attackRoll == 1)
-            {
-                Debug.Log("Critical Fail! Attack missed.");
-                targetManager.Miss();
-                
-                // Even on a miss, if drive mode was active, it should be consumed
-                DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
-                attackerDriveManager?.OnAttackPerformed();
-                
-                break;
-            }
-
-            if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
-            {
-                float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
-
-                // Damage bonuses come from drive alone — Accuracy buffs deliberately do not touch
-                // damage, so the two systems don't stack into one another. See CLAUDE.md.
-
-                // Apply drive mode multiplier if the attacker is in drive mode
-                DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
-                if (attackerDriveManager != null)
+                if (attackRoll == 1)
                 {
+                    Debug.Log("Critical Fail! Attack missed.");
+                    targetManager.Miss();
+                
+                    // Even on a miss, if drive mode was active, it should be consumed
+                    DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
+                    attackerDriveManager?.OnAttackPerformed();
+                
+                    break;
+                }
+
+                if (attackRoll == 20 || (attackRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
+                {
+                    float damage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
+
+                    // Damage bonuses come from drive alone — Accuracy buffs deliberately do not touch
+                    // damage, so the two systems don't stack into one another. See CLAUDE.md.
+
+                    // Apply drive mode multiplier if the attacker is in drive mode
+                    DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
+                    if (attackerDriveManager != null)
+                    {
                   
                     
-                    float driveMultiplier = attackerDriveManager.GetNextAttackDamageMultiplier();
-                    damage *= driveMultiplier;
+                        float driveMultiplier = attackerDriveManager.GetNextAttackDamageMultiplier();
+                        damage *= driveMultiplier;
                     
                     
-                    if (driveMultiplier > 1f)
-                    {
-                        Debug.Log($"Drive system applied {driveMultiplier}x damage multiplier!");
+                        if (driveMultiplier > 1f)
+                        {
+                            Debug.Log($"Drive system applied {driveMultiplier}x damage multiplier!");
+                        }
+                    
+                        // IMPORTANT: Call OnAttackPerformed to deactivate drive mode after the attack
+                        attackerDriveManager.OnAttackPerformed();
                     }
-                    
-                    // IMPORTANT: Call OnAttackPerformed to deactivate drive mode after the attack
-                    attackerDriveManager.OnAttackPerformed();
+                    else
+                    {
+                        Debug.Log($"No drive manager found for {currentCharacter.characterData.characterName}");
+                    }
+                
+                    // >= threshold rather than == 20, so a CritChance buff widens the window.
+                    // Note this is a different test from the "natural 20 always hits" check above,
+                    // which stays pinned at 20 — a buffed 18 can crit, but it still has to beat the
+                    // target's defense to land, so you can never crit on a miss.
+                    if (attackRoll >= currentCharacter.CritThreshold)
+                    {
+                        Debug.Log($"Critical Hit! Double damage! (rolled {attackRoll} vs threshold {currentCharacter.CritThreshold})");
+                        damage *= 2;
+                    }
+
+                    Debug.Log($"Final damage dealt: {damage}");
+                    Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
+                    targetManager.TakeDamage(damage);
+                    currentCharacter.OnDamageDealt(damage);
                 }
                 else
                 {
-                    Debug.Log($"No drive manager found for {currentCharacter.characterData.characterName}");
-                }
+                    Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " Missed enemy with defense value of: " + targetManager.DefenseValue);
+                    targetManager.Miss();
                 
-                if (attackRoll == 20)
+                    // Even on a miss, if drive mode was active, it should be consumed
+                    DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
+                    attackerDriveManager?.OnAttackPerformed();
+                }
+                break;
+
+            // Resolves exactly like Attack — same to-hit rule, same crit, same drive multiplier — and
+            // then siphons a share of it back. Kept as its own case rather than a flag on Attack so the
+            // d20 rule stays written out in full and stays comparable to EnemyManager.RollToHit().
+            case Action.ActionType.HealthDrain:
+                currentCharacter.PlayAttackAudio();
+
+                int drainRoll = HitChanceRoll();
+
+                if (drainRoll == 1)
                 {
-                    Debug.Log("Critical Hit! Double damage!");
-                    damage *= 2;
+                    Debug.Log("Critical Fail! Drain missed.");
+                    targetManager.Miss();
+                    currentCharacter.GetDriveManager()?.OnAttackPerformed();
+                    break;
                 }
 
-                Debug.Log($"Final damage dealt: {damage}");
-                Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
-                targetManager.TakeDamage(damage);
-                currentCharacter.OnDamageDealt(damage);
+                if (drainRoll == 20 || (drainRoll + currentCharacter.AttackPower >= targetManager.DefenseValue))
+                {
+                    float drainDamage = Random.Range(selectedAction.minDamage, selectedAction.maxDamage);
+
+                    DriveManager drainDriveManager = currentCharacter.GetDriveManager();
+                    if (drainDriveManager != null)
+                    {
+                        drainDamage *= drainDriveManager.GetNextAttackDamageMultiplier();
+                        drainDriveManager.OnAttackPerformed();
+                    }
+
+                    if (drainRoll >= currentCharacter.CritThreshold)
+                    {
+                        Debug.Log($"Critical Hit! Double drain! (rolled {drainRoll} vs threshold {currentCharacter.CritThreshold})");
+                        drainDamage *= 2;
+                    }
+
+                    // The heal is derived from the damage, so the drive multiplier has already flowed
+                    // into it once. Heal() is called with the default 1x multiplier deliberately —
+                    // passing GetNextHealingMultiplier() as well would apply drive twice to one action.
+                    float healthTaken = targetManager.TakeDamage(drainDamage);
+                    currentCharacter.OnDamageDealt(drainDamage);
+
+                    float siphoned = healthTaken * selectedAction.healthDrainRatio;
+
+                    if (siphoned > 0f)
+                    {
+                        currentCharacter.Heal(siphoned);
+                    }
+
+                    Debug.Log($"{currentCharacter.characterData.characterName} drained {healthTaken} health from " +
+                              $"{targetManager.characterData.characterName}, healing {siphoned}");
+                }
+                else
+                {
+                    Debug.Log("Drain value of " + (drainRoll + currentCharacter.AttackPower) + " missed enemy with defense value of: " + targetManager.DefenseValue);
+                    targetManager.Miss();
+                    currentCharacter.GetDriveManager()?.OnAttackPerformed();
+                }
+                break;
+
+            case Action.ActionType.Heal:
+                int healRoll = HitChanceRoll();
+                float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
+            
+                // Crit chance applies to healing too — a healer who buffs their crit should see it
+                // in their heals, or the buff silently means nothing in a support character's hands.
+                if (healRoll >= currentCharacter.CritThreshold)
+                {
+                    Debug.Log($"Critical Heal! Double healing! (rolled {healRoll} vs threshold {currentCharacter.CritThreshold})");
+                    healAmount *= 2;
+                }
+            
+                // The healer's drive stacks, read before they're consumed below. Heal() can't look this
+                // up itself — its own DriveManager belongs to the target, not the caster.
+                DriveManager healerDriveManager = currentCharacter.GetDriveManager();
+                float healDriveMultiplier = healerDriveManager != null
+                    ? healerDriveManager.GetNextHealingMultiplier()
+                    : 1f;
+
+                targetManager.Heal(healAmount, healDriveMultiplier);
+                Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount} (drive x{healDriveMultiplier})");
+
+                // IMPORTANT: Consume drive mode after the heal
+                currentCharacter.OnAttackPerformed();
+                break;
+
+            case Action.ActionType.Buff:
+                targetManager.AddBuff(selectedAction.buffType, selectedAction.buffValue, selectedAction.duration);
+                break;
+
+            case Action.ActionType.Debuff:
+                targetManager.AddBuff(selectedAction.buffType, -selectedAction.buffValue, selectedAction.duration);
+                break;
+
+            // Drive actions move raw meter and nothing else — no roll, no crit, and deliberately no
+            // drive multiplier off the caster's own stacks. Spending drive to make more drive is a
+            // feedback loop, and the amount is authored on the Action rather than rolled so a support
+            // player can plan around exactly how much of a segment they're handing over.
+            case Action.ActionType.DriveGrant:
+                targetManager.GainDrive(selectedAction.driveAmount);
+                Debug.Log($"{currentCharacter?.characterData?.characterName ?? "Someone"} granted " +
+                          $"{selectedAction.driveAmount} drive to {targetManager.characterData?.characterName ?? targetManager.name}");
+                break;
+
+            case Action.ActionType.DriveDrain:
+                targetManager.LoseDrive(selectedAction.driveAmount);
+                Debug.Log($"{currentCharacter?.characterData?.characterName ?? "Someone"} drained " +
+                          $"{selectedAction.driveAmount} drive from {targetManager.characterData?.characterName ?? targetManager.name}");
+                break;
+        }
+
+    }
+    finally
+    {
+        // Everything here runs even if resolving the effect above threw — see the method remarks.
+        // Using an action costs its cooldown and the turn together; splitting them means a fault
+        // mid-resolution hands back a free, off-cooldown action.
+        if (turnManager.currentCharacterTurn != null && turnManager.currentCharacterTurn.characterData != null)
+        {
+            turnManager.currentCharacterTurn.UseAction(selectedAction);
+
+            // Null-guarded: this sits between the cooldown and turn handover, so an unguarded miss
+            // here would strand the turn all over again.
+            ActionsManager actionsManager = FindObjectOfType<ActionsManager>();
+
+            if (actionsManager != null)
+            {
+                actionsManager.LoadCharacterActions(turnManager.currentCharacterTurn);
             }
             else
             {
-                Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " Missed enemy with defense value of: " + targetManager.DefenseValue);
-                targetManager.Miss();
-                
-                // Even on a miss, if drive mode was active, it should be consumed
-                DriveManager attackerDriveManager = currentCharacter.GetDriveManager();
-                attackerDriveManager?.OnAttackPerformed();
+                Debug.LogWarning("[CombatController] No ActionsManager in the scene — action buttons won't refresh.");
             }
-            break;
+        }
 
-        case Action.ActionType.Heal:
-            int healRoll = HitChanceRoll();
-            float healAmount = Random.Range(selectedAction.minHeal, selectedAction.maxHeal);
-            
-            if (healRoll == 20)
-            {
-                Debug.Log("Critical Heal! Double healing!");
-                healAmount *= 2;
-            }
-            
-            // The healer's drive stacks, read before they're consumed below. Heal() can't look this
-            // up itself — its own DriveManager belongs to the target, not the caster.
-            DriveManager healerDriveManager = currentCharacter.GetDriveManager();
-            float healDriveMultiplier = healerDriveManager != null
-                ? healerDriveManager.GetNextHealingMultiplier()
-                : 1f;
-
-            targetManager.Heal(healAmount, healDriveMultiplier);
-            Debug.Log($"Healing {targetManager.gameObject.name} by {healAmount} (drive x{healDriveMultiplier})");
-
-            // IMPORTANT: Consume drive mode after the heal
-            currentCharacter.OnAttackPerformed();
-            break;
-
-        case Action.ActionType.Buff:
-            targetManager.AddBuff(selectedAction.buffType, selectedAction.buffValue, selectedAction.duration);
-            break;
-
-        case Action.ActionType.Debuff:
-            targetManager.AddBuff(selectedAction.buffType, -selectedAction.buffValue, selectedAction.duration);
-            break;
+        turnManager.CompleteTurn();
     }
-    
-    // Mark action as used AFTER successful execution
-    if (turnManager.currentCharacterTurn != null && turnManager.currentCharacterTurn.characterData != null)
-    {
-        turnManager.currentCharacterTurn.UseAction(selectedAction);
-
-        // Refresh the actions UI to show updated cooldown states
-        FindObjectOfType<ActionsManager>().LoadCharacterActions(turnManager.currentCharacterTurn);
-    }
-    
-    turnManager.CompleteTurn();
 }
     public Action GetSelectedAction()
     {

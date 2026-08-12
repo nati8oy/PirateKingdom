@@ -101,6 +101,10 @@ public class ActionTargetingLine : MonoBehaviour
     private CombatController combatController;
     private TargetState appliedCursorState = TargetState.None;
 
+    // Who currently has the hover target indicator lit, so it can be cleared off them when the
+    // cursor moves on. Only ever one at a time.
+    private CharacterManager hoverTarget;
+
     /// <summary>
     /// The player-facing toggle, backed by <see cref="GameSettings.ShowTargetingLine"/> so it
     /// persists across runs. Setting it writes through to the stored setting; the cursor target
@@ -163,6 +167,11 @@ public class ActionTargetingLine : MonoBehaviour
         // Never leave a swapped cursor behind — it would persist past this component.
         ApplyCursor(TargetState.None, force: true);
 
+        // Same reasoning for the indicator: nothing else would ever turn it off, since this
+        // component is its only hover-side owner.
+        if (hoverTarget != null) hoverTarget.SetHoverTargeted(false);
+        hoverTarget = null;
+
         if (lineRenderer != null) lineRenderer.enabled = false;
     }
 
@@ -206,15 +215,21 @@ public class ActionTargetingLine : MonoBehaviour
         {
             lineRenderer.enabled = false;
             ApplyCursor(TargetState.None);
+
+            // No live selection means nobody is being targeted — this is what clears the marker
+            // after an action resolves, without needing the pointer to move.
+            ApplyHoverTarget(null);
             return;
         }
 
         Vector3 cursorWorld = ScreenToWorld(Mouse.current.position.ReadValue());
-        TargetState state = EvaluateTarget(cursorWorld, out Vector3 targetPoint);
+        TargetState state = EvaluateTarget(cursorWorld, out Vector3 targetPoint, out CharacterManager hovered);
 
-        // Cursor first and unconditionally: it reports all three states and must keep working
-        // whether or not the line is drawn, and whether or not the line can find its start point.
+        // Cursor and target indicator first, unconditionally: both report target state and must keep
+        // working whether or not the line is drawn, and whether or not it can find its start point.
+        // The line is a player setting; this feedback is not.
         ApplyCursor(state);
+        ApplyHoverTarget(state == TargetState.Valid ? hovered : null);
 
         if (!showLine || state != TargetState.Valid || !TryResolveStart(selected, out Vector3 start))
         {
@@ -235,9 +250,10 @@ public class ActionTargetingLine : MonoBehaviour
     /// space isn't a mistake, but hovering a combatant the action can't touch is, and the cursor
     /// draws that distinction.
     /// </summary>
-    private TargetState EvaluateTarget(Vector3 worldPoint, out Vector3 targetPoint)
+    private TargetState EvaluateTarget(Vector3 worldPoint, out Vector3 targetPoint, out CharacterManager validTarget)
     {
         targetPoint = worldPoint;
+        validTarget = null;
 
         Collider2D[] hits = Physics2D.OverlapPointAll(worldPoint, targetLayers);
         bool foundCombatant = false;
@@ -255,6 +271,7 @@ public class ActionTargetingLine : MonoBehaviour
                 Vector3 centre = hit.bounds.center;
                 targetPoint = new Vector3(centre.x, centre.y, worldZ);
 
+                validTarget = candidate;
                 return TargetState.Valid;
             }
 
@@ -262,6 +279,40 @@ public class ActionTargetingLine : MonoBehaviour
         }
 
         return foundCombatant ? TargetState.Invalid : TargetState.None;
+    }
+
+    /// <summary>
+    /// Lights the hovered character's target indicator — the same marker an enemy shows on its
+    /// victim before attacking — and clears it off whoever had it last.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A self-cast shows nothing.</b> The indicator means "this character is about to be
+    /// acted on by someone else"; pointing it at yourself while you heal or buff yourself reads as
+    /// an incoming threat, which is the opposite of what's happening.</para>
+    ///
+    /// <para>Driven from the per-frame evaluation rather than from
+    /// <c>TargetHoverHandler</c>'s pointer-enter/exit events on purpose. Exit events only fire when
+    /// the pointer <i>moves</i>, so resolving an action without moving the mouse — the normal case,
+    /// since you click the target you're hovering — would leave the marker lit on a character
+    /// nobody is targeting any more, right through the enemy's turn. Re-deriving it each frame from
+    /// the live selection means it clears itself the instant the selection does.</para>
+    /// </remarks>
+    private void ApplyHoverTarget(CharacterManager candidate)
+    {
+        if (candidate != null && candidate == combatController.GetCurrentCharacter())
+        {
+            candidate = null;
+        }
+
+        if (candidate == hoverTarget) return;
+
+        // Unity's overloaded == treats a destroyed object as null, so a target that died while
+        // hovered drops out here rather than throwing.
+        if (hoverTarget != null) hoverTarget.SetHoverTargeted(false);
+
+        hoverTarget = candidate;
+
+        if (hoverTarget != null) hoverTarget.SetHoverTargeted(true);
     }
 
     private void ApplyCursor(TargetState state, bool force = false)

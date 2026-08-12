@@ -365,6 +365,14 @@ public class EnemyManager : MonoBehaviour
             {
                 situationalModifier *= 1.3f;
             }
+
+            // Lean on the drain once hurt — it's the only sustain that doesn't cost a turn of
+            // damage. Deliberately not folded into the emergency-heal branch above: that one
+            // guarantees a heal, and a drain only heals if it lands, so it's a poor panic button.
+            if (action.actionType == Action.ActionType.HealthDrain && healthPercentage < 0.5f)
+            {
+                situationalModifier *= 1.4f;
+            }
             
             float finalWeight = baseWeight * situationalModifier;
             actionWeights.Add((action, finalWeight));
@@ -392,6 +400,9 @@ public class EnemyManager : MonoBehaviour
             Action.ActionType.Heal => enemyData.healWeight,
             Action.ActionType.Buff => enemyData.buffWeight,
             Action.ActionType.Debuff => enemyData.debuffWeight,
+            Action.ActionType.DriveGrant => enemyData.driveGrantWeight,
+            Action.ActionType.DriveDrain => enemyData.driveDrainWeight,
+            Action.ActionType.HealthDrain => enemyData.healthDrainWeight,
             _ => 0.1f
         };
     }
@@ -475,7 +486,10 @@ public class EnemyManager : MonoBehaviour
                     
                 case Enemy.TargetingStrategy.ClosestToDefeating:
                     return GetClosestToDefeatingTarget(validTargets);
-                    
+
+                case Enemy.TargetingStrategy.HighestDrive:
+                    return GetHighestDriveTarget(validTargets);
+
                 default:
                     return validTargets[Random.Range(0, validTargets.Count)];
             }
@@ -498,15 +512,56 @@ public class EnemyManager : MonoBehaviour
     private CharacterManager GetClosestToDefeatingTarget(List<CharacterManager> targets)
     {
         if (_selectedAction == null) return GetLowestHealthTarget(targets);
-        
+
         return targets.OrderBy(t => t.GetCurrentHealth() - _selectedAction.maxDamage).First();
+    }
+
+    /// <summary>
+    /// Whoever has the most drive banked — the strategy that makes a DriveDrain or HealthDrain feel
+    /// aimed. Falls back to a random pick when nobody has any drive at all.
+    /// </summary>
+    /// <remarks>
+    /// The fallback matters more than it looks: with every meter at zero an ordered pick is
+    /// deterministic, so the enemy would open every single fight by draining whichever crew member
+    /// happened to sort first. Random keeps the opening turn from being scripted.
+    /// </remarks>
+    private CharacterManager GetHighestDriveTarget(List<CharacterManager> targets)
+    {
+        CharacterManager best = null;
+        float bestDrive = 0f;
+
+        foreach (CharacterManager candidate in targets)
+        {
+            DriveManager drive = candidate != null ? candidate.GetDriveManager() : null;
+            if (drive?.Drive == null) continue;
+
+            if (best == null || drive.Drive.CurrentDrive > bestDrive)
+            {
+                best = candidate;
+                bestDrive = drive.Drive.CurrentDrive;
+            }
+        }
+
+        if (best == null || bestDrive <= 0f)
+        {
+            return targets[Random.Range(0, targets.Count)];
+        }
+
+        return best;
     }
     
     private void PerformAction(CharacterManager targetManager)
     {
         if (_selectedAction == null || targetManager == null) return;
         
-        if (useParrySystem && _selectedAction.actionType == Action.ActionType.Attack && _enemyAttack != null)
+        // HealthDrain goes down the parryable path alongside Attack. It's a damaging swing with a
+        // windup like any other, and an enemy attack the player can't parry reads as a bug. It also
+        // falls out well: a parry cuts the damage to 25%, and since the enemy's healing is derived
+        // from health actually lost, it cuts their heal by the same amount.
+        bool isDamagingSwing = _selectedAction.actionType == Action.ActionType.Attack
+                               || _selectedAction.actionType == Action.ActionType.HealthDrain;
+
+        if (useParrySystem && isDamagingSwing && _enemyAttack != null)
         {
             PerformParryableAttack(targetManager);
         }
@@ -546,8 +601,7 @@ public class EnemyManager : MonoBehaviour
         float damage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
 
         // Check for critical hit
-        int critRoll = RollForCritical();
-        if (critRoll == 20) // Natural 20 is a crit
+        if (RollForCritical())
         {
             damage *= 2;
             Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
@@ -595,6 +649,10 @@ public class EnemyManager : MonoBehaviour
         
         switch (_selectedAction.actionType)
         {
+            // HealthDrain shares this label — resolution is identical, and the siphon at the end is
+            // a no-op for a plain Attack. This path only runs with the parry system off or missing;
+            // normally both reach PerformParryableAttack instead.
+            case Action.ActionType.HealthDrain:
             case Action.ActionType.Attack:
                 if (!RollToHit(targetManager, out int toHitRoll))
                 {
@@ -605,8 +663,7 @@ public class EnemyManager : MonoBehaviour
                 float damage = Random.Range(_selectedAction.minDamage, _selectedAction.maxDamage);
 
                 // Check for critical hit
-                int critRoll = RollForCritical();
-                if (critRoll == 20)
+                if (RollForCritical())
                 {
                     damage *= 2;
                     Debug.Log($"[EnemyManager] {gameObject.name} scored a critical hit!");
@@ -628,9 +685,10 @@ public class EnemyManager : MonoBehaviour
                     enemyDriveManager.OnAttackPerformed();
                 }
                 
-                targetManager.TakeDamage(damage);
+                float healthTaken = targetManager.TakeDamage(damage);
+                ApplyHealthDrain(healthTaken);
                 break;
-                
+
             case Action.ActionType.Heal:
                 float healing = Random.Range(_selectedAction.minHeal, _selectedAction.maxHeal);
                 
@@ -652,40 +710,55 @@ public class EnemyManager : MonoBehaviour
                 healerDriveManager?.OnAttackPerformed();
                 break;
                 
+            // Drive actions call the target's CharacterManager directly — the same path the player
+            // takes, and now the same path the buff branch below takes.
+            //
+            // targetManager is used as-is rather than being overridden to self for SingleAlly the
+            // way the buff branch does, because SelectTarget already resolves SingleAlly to another
+            // living enemy and only falls back to self when this one is alone. An enemy feeding its
+            // ally's meter is the interesting case; forcing self would throw it away.
+            case Action.ActionType.DriveGrant:
+                float driveGranted = targetManager.GainDrive(_selectedAction.driveAmount);
+                Debug.Log($"[EnemyManager] {gameObject.name} granted {driveGranted} drive to " +
+                          $"{targetManager.characterData?.characterName}");
+                break;
+
+            case Action.ActionType.DriveDrain:
+                float driveDrained = targetManager.LoseDrive(_selectedAction.driveAmount);
+                Debug.Log($"[EnemyManager] {gameObject.name} drained {driveDrained} drive from " +
+                          $"{targetManager.characterData?.characterName}");
+                break;
+
             case Action.ActionType.Buff:
             case Action.ActionType.Debuff:
-                // Apply buff/debuff - try different possible method names
-                CharacterManager buffTarget = _selectedAction.targetType == Action.TargetType.SingleAlly ? 
-                    _characterManager : targetManager;
-                
-                try
+                // Called directly, matching the player path in CombatController. This used to go
+                // through SendMessage with an object[] of three or four arguments — SendMessage only
+                // ever passes ONE, so it matched no overload, and the bare catch below swallowed the
+                // failure without even a log line. Every enemy buff and debuff silently did nothing.
+                // Don't reintroduce reflection here.
+                //
+                // SingleAlly resolves to this enemy rather than SelectTarget's pick, so a buff is a
+                // self-buff. That differs from the DriveGrant branch above, which honours the pick —
+                // deliberately: feeding an ally's meter is the interesting case for drive, whereas a
+                // protection or accuracy buff is almost always meant for the caster, and there is no
+                // Self target type to say so explicitly.
+                CharacterManager buffTarget = _selectedAction.targetType == Action.TargetType.SingleAlly
+                    ? _characterManager
+                    : targetManager;
+
+                if (buffTarget != null)
                 {
-                    // Try different possible buff method names
-                    if (HasMethod(buffTarget, "ApplyBuff"))
-                    {
-                        buffTarget.SendMessage("ApplyBuff", new object[] { 
-                            _selectedAction.buffType, 
-                            _selectedAction.buffValue, 
-                            Mathf.RoundToInt(_selectedAction.duration), 
-                            _selectedAction.actionType == Action.ActionType.Buff 
-                        });
-                    }
-                    else if (HasMethod(buffTarget, "AddBuff"))
-                    {
-                        buffTarget.SendMessage("AddBuff", new object[] { 
-                            _selectedAction.buffType, 
-                            _selectedAction.buffValue, 
-                            Mathf.RoundToInt(_selectedAction.duration) 
-                        });
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[EnemyManager] No suitable buff method found on {buffTarget.name}");
-                    }
+                    // Debuff negates, exactly as CombatController does — buffValue is authored
+                    // positive for both.
+                    float buffAmount = _selectedAction.actionType == Action.ActionType.Buff
+                        ? _selectedAction.buffValue
+                        : -_selectedAction.buffValue;
+
+                    buffTarget.AddBuff(_selectedAction.buffType, buffAmount, _selectedAction.duration);
                 }
-                catch
+                else
                 {
-                    Debug.LogWarning($"[EnemyManager] Error applying buff to {buffTarget.name}");
+                    Debug.LogWarning($"[EnemyManager] {gameObject.name} had no target for {_selectedAction.actionName}.");
                 }
                 break;
         }
@@ -696,11 +769,6 @@ public class EnemyManager : MonoBehaviour
         _turnManager.CompleteTurn();
     }
 
-    private bool HasMethod(object obj, string methodName)
-    {
-        return obj.GetType().GetMethod(methodName) != null;
-    }
-    
     // Store pending damage and target for parryable attacks
     private float _pendingDamage;
     private CharacterManager _pendingTarget;
@@ -717,21 +785,26 @@ public class EnemyManager : MonoBehaviour
             return;
         }
         
+        float healthLost;
+
         if (!wasParried)
         {
             // Attack was not parried, apply full damage
-            _pendingTarget.TakeDamage(_pendingDamage);
+            healthLost = _pendingTarget.TakeDamage(_pendingDamage);
             Debug.Log($"[EnemyManager] {gameObject.name} hit {_pendingTarget.characterData.characterName} for {_pendingDamage:F1} damage");
         }
         else
         {
             // Attack was parried, apply reduced damage (adjust multiplier as needed)
             float parryDamageReduction = 0.25f; // 25% damage gets through on parry
-            
+
             float reducedDamage = _pendingDamage * parryDamageReduction;
-            _pendingTarget.TakeDamage(reducedDamage, wasParried: true);  // <-- Pass wasParried = true!
+            healthLost = _pendingTarget.TakeDamage(reducedDamage, wasParried: true);  // <-- Pass wasParried = true!
             Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried! Reduced damage: {reducedDamage:F1} ({parryDamageReduction * 100}% of {_pendingDamage:F1})");
         }
+
+        // Siphon happens here rather than at the roll, so it's scaled by what the parry let through.
+        ApplyHealthDrain(healthLost);
 
         // Clear pending data, the target highlight and the tooltip flag
         ClearHighlight();
@@ -743,9 +816,59 @@ public class EnemyManager : MonoBehaviour
         _turnManager.CompleteTurn();
     }
     
-    private int RollForCritical()
+    /// <summary>
+    /// Heals this enemy for its share of the health a HealthDrain just took. No-ops for every other
+    /// action type, so both the parryable and direct paths can call it unconditionally.
+    /// </summary>
+    /// <remarks>
+    /// Takes health <i>actually lost</i> rather than damage rolled, which is what makes the parry
+    /// interaction work without a special case: a parried drain removed 25% of the health, so it
+    /// heals the enemy 25% as much.
+    ///
+    /// The 1x multiplier on Heal() is deliberate — drive already multiplied the damage this is
+    /// derived from, and applying it again would let one drive spend pay out twice.
+    /// </remarks>
+    private void ApplyHealthDrain(float healthLost)
     {
-        return Random.Range(1, 21); // d20 roll
+        if (_selectedAction == null || _selectedAction.actionType != Action.ActionType.HealthDrain) return;
+        if (_characterManager == null || healthLost <= 0f) return;
+
+        float siphoned = healthLost * _selectedAction.healthDrainRatio;
+        if (siphoned <= 0f) return;
+
+        _characterManager.Heal(siphoned);
+
+        Debug.Log($"[EnemyManager] {gameObject.name} siphoned {siphoned:F1} health " +
+                  $"({_selectedAction.healthDrainRatio:P0} of {healthLost:F1} taken)");
+    }
+
+    /// <summary>
+    /// Rolls this enemy's critical hit, honouring any <see cref="Character.BuffType.CritChance"/>
+    /// buff via <c>CharacterManager.CritThreshold</c>. Returns true on a crit.
+    /// </summary>
+    /// <remarks>
+    /// Returns the verdict rather than the raw roll, so the threshold is applied in one place
+    /// instead of every call site re-testing <c>== 20</c> — which is exactly how the base crit rule
+    /// came to be duplicated across two branches in the first place.
+    ///
+    /// <b>Still a separate roll from the to-hit check</b>, unlike the player, whose single d20
+    /// decides both. That asymmetry predates this and is logged in <c>TODO.md</c>; a CritChance buff
+    /// makes it slightly more visible, because an enemy's crit is gated behind landing a separate
+    /// to-hit roll first while the player's buffed high roll both hits and crits by construction.
+    /// </remarks>
+    private bool RollForCritical()
+    {
+        int roll = Random.Range(1, 21); // d20 roll
+        int threshold = _characterManager != null ? _characterManager.CritThreshold : 20;
+
+        bool crit = roll >= threshold;
+
+        if (crit && enemyData != null && enemyData.showDebugInfo)
+        {
+            Debug.Log($"[EnemyManager] {gameObject.name} crit roll {roll} met threshold {threshold}");
+        }
+
+        return crit;
     }
 
     /// <summary>

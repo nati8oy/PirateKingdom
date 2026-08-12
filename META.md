@@ -24,6 +24,29 @@ and tuning, with engineering help on request for anything needing new mechanics 
 status effects) rather than new numbers. B and C are lettered, not numbered, because neither has an
 ordering against 3–6.
 
+**Phase B has since taken most of the mechanical work**, so the action vocabulary is now much wider
+than "attack, heal, buff". Landed since this plan was written, all code-complete and awaiting
+Editor verification:
+
+| | |
+|---|---|
+| `ActionType.DriveGrant` / `DriveDrain` | Move raw drive onto an ally or off an enemy. Drive became something the party plays *with* rather than a private resource. |
+| `ActionType.HealthDrain` | Attack that heals the attacker from health **actually lost**. Parryable, so a parry cuts the healing too. |
+| `BuffType.DamageReduction` | Protection, as a fraction. The one buff type that isn't a stat — applied in `TakeDamage()`, not `RefreshStats()`. Negated, it's a vulnerability. |
+| `BuffType.CritChance` | Widens the crit window, in d20 points (+5% each). Applies to attacks, drains and heals. |
+| `Action.autoTargetSelf` | Self-cast actions resolve with no target click and end the turn. |
+| `Enemy.TargetingStrategy.HighestDrive` | Makes an enemy drain aim at the fullest meter rather than by health. |
+| Enemy buffs fixed | The `SendMessage` reflection path never bound — every enemy buff and debuff silently did nothing. Now calls `AddBuff` directly. |
+| Roster retuned into the band | Defense values moved into the §Phase B baseline, so **defense and its debuffs are live** and hit chances span 60–95% instead of clamping at 95%. |
+
+**Every debuff comes free** from the buff it mirrors — `ActionType.Debuff` negates `buffValue`, so
+Speed, Defense, Accuracy, Crit Chance and Damage Reduction all debuff with no extra code.
+
+Two combat-wide invariants worth knowing before touching resolution, both in `CLAUDE.md`:
+`CombatController.PerformAction()` completes the turn from a `finally` (a fault mid-resolution used
+to hand back a free extra action), and `CharacterManager.TakeDamage()` now returns health actually
+lost, which is what makes life steal honest about overkill.
+
 What exists and works today:
 
 | | |
@@ -677,7 +700,7 @@ finds it without per-prefab wiring. Maps outcome to effect:
 | Outcome | Fires from |
 |---|---|
 | `Hit` | `CharacterManager.TakeDamage()` |
-| `Crit` | same, when the attack rolled a natural 20 |
+| `Crit` | same, when the roll met `CharacterManager.CritThreshold` (20 unbuffed, lower with a `CritChance` buff — no longer a fixed natural 20) |
 | `Parry` | `TakeDamage(wasParried: true)` / `CharacterManager.Parry()` |
 | `Miss` | `CharacterManager.Miss()` |
 
@@ -744,8 +767,15 @@ minimum roll to hit = defenseValue - attackPower + 1     (floored at 2, since 1 
 hit chance          = (21 - minimum roll) / 20
 ```
 
-**As authored today every `defenseValue` (3–5) sits below every `attackPower` (5–11), so the
-subtraction clamps and everything hits 95%.** Defense is inert, and the only misses in the game are
+**This has since been applied — the baseline below is the authored roster, not a proposal.** Crew sit
+at defense 13 / attack 11-15; Skeleton 8/11, Elite 10/17, Boss 12/14. Hit chances now span 60-95%
+rather than clamping at 95%, so **defense is live and misses are no longer only natural 1s.**
+
+The one asset still outside the band is `Witch Healer` (attack 5, defense 3), which everything hits
+at the ceiling.
+
+*Superseded, kept for the reasoning:* it used to be that every `defenseValue` (3-5) sat below every
+`attackPower` (5-11), so the subtraction clamped, defense was inert, and the only misses were
 natural 1s. Enemies gaining the ability to miss (see `TODO.md`) changed nothing on its own for the
 same reason.
 
@@ -784,6 +814,76 @@ Sketched so the cost is known, not designed. The per-turn tick it needs already 
 - Enemy AI weighting: `EnemyManager.ChooseBestAction()` scores by `ActionType`, so a new type needs
   a weight or enemies will never pick it.
 
+#### Multi-target attacks — what it would touch
+
+Sketched so the cost is known, not designed. Wanted for both crew and enemies.
+
+**It's a half-built feature, and the slate is clean.** `Action.TargetType` already has `AllEnemies`
+and `AllAllies`, and both sides already accept them — they just resolve against one target
+(`CombatController.IsValidTarget()` accepts any enemy-tagged click; `EnemyManager.SelectTarget()`
+returns `_playerCharacters[0]`, with a comment saying as much). **All 13 authored Action assets are
+`SingleEnemy` or `SingleAlly`**, so implementing real multi-target semantics changes no existing
+asset's behaviour.
+
+**Two things to pay down first, because AoE is what makes them dangerous:**
+
+- **`TargetType` means two different things** — absolute in `CombatController`, caster-relative in
+  `EnemyManager` (see `TODO.md`). Benign while each asset lives on one side only. With AoE, one
+  inverted read means an enemy's "all enemies" resolves against its own side, or a crew AoE hits
+  the party.
+- **The d20 rule is already duplicated** across `CombatController.PerformAction()` and
+  `EnemyManager`, and `HealthDrain` made it four hand-synced copies. Adding per-target loops to both
+  writes the loop twice and then merges it. **Extract a shared resolver taking
+  `(caster, action, targets[])` first**, with single-target as the one-element case. This is the
+  call that shapes everything else.
+
+**The decision without a clean answer: parry.** Single-target at every level — `ParryInputManager`
+dispatches to exactly one `activeParrySystem`, `EnemyAttack.StartAttack()` takes one GameObject,
+`_pendingDamage`/`_pendingTarget` are single-valued, and one shared Parry input action means three
+crew physically cannot each parry their own hit. Two viable shapes:
+
+- *AoE enemy attacks are unparryable.* Simplest, and defensible design — AoE becomes the threat you
+  can't mitigate, only prevent or survive. Needs strong telegraphing or it reads as broken parry.
+- *One press mitigates party-wide.* Elegant, but the parry drive reward is
+  `damage prevented × parryBonusDriveMultiplier` **per character**, so one press paying out across
+  three crew is an enormous drive swing needing retune.
+
+Recommend the first, chosen explicitly rather than by default.
+
+**Drive economy scales with the target count, both ways.** `damageInflictedDriveMultiplier` is 4 and
+a segment is 100, so a 3-target AoE for 5 each generates **60 drive from one action** — over half a
+segment. Every victim separately gains `damageTakenDriveMultiplier`, so an enemy AoE tops up the
+whole party at once. And a drive stack spent on an AoE is worth N× one spent on a single target.
+Decide deliberately whether drive gain stays per-damage-point (scales with N) or becomes per-action.
+
+**Traps, all concrete:**
+
+- **`OnAttackPerformed()` must fire once per action, not per target** — inside the loop, target 1
+  consumes the stacks and targets 2+ silently lose the multiplier. Same for `UseAction()`.
+- **Turn completion exactly once.** Firing `EnemyAttack` per target makes `OnAttackComplete` fire N
+  times, and each calls `CompleteTurn()` — the enemy would burn N turns.
+- **Per-target rolls.** Roll to-hit *and* damage per target so each target's `defenseValue` and crits
+  matter; note it multiplies variance. The "single damage roll" rule in `CLAUDE.md` exists only to
+  keep the parry reward honest, so it doesn't bind if AoE is unparryable.
+- **Death mid-iteration is safe today and won't stay safe.** `TakeDamage` only fires `OnDeath`; the
+  `Destroy` happens in `CharacterManager.Update()` next frame, so a synchronous loop is fine. Phase C
+  staggers resolution across frames, at which point it isn't. Snapshot the list and null-check per
+  iteration regardless. (Aside: `OnDeath` fires twice per death — from `TakeDamage` and again from
+  `Update` — harmless only because nothing subscribes to it.)
+- **Enemy AI can't see how many an action would hit.** `ChooseBestAction()` weights purely by
+  `ActionType`, so an AoE is strictly better against 3 crew and worthless against 1 with no way to
+  tell. Needs a situational modifier scaling by living target count. `SelectTarget()` also returns a
+  single `CharacterManager`.
+
+**UI is single-target throughout.** `ActionTargetingLine.ApplyHoverTarget()` tracks exactly one
+`hoverTarget` (the per-character flag underneath handles multiples fine, so this is a set change),
+the line draws to one point, and `TooltipUI.ShowTargetTooltip()` previews one hit chance where an
+AoE has a different one per target.
+
+**Sequencing: do this after Phase C.** Three simultaneous damage feedbacks and floating numbers read
+as mush, and Phase C is precisely about putting authored time around resolution — building AoE first
+means redoing its presentation.
+
 #### Open items belonging to this phase
 
 Detail in `TODO.md`:
@@ -792,20 +892,43 @@ Detail in `TODO.md`:
 - **Tephi is undertuned** — attack 5 and the roster's lowest `buffNextActionMultiplier` (1.5).
 - **`Skelly Spear` (5–10) is in no enemy's `actionSlots`** — the Elite is its natural home.
 - **`GetModifiedAttackPower()` has no callers** — decide whether drive should affect accuracy, or delete it.
-- **Crit asymmetry** — the player's natural 20 both hits and crits; enemies roll to-hit and crit separately.
+- **Crit asymmetry** — the player's single roll both hits and crits; enemies roll to-hit and crit
+  separately. Slightly more visible now: with `BuffType.CritChance` widening the window, an enemy's
+  crit is gated behind passing a *separate* to-hit roll first, so the same buff value buys an enemy
+  marginally fewer crits than a crew member. Both sides now read `CharacterManager.CritThreshold`,
+  so unifying is a matter of deleting `RollForCritical()` and testing the to-hit roll instead.
 - **Drive multipliers below ~1.5 vanish into `Mathf.Round`** on small damage ranges. Sanity-check new
   tuning against `minDamage`, not the midpoint.
 
 **Buff actions — read these three before authoring any.** The player path works and new buff/debuff
 `Action` assets need no code, but:
 
-- **Enemy buff/debuff actions silently no-op** — `EnemyManager` applies them through a `SendMessage`
-  call that can't bind, swallowed by a bare `catch`. Fix before slotting a buff onto an enemy.
+- ~~**Enemy buff/debuff actions silently no-op**~~ — **fixed.** `EnemyManager` now calls `AddBuff`
+  directly instead of through an unbindable `SendMessage`. Enemy buffs work.
 - **`BuffType.Health` grants max health but no actual health**, and can leave a character above
-  100% when it expires. Avoid the type until it's decided; Attack, Defense and Speed are safe.
+  100% when it expires. Avoid the type until it's decided; the rest are safe.
 - **`BuffType.Attack` is now `BuffType.Accuracy`** — it feeds the to-hit roll only. Damage bonuses
-  stay drive's job so the two don't compound. **Defense buffs still do nothing at all** until
-  defense values move into the band above — the to-hit roll clamps. Speed buffs work as expected.
+  stay drive's job so the two don't compound. **Defense buffs and debuffs now work** — the roster has
+  been retuned into the band above, so the to-hit roll no longer clamps. A -3 Defense debuff is worth
+  +10 to +15 percentage points to whoever is attacking the target. Speed buffs work as expected.
+  - **Every debuff comes free from the buff it mirrors** — `ActionType.Debuff` negates `buffValue`,
+    so Speed, Defense, Accuracy, Crit Chance and Damage Reduction all have working debuff forms with
+    no extra code. Author them as `Debuff` with a positive `buffValue`.
+- **`BuffType.CritChance` is authored in flat d20 points** — each point is one more critting face,
+  so `+1` is +5% and `+2` is +15% total. Capped at 50% (threshold 11); a negative value switches
+  crits off entirely rather than wrapping. Applies to attacks, health drains **and heals**.
+  - Cheapest damage dial that isn't drive: it multiplies existing damage rather than adding to it,
+    so it scales with whatever the weapon already does and doesn't need retuning per action.
+- **`BuffType.DamageReduction` is the protection buff, and is authored in different units** — a
+  FRACTION (0.25 = 25% less damage), where every other type is flat points. Stacks additively,
+  capped at 90% so protection can never reach immunity; as a Debuff it becomes a vulnerability,
+  floored at -100%. It's the one buff type that isn't a stat, so it's applied in
+  `CharacterManager.TakeDamage()` rather than `RefreshStats()`.
+  - **It's the mitigation dial that can't clamp.** Defense also works now that the roster is in
+    band, but Defense stops helping once a matchup is already at the 5% floor or 95% ceiling,
+    whereas protection scales the damage itself and always does something.
+  - Watch the rounding, as ever: damage is rounded after reduction, so 25% off a 2-damage hit is
+    invisible. Sanity-check against `minDamage`.
 
 Buff icons are built — `BuffIconDisplay` on the combatant root, driven by
 `CharacterManager.BuffsChanged`. One slot per buff type, sprite plus optional turns text.

@@ -51,10 +51,16 @@ compounded damage number, and duplicated a system that already works. The two st
 `Accuracy` staying at position 0 keeps every authored Action asset pointing at the right buff.
 Append new types at the end — a remark on the enum says so.
 
-Still true: a *Defense* buff has a related problem — with every `defenseValue` currently below every `attackPower`
-the to-hit roll clamps at "2+", so a Defense buff changes **nothing at all** until the values move
-into the band described in `META.md` Phase B. Speed buffs work as expected — initiative is
-`Speed + Random(1,9)`, re-rolled each round.
+~~Still true: a *Defense* buff changes nothing, because the to-hit roll clamps.~~ **No longer true —
+the roster has been retuned into the Phase B band and Defense is live.** Crew sit at defense 13,
+enemies at 11/14/17 against attack powers of 5-15, so hit chances span 60-95% and there is real
+headroom for the roll to move in. A -3 Defense debuff is worth +10 to +15 percentage points in most
+matchups, in both directions.
+
+The one asset still outside the band is **`Witch Healer` (defense 3)**, which everything hits at the
+95% ceiling — a Defense debuff on it genuinely does nothing.
+
+Speed buffs work as expected — initiative is `Speed + Random(1,9)`, re-rolled each round.
 
 ### Most of the roster caps on the *first* drive stack
 The multiplier is `1 + baseBonus·(1 + d + d² + …)` where `baseBonus = buffNextActionMultiplier - 1`,
@@ -96,6 +102,44 @@ Consequences worth keeping in mind:
 
 ## Bugs
 
+### A player action sometimes doesn't seem to end the turn — INTERMITTENT, unresolved
+**Status: partly fixed, root cause not established. Reported against `DriveGrant`, but nothing about
+the symptom is specific to that action type.**
+
+Symptom: after resolving an action the player appears to still be able to act, instead of the turn
+passing on. Now happens *unreliably* rather than every time, which is the main thing to explain.
+
+**Already fixed, don't re-fix:** `CombatController.PerformAction()` charges the cooldown and calls
+`CompleteTurn()` from a `finally` (see `CLAUDE.md`). Previously an exception while applying an effect
+skipped both, which doesn't stall the game — it hands out a **free, off-cooldown extra action**,
+because the selection is still live and the buttons are still interactable. That path is closed:
+entering `PerformAction` now always costs the turn. **So whatever remains is not this.**
+
+Three candidates, in the order they explain *intermittency*:
+
+1. **It may not be a bug at all — the turn is passing to another crew member.** Initiative is
+   `Speed + Random(1,9)`, re-rolled every round, so two crew frequently act back to back. When they
+   do, `CompleteTurn()` → `SetCharacterTurn()` repopulates the bar with the *next* crew member's
+   actions, still interactable, and from the player's seat that is indistinguishable from "my turn
+   didn't end". Frequency would track how often crew are adjacent in the turn order — which fits
+   "works, but unreliably" better than either option below.
+   **Discriminator:** the turn marker and the "X's Turn" label move, and the console logs
+   `<name> completed their turn, buffs updated`.
+2. **`PerformAction` is never reached.** `TryExecuteActionOnCurrentTarget()` returns early on an
+   invalid target, correctly leaving the turn open — a misclick must not cost a turn. Intermittent
+   if clicks sometimes land on the wrong combatant, or get eaten by UI over the sprite.
+   **Discriminator:** console shows `Invalid target for action <name>`.
+3. **An exception mid-resolution.** Now harmless to turn flow, but it would leave the effect
+   half-applied. Most likely source is an MMF_Player with an unassigned target — the
+   `driveGrantedFeedback` / `driveDrainedFeedback` slots are new and start empty.
+   **Discriminator:** a red error in the console.
+
+**Next step when picking this up:** it's intermittent, so catch it rather than reason about it —
+note the acting character's name and the turn order at the moment it happens, and grab the whole
+console rather than just the last line. A temporary log at the top of `SetCharacterTurn()` printing
+who just gained the turn would settle candidate 1 immediately, which is worth doing first because it
+is the cheapest to rule in or out and would mean there's no bug here at all.
+
 ### ~~Enemies could never miss~~ — DONE
 `EnemyManager` rolled a d20 for **crits only** (`RollForCritical`), with no to-hit check anywhere in
 the enemy path and no miss branch — every enemy attack landed unless parried. Two consequences that
@@ -114,22 +158,47 @@ a guaranteed miss would cost the player their attempt for nothing.
 *Balance note:* enemy attacks now land less often than they used to, so any tuning done before this
 was against enemies that hit 100% of the time. Crew `defenseValue` is now live and worth checking.
 
-### Enemy buff and debuff actions silently do nothing
-`EnemyManager.cs:608-625` applies buffs by reflection: `HasMethod(buffTarget, "ApplyBuff")` then
+### `Action.TargetType` means different things to the player and to enemies
+Found while adding the drive actions. `CombatController.IsValidTarget()` reads it **absolutely** —
+`SingleEnemy` means "an object tagged `Enemy`". `EnemyManager.SelectTarget()` reads it
+**caster-relatively** — its `SingleEnemy` case is commented "Enemy targeting players" and returns
+players.
+
+So the same enum member resolves to opposite sides depending on who owns the asset. It happens to
+work out today because an action asset is only ever slotted on one side, and the two readings agree
+for the common cases (an enemy's `SingleEnemy` attack wants players; a player's wants enemies).
+
+**The authoring rule that follows:** `SingleEnemy` = "someone on the other side", `SingleAlly` =
+"my side", and an action asset is **not** portable between crew and enemies — a `DriveDrain`
+authored for the crew can't simply be dropped into an enemy's `actionSlots` and mean the same thing.
+
+Worth unifying eventually, but it's a rename-and-audit job across every authored asset, so not now.
+
+**Multi-target attacks are what make this urgent.** While every action hits one target the two
+readings are merely confusing; once `AllEnemies` resolves against a whole side, one inverted read
+means an enemy's AoE hits its own allies or a crew AoE hits the party. See "Multi-target attacks —
+what it would touch" in `META.md` Phase B, which lists this as a prerequisite.
+
+### ~~Enemy buff and debuff actions silently do nothing~~ — DONE
+`EnemyManager` applied buffs by reflection: `HasMethod(buffTarget, "ApplyBuff")` then
 `buffTarget.SendMessage("ApplyBuff", new object[] { … })` with **four** arguments, falling back to
-`"AddBuff"` with **three**.
+`"AddBuff"` with **three**. `SendMessage` only ever passes a **single** argument, so the `object[]`
+went in as one parameter and matched neither `AddBuff(BuffType, float, float)` nor any `ApplyBuff`
+overload — and `ApplyBuff` never existed on `CharacterManager`. The bare `catch` swallowed the
+failure, so there wasn't even a log line.
 
-`SendMessage` only ever passes a **single** argument. Passing an `object[]` hands the array itself
-as one parameter, which matches neither `AddBuff(BuffType, float, float)` nor any `ApplyBuff`
-overload — and `ApplyBuff` doesn't exist on `CharacterManager` at all. The call fails and the bare
-`catch` below swallows it, so there isn't even a log line.
+Now calls `buffTarget.AddBuff(...)` directly, matching `CombatController`, negating `buffValue` for
+the debuff case. `HasMethod()` is deleted; there is no reflection left in the file.
 
-The player's path is fine: `CombatController.cs:391-398` calls `AddBuff` directly.
+Fixed as part of adding the protection buff (`BuffType.DamageReduction`) — that's the first buff
+anyone would realistically want on an enemy, so shipping it against a no-op path would have made the
+feature look broken on half the roster.
 
-Masked today only because no enemy has a buff or debuff in its `actionSlots`. Slot one onto the
-Elite and it no-ops. **Fix:** delete the reflection and call `buffTarget.AddBuff(...)` directly,
-matching the player path, with `-buffValue` for the debuff case. `HasMethod()` then has no callers
-and should go too.
+**Behaviour note kept deliberately:** `SingleAlly` still resolves to the casting enemy rather than
+`SelectTarget()`'s pick, so an enemy buff is a self-buff. That differs from the `DriveGrant` branch,
+which honours the pick. There is no `Self` target type to distinguish "me" from "an ally", and a
+protection or accuracy buff is almost always meant for the caster — adding one is the real fix if
+enemy support characters are ever wanted.
 
 ### `BuffType.Health` grants max health but no actual health
 `CharacterManager.cs:260` folds Health buffs into `MaxHealth`, and nothing adjusts `CurrentHealth`.
@@ -432,11 +501,30 @@ Worth reopening because the interesting decision isn't *when* to spend, it's *wh
 
 So two of the four work and are simply not exposed. The gap is a menu, not a system.
 
+**Partly answered by `DriveGrant` / `DriveDrain`.** "Spend on someone else" below is now built, from
+the other direction: rather than donating your own segments, an `Action` moves raw meter — onto an
+ally, or off an enemy. That makes drive a thing the party plays *with* rather than a private
+resource, and it needed no drive-menu UI, which is what had blocked every other option here.
+
+Follow-ups it opened:
+
+- ~~**No targeting strategy picks by drive.**~~ **DONE.** `Enemy.TargetingStrategy.HighestDrive`
+  added, resolved by `EnemyManager.GetHighestDriveTarget()`. Falls back to a random pick when every
+  candidate is at zero drive — without that the opening turn of every fight would be deterministic,
+  since an ordered pick over all-equal values always returns the same crew member.
+- **Drain can't touch committed stacks**, by design (see `CLAUDE.md`). A "disrupt" effect that
+  knocks the stacks off a charged-up enemy would be a genuinely different action, and it needs a
+  way to reach `DriveManager.ClearStacks()`, which is currently private.
+- **`HealthDrain` landed alongside it** — an attack that heals the attacker for a share of the
+  health the target actually lost. See the drive/health drain notes in `CLAUDE.md`.
+
 ### Directions worth exploring
 
-- **Shake off debuffs.** `RemoveDebuff` exists and works. It only becomes meaningful once enemies
-  can actually apply debuffs — which they can't today, see the `SendMessage` bug above. Fixing that
-  gives this one an immediate reason to exist.
+- **Shake off debuffs.** `RemoveDebuff` exists and works, and **now has a reason to exist**: the
+  `SendMessage` bug is fixed, so enemies can actually apply debuffs, and there are more worth
+  shaking off than there were — a Speed or Defense debuff now genuinely bites, and a negated
+  `DamageReduction` (vulnerability) or `CritChance` is a real threat. Still unreachable for the
+  player only because nothing builds the drive utility menu.
 - **Reset action cooldowns.** Needs real implementation against `CharacterManager.actionCooldowns`.
   The design question is whether it clears one chosen action (a decision, needs target UI) or all of
   them (simpler, blunter).

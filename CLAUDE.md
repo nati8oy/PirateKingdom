@@ -44,19 +44,33 @@ third-party and should not be modified** unless explicitly requested:
 ### First-party script map (`Assets/Scripts/`)
 
 - `Combat/`
-  - `Character.cs` — **ScriptableObject** base for all characters (stats, class, allegiance,
-    buffs, per-action cooldowns). Enemies subclass this.
-  - `Action.cs` — ScriptableObject defining an ability (Attack/Heal/Buff/Debuff, target type,
-    damage/heal ranges, cooldown, windup, icon).
+  - `Character.cs` — **ScriptableObject** base for all characters: authored stats, class,
+    allegiance, art, drive multipliers, and the `BuffType` enum. Enemies subclass this.
+    **Authored data only** — buffs and per-action cooldowns live on the runtime `CharacterManager`,
+    not here (moved in Phase 1a; see "ScriptableObject data vs. MonoBehaviour runtime").
+  - `Action.cs` — ScriptableObject defining an ability. Seven `ActionType`s: Attack, Heal, Buff,
+    Debuff, DriveGrant, DriveDrain, HealthDrain. **`ActionType` is serialized by integer value —
+    append new members, never reorder them**, same rule as `Character.BuffType` and
+    `Enemy.TargetingStrategy`.
+    - The Inspector is grouped so **each value section is headed with the action types that read
+      it** — Damage (Attack, Health Drain) / Healing (Heal) / Buff-Debuff / Drive (Drive Grant,
+      Drive Drain) / Life Steal (Health Drain) / Enemy Windup. Only one section applies to any given
+      action; the Inspector showing a field does not mean that field is live.
+    - **Field order is Inspector layout only.** Unity serializes by field *name*, so regrouping is
+      safe on authored assets; renaming needs `[FormerlySerializedAs]`.
+    - `autoTargetSelf` skips target selection and resolves on the caster — see "Turn ownership".
   - `CombatController.cs` — resolves **player** actions on a target (d20 hit rolls, crits, drive
-    multipliers) and calls `TurnManager.CompleteTurn()`.
+    multipliers), then charges the cooldown and calls `TurnManager.CompleteTurn()` **from a
+    `finally`** so a fault mid-resolution can't hand back a free extra action. Also owns the
+    `autoTargetSelf` shortcut in `SelectAction()`.
   - `DriveManager.cs` / `DriveMeter.cs` / `DriveUI.cs` — the "Drive" super-meter resource system.
   - `ClickableCharacter.cs` — target selection. Implements `IPointerClickHandler` (world sprite
     body + `Collider2D` + a `Physics2DRaycaster` on the camera). Its `CharacterClicked()` is still
     public so a UI Button's OnClick can drive it too.
   - `ActionTargetingLine.cs` — LineRenderer from the selected action's source to the legal target
-    under the cursor, plus valid / invalid / default cursor swaps. The line is a **player setting**
-    (`GameSettings.ShowTargetingLine`, default on); the cursor feedback is always on.
+    under the cursor, plus valid / invalid / default cursor swaps, plus lighting that target's
+    `img_target_indicator`. The line is a **player setting**
+    (`GameSettings.ShowTargetingLine`, default on); the cursor and indicator feedback are always on.
   - `ParryVisualFeedback.cs`.
 - `Generics and Managers/`
   - `TurnManager.cs` — **the heart of combat.** Initiative-based turn order (re-rolled each
@@ -66,13 +80,21 @@ third-party and should not be modified** unless explicitly requested:
     `SceneManager.sceneLoaded` and by `EncounterBootstrapper` after it spawns — a single `Awake`
     snapshot goes stale the moment combatants are spawned at runtime.
   - `CharacterManager.cs` — the **runtime MonoBehaviour** wrapper around a `Character`
-    ScriptableObject: current health, taking/dealing damage, healing, feedbacks, death, drive.
+    ScriptableObject: current health, taking/dealing damage, healing, feedbacks, death, drive. Owns
+    all per-instance state — `activeBuffs`, `actionCooldowns`, and the run record — and derives the
+    buff-dependent values combat reads: `DamageReductionFraction`, `CritThreshold` /
+    `CritChancePercent`, plus the four stats in `RefreshStats()`.
+    - `TakeDamage()` returns the health **actually lost** (rounded, capped by remaining health), for
+      `HealthDrain` to siphon from. Every other caller ignores it.
+    - `SetTargeted()` / `SetHoverTargeted()` are two independent owners of the one target indicator.
   - `ActionsManager.cs` — builds the player action-button UI (incl. the End Turn button) and the
     shared `IsActionAvailable` cooldown check used by both player and enemy AI. The panel shows
     whoever's turn it is, **enemies included**, but buttons are only interactable for a
     `Player`-allegiance character — see "Turn ownership" below.
   - `ParrySystem.cs` + `ParryInputManager.cs` — real-time parry windows on incoming enemy attacks.
-  - `PlayerInputHandler.cs` — maps the Drive input action to `EnterDriveMode`.
+  - `PlayerInputHandler.cs` — maps the Drive input action to `DriveManager.TryAddDriveStack()`, one
+    stack per press, on whichever crew member currently holds the turn. (It used to be described as
+    calling `EnterDriveMode`; that's now only a `driveStacks`-backed shim — prefer the stacking API.)
   - `CursorManager.cs` — the single owner of the hardware cursor. `DontDestroyOnLoad`, lazy
     `Instance`, tolerates being absent. **Anything that swaps the cursor must go through it**
     (`SetCursor` / `ResetToDefault`) — a component calling `Cursor.SetCursor(null, …)` directly
@@ -94,7 +116,11 @@ third-party and should not be modified** unless explicitly requested:
     in front. Optional; combatants spawn from one prefab and would otherwise share one order.
 - `Enemy/`
   - `Enemy.cs` — ScriptableObject subclass of `Character` with AI config (action weights,
-    targeting strategy, heal threshold, drive config).
+    targeting strategy, heal threshold, drive config). `TargetingStrategy` includes `HighestDrive`,
+    which is what makes a `DriveDrain` or `HealthDrain` feel aimed — the health-based strategies
+    would otherwise drain whoever happens to have the emptiest meter. It falls back to a random pick
+    when every candidate is at zero drive, so the opening turn isn't deterministic. **Append-only
+    enum**, like every other serialized enum here.
   - `EnemyManager.cs` — enemy AI turn logic: weighted action choice, target selection,
     parryable attack flow.
   - `EnemyAttack.cs` — coroutine attack sequence that opens the target's parry window. It does
@@ -148,7 +174,20 @@ third-party and should not be modified** unless explicitly requested:
       queued scene load.
   - **No Meta file uses `using System;`** — it would make `System.Action` collide with the
     game's own `Action` ScriptableObject. System types are fully qualified instead.
-- `Player/PlayerCombatController.cs`, `Tooltip/`, `Debugs/`, `PlayerControls.cs` (generated input).
+- `Tooltip/`
+  - `TooltipUI.cs` — scene singleton driving the one shared tooltip label. Four entry points:
+    `ShowActionTooltip` (bare), `ShowActionTooltipWithCharacter` (hover on an action button, adds
+    cooldown state), `ShowEnemyActionTooltip` (what the enemy is about to do), and
+    `ShowTargetTooltip` (hover on a target, the only one that previews an *outcome*).
+    - **All four switch on `ActionType`, so a new type renders blank in four places** unless each is
+      updated. Same for the buff formatters, which exist because `buffValue` means different units
+      per `BuffType`.
+    - `ShowTargetTooltip` must model everything that will actually modify the number — attacker's
+      drive multiplier, attacker's `CritChancePercent`, and the **target's `DamageReductionFraction`**
+      — or it quotes damage that never lands and the shortfall reads as a bug.
+    - Still carries the `DontDestroyOnLoad`-on-a-Canvas-child bug logged in `TODO.md`.
+  - `ActionButtonHover.cs` / `TargetHoverHandler.cs` — EventSystem hover handlers that call into it.
+- `Player/PlayerCombatController.cs`, `Debugs/`, `PlayerControls.cs` (generated input).
 
 ## Key architecture concepts
 
@@ -185,6 +224,14 @@ third-party and should not be modified** unless explicitly requested:
     don't try to win that race with Script Execution Order.
   - `Update()` early-returns until the battle has begun. Without that guard a scene that spawns
     its combatants would count zero living players on frame one and instantly declare a defeat.
+  - **`CombatController.PerformAction()` charges the cooldown and calls `CompleteTurn()` from a
+    `finally`.** Resolution and handover used to be a plain sequence, so anything that threw while
+    applying an effect skipped both. That does not stall the game — it hands out a **free extra
+    action**: the selection is still live and the buttons are still interactable, so the player just
+    picks something else, off cooldown. A broken feedback reference on one `Action` therefore became
+    a balance exploit that also hid its own stack trace. Acting costs the turn whether or not the
+    effect resolved cleanly. The null-target guard sits *above* the try on purpose — a click that
+    never became an action must not cost anything.
 - **Turn ownership — the player may only act on their own turn.** Enforced in three places, and
   all three are load-bearing:
   - `ActionsManager.LoadCharacterActions()` sets `button.interactable = isAvailable && playerControlled`,
@@ -218,15 +265,60 @@ third-party and should not be modified** unless explicitly requested:
   - Clicking and hovering both need a `Collider2D` on the combatant plus a **`Physics2DRaycaster`
     on the camera**. `IPointerEnterHandler`/`IPointerClickHandler` are EventSystem interfaces, not
     UI ones, so they work on sprites once a raycaster exists.
-- **d20 combat resolution:** roll 1–20. `1` = critical miss, `20` = critical hit (double dmg),
-  otherwise `roll + attackPower >= target defense` to hit. Player side in
-  `CombatController.PerformAction()`, enemy side in `EnemyManager.RollToHit()` — keep the two rules
-  identical if you change either.
+- **d20 combat resolution:** roll 1–20. `1` = critical miss, `20` always hits, otherwise
+  `roll + attackPower >= target defense` to hit. A hit crits (double dmg) when
+  `roll >= CharacterManager.CritThreshold`. Player side in `CombatController.PerformAction()`,
+  enemy side in `EnemyManager.RollToHit()` — keep the two rules identical if you change either.
+  - **"Natural 20 always hits" and "this roll crits" are two different tests**, and only the second
+    moves. The auto-hit check stays pinned at 20; `CritThreshold` starts at 20 and drops one per
+    point of `BuffType.CritChance`. So a buffed 18 can crit — but it still has to beat the target's
+    defense to land, which is what makes it impossible to crit on a miss.
+  - `CritThreshold` is clamped to `[11, 21]`: 11 caps buffed crit chance at 50%, and 21 is
+    deliberately reachable — no d20 face satisfies it, so a negative `CritChance` buff switches
+    crits off rather than wrapping around. `CritChancePercent` is the same thing for tooltips.
+  - **Crit applies to healing too**, on the same threshold, or the buff would silently mean nothing
+    in a support character's hands.
   - **The enemy roll is separate from the crit roll.** `EnemyManager` rolls twice: `RollToHit()`
-    decides whether the attack lands, `RollForCritical()` decides whether it doubles.
+    decides whether the attack lands, `RollForCritical()` decides whether it doubles — the latter
+    now returns a bool and applies the threshold itself, so no call site re-tests `== 20`. The
+    player's single roll decides both. That asymmetry is still logged in `TODO.md` and a
+    `CritChance` buff makes it slightly more visible: an enemy's crit is gated behind passing a
+    separate to-hit roll first.
   - **A missed enemy attack skips the parry sequence entirely** rather than opening a window over
     nothing. A parry attempt is spent whether or not it lands, so making the player burn theirs on
     an attack that could never connect would be a loss with no decision in it.
+  - **`BuffType.DamageReduction` is the protection buff and is the one buff type that isn't a stat.**
+    Every other type is a flat additive modifier folded into `CharacterManager.RefreshStats()`; this
+    one is a **fraction** applied in `TakeDamage()` at the moment damage lands, because there is no
+    "damage taken" stat for it to modify. **Don't route it through `RefreshStats()`.**
+    - Authored on `Action.buffValue` as a fraction (0.25 = 25% less), unlike the flat points every
+      other type uses. Stacks additively, clamped to `[-1, 0.9]` — protection can never reach
+      immunity, and a vulnerability (the negated Debuff case, which comes for free) can at worst
+      double incoming damage.
+    - Applied **first thing** in `TakeDamage`, so the floating number, the health loss, the drive
+      earned and the return value all agree on what actually got through. It therefore reduces the
+      drive gained from being hit as well — protection that cut damage but paid full drive would be
+      a pure win, and the parry path already pays drive on damage taken rather than damage swung.
+    - **Multiplicative with a parry, not special-cased.** A parried hit arrives already cut to its
+      25% chip and protection applies on top; they're independent mitigations.
+    - It also silently reduces what a `HealthDrain` attacker heals, since that's derived from health
+      actually lost. That's correct, and free.
+  - **`BuffType.CritChance` is authored in flat d20 points, not percent** — each point is one more
+    face that crits, so `+2` means 15% instead of 5%. Points rather than a percentage because a
+    percentage can only ever land on a multiple of 5, so "12%" would silently become 10% or 15%.
+    Tooltips render it as the percentage it buys, since `+2` means nothing to a player.
+  - **`Action.autoTargetSelf`** resolves an action on its caster with no target click and ends the
+    turn — for self-buffs and guard actions where clicking your own portrait is busywork. Handled in
+    `CombatController.SelectAction()` so it covers every route in, and checked *before* the
+    automatic-targeting branch, since "cast on me" is a stronger statement than "pick at random".
+    It needs a `TargetType` the caster is legal for; on a `SingleEnemy` action it warns and falls
+    back to manual targeting rather than erroring, because an action that eats the turn without
+    resolving is worse than one that just asks for a target. Player-side only — enemies already
+    resolve ally-targeted buffs onto themselves.
+  - **Every buff type has a working debuff form for free.** `ActionType.Debuff` negates `buffValue`
+    before calling `AddBuff`, on both the player and enemy paths, so Speed, Defense, Accuracy,
+    Crit Chance and Damage Reduction all debuff with no extra code — author them as `Debuff` with a
+    positive `buffValue`. There is no separate debuff enum and there should not be one.
   - **`attackPower` affects accuracy only, never damage** — and so do `BuffType.Accuracy` buffs,
     which stack onto it in `RefreshStats()`. **Damage bonuses are drive's job alone.** Keeping the
     two disjoint is a deliberate decision: letting accuracy buffs also raise damage was tried and
@@ -234,6 +326,20 @@ third-party and should not be modified** unless explicitly requested:
     number and duplicated a system that already worked.
   - `CharacterManager.GetModifiedAttackPower()` applies the drive multiplier to attack power but
     **has no callers**; drive reaches damage through `GetNextAttackDamageMultiplier()`. See `TODO.md`.
+  - **`HealthDrain` uses the same d20 rule** — it's an attack that also heals, so the rule is
+    written out in full in `CombatController.PerformAction()` and reached via `RollToHit()` on the
+    enemy side, exactly like `Attack`. **If you change the to-hit rule, there are now four places to
+    keep identical, not two.**
+    - The heal is a share of the health the target **actually lost**, not of the damage rolled.
+      That's what `CharacterManager.TakeDamage()`'s return value is for — it reports rounded damage
+      capped by remaining health, so a killing blow on a 3hp target drains 3, not 20. Health moves
+      between the two combatants; it is never created.
+    - **Drive multiplies it exactly once.** Drive scales the damage, and the heal is derived from
+      the damage, so `Heal()` is deliberately called with the default `1f` multiplier. Passing
+      `GetNextHealingMultiplier()` as well would pay one drive spend out twice.
+    - Authored as `Action.healthDrainRatio` (0–1). **Rounding is the trap here** — `Heal()` rounds,
+      so a low ratio against a small damage range heals 0 and reads as broken. Sanity-check against
+      `minDamage`, not the midpoint. Same failure mode as the drive multipliers.
 - **Drive system:** a 4-segment meter that fills from dealing damage, taking damage, and **parries**
   (per-character multipliers on `Character`).
   - **`DriveMeter` is a serialized field inside `DriveManager`, so its values live on the prefab, not
@@ -256,6 +362,27 @@ third-party and should not be modified** unless explicitly requested:
       *target*, so doing so spent the healer's segments while consuming the target's idle stacks.
   - **Player input:** each press of the Drive action adds one stack to the selected crew member
     (`PlayerInputHandler` → `TryAddDriveStack()`). Sound + particles fire on **every** stack.
+  - **Drive manipulation actions (`DriveGrant` / `DriveDrain`).** An `Action` can move raw drive on
+    its target: grant it to yourself or a crewmate, or strip it from an enemy. Amount is authored
+    on `Action.driveAmount`, positive for both, negated by the drain case — the same idiom as
+    `Buff`/`Debuff`. Resolution is `CharacterManager.GainDrive()` / `LoseDrive()` → `DriveManager`
+    → `DriveMeter.AddDrive()` / `RemoveDrive()`.
+    - **Raw meter, never stacks.** Committing a stack stays the owner's own decision on their own
+      turn; a support character fills the meter, they don't spend it for you.
+    - **The caster's drive stacks deliberately do not multiply it.** A drive spend that makes more
+      drive is a feedback loop — same reasoning that keeps accuracy buffs out of damage.
+    - **Draining never claws back committed stacks.** `TryAddDriveStack()` spends the drive at
+      commit time, so a stack is already paid for. It can't come up anyway: enemies commit stacks
+      at the start of their own turn and spend them in the same turn, so a player's drain only ever
+      reaches banked meter.
+    - Both methods return the amount that **actually** moved, clamped by a full or empty meter, and
+      that's the number the floating text reports — a drain on an empty enemy must read as the
+      wasted turn it was. `TooltipUI.DescribeDriveOutcome()` previews the same clamped result plus
+      the segment change, because **segments are the unit that buys anything**: a grant that doesn't
+      cross a segment boundary gives the target nothing they can spend.
+    - Enemy AI weights them via `Enemy.driveGrantWeight` / `driveDrainWeight`, read by
+      `EnemyManager.GetBaseWeight()`. Without a weight entry an action still gets the `0.1f`
+      fallback, so a new `ActionType` is never truly unreachable for enemies.
   - **Enemies** use the *same* stacking system: `EnemyDriveManager.EvaluateDriveUsage()` (called at
     the start of the enemy turn) picks how many stacks to commit per its `EnemyDriveConfig`
     (`strategy`, `stacksPerBuff`, `minimumSegmentsToUse`, `healthThreshold`, `usageChance`) authored
@@ -274,11 +401,30 @@ third-party and should not be modified** unless explicitly requested:
     is the separate "who" cue, and folding them together blurs two signals into one.
   - `EnemyManager.TelegraphThenAct()` is **the first place an enemy turn yields**, so it's the first
     that has to cope with the target dying or the battle ending mid-flight.
-  - `CharacterManager.SetTargeted()` is the only thing that touches the indicator. `ClearHighlight()`
-    runs on every exit — attack resolved, attack missed, target died during the telegraph, no
-    pending target, and `OnDisable`. That last one matters: an enemy killed mid-telegraph would
-    otherwise leave its victim highlighted permanently.
-- **Parry:** enemy attacks have a windup; `EnemyAttack` opens a `ParrySystem` window on the target.
+  - `ClearHighlight()` runs on every exit — attack resolved, attack missed, target died during the
+    telegraph, no pending target, and `OnDisable`. That last one matters: an enemy killed
+    mid-telegraph would otherwise leave its victim highlighted permanently.
+  - **The same indicator doubles as the player's hover target marker**, since "this character is
+    about to be acted on" is one idea and deserves one symbol. It therefore has **two independent
+    owners**, and `CharacterManager` tracks them as separate flags (`SetTargeted()` for the enemy
+    telegraph, `SetHoverTargeted()` for hover) with visibility derived from either being set.
+    **Don't collapse them back into one bool** — whichever finished last would hide the marker
+    while the other still wanted it.
+  - **Hover targeting is driven from `ActionTargetingLine`'s per-frame evaluation, not from
+    `TargetHoverHandler`'s pointer-enter/exit events.** Exit events only fire when the pointer
+    *moves*, and the normal case is clicking the target you're already hovering — so an
+    event-driven version leaves the marker lit on a character nobody is targeting any more, right
+    through the enemy's turn. Re-deriving it each frame from the live selection means it clears
+    itself the moment `TurnManager` clears the selection.
+  - **A self-cast shows no indicator.** The marker means "someone else is about to act on you";
+    aiming it at yourself while self-healing reads as an incoming threat. Suppressed by comparing
+    the hovered character against `CombatController.GetCurrentCharacter()`.
+- **Parry:** enemy `Attack` **and `HealthDrain`** actions have a windup; `EnemyAttack` opens a
+  `ParrySystem` window on the target. The routing test in `EnemyManager.PerformAction()` is
+  "is this a damaging swing", not "is this an Attack" — a damaging enemy action the player can't
+  parry reads as a bug. Parrying a drain cuts the enemy's *healing* as well as the damage, for free:
+  the siphon is applied in `OnAttackComplete()` from health actually lost, which the 25% chip
+  already accounts for.
   A well-timed parry input (routed through the singleton `ParryInputManager`) negates most damage
   (**25% still lands**) and grants bonus drive.
   - **One attempt per attack.** `EnemyAttack.BeginParrySequence()` arms a single attempt at the

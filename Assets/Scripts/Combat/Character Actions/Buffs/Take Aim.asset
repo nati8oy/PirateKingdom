@@ -13,16 +13,19 @@ MonoBehaviour:
   m_Name: Take Aim
   m_EditorClassIdentifier: 
   id: take_aim
-  actionName: Dead Eye
+  actionName: Take Aim
+  actionIcon: {fileID: 21300000, guid: 10c4abc92cc804da1bb186d952d18e96, type: 3}
   actionType: 2
   targetType: 1
-  cooldown: 0
-  actionIcon: {fileID: 21300000, guid: 10c4abc92cc804da1bb186d952d18e96, type: 3}
-  attackWindupTime: 1
+  autoTargetSelf: 0
+  cooldown: 1
   minDamage: 0
   maxDamage: 0
   minHeal: 0
   maxHeal: 0
+  buffType: 0
   buffValue: 2
   duration: 2
-  buffType: 0
+  driveAmount: 100
+  healthDrainRatio: 0.5
+  attackWindupTime: 1

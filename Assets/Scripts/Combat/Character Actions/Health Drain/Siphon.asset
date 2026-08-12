@@ -14,17 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Action
   id: siphon
   actionName: Siphon
+  actionIcon: {fileID: -3056857510201058535, guid: 3c3347a2d3d164386adb2001cea7a98e, type: 3}
   actionType: 6
   targetType: 0
-  cooldown: 0
-  actionIcon: {fileID: -3056857510201058535, guid: 3c3347a2d3d164386adb2001cea7a98e, type: 3}
-  attackWindupTime: 1
+  autoTargetSelf: 0
+  cooldown: 2
   minDamage: 5
   maxDamage: 9
   minHeal: 0
   maxHeal: 0
+  buffType: 0
   buffValue: 0
   duration: 0
-  buffType: 0
-  healthDrainRatio: 0.5
   driveAmount: 100
+  healthDrainRatio: 0.5
+  attackWindupTime: 1

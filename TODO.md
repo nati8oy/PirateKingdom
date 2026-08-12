@@ -520,9 +520,11 @@ Follow-ups it opened:
 
 ### Directions worth exploring
 
-- **Shake off debuffs.** `RemoveDebuff` exists and works. It only becomes meaningful once enemies
-  can actually apply debuffs — which they can't today, see the `SendMessage` bug above. Fixing that
-  gives this one an immediate reason to exist.
+- **Shake off debuffs.** `RemoveDebuff` exists and works, and **now has a reason to exist**: the
+  `SendMessage` bug is fixed, so enemies can actually apply debuffs, and there are more worth
+  shaking off than there were — a Speed or Defense debuff now genuinely bites, and a negated
+  `DamageReduction` (vulnerability) or `CritChance` is a real threat. Still unreachable for the
+  player only because nothing builds the drive utility menu.
 - **Reset action cooldowns.** Needs real implementation against `CharacterManager.actionCooldowns`.
   The design question is whether it clears one chosen action (a decision, needs target UI) or all of
   them (simpler, blunter).

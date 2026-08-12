@@ -13,18 +13,19 @@ MonoBehaviour:
   m_Name: Drive Grant
   m_EditorClassIdentifier: Assembly-CSharp::Action
   id: drive_grant
-  actionName: Grand Drive
+  actionName: Grant Drive
+  actionIcon: {fileID: 21300000, guid: e57646fa2a8dd4cbe82026f8a05e70b9, type: 3}
   actionType: 4
   targetType: 1
+  autoTargetSelf: 0
   cooldown: 3
-  actionIcon: {fileID: 21300000, guid: e57646fa2a8dd4cbe82026f8a05e70b9, type: 3}
-  attackWindupTime: 1
   minDamage: 0
   maxDamage: 0
   minHeal: 0
   maxHeal: 0
+  buffType: 0
   buffValue: 0
   duration: 0
-  buffType: 0
-  healthDrainRatio: 0.5
   driveAmount: 100
+  healthDrainRatio: 0.5
+  attackWindupTime: 1

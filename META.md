@@ -24,6 +24,29 @@ and tuning, with engineering help on request for anything needing new mechanics 
 status effects) rather than new numbers. B and C are lettered, not numbered, because neither has an
 ordering against 3–6.
 
+**Phase B has since taken most of the mechanical work**, so the action vocabulary is now much wider
+than "attack, heal, buff". Landed since this plan was written, all code-complete and awaiting
+Editor verification:
+
+| | |
+|---|---|
+| `ActionType.DriveGrant` / `DriveDrain` | Move raw drive onto an ally or off an enemy. Drive became something the party plays *with* rather than a private resource. |
+| `ActionType.HealthDrain` | Attack that heals the attacker from health **actually lost**. Parryable, so a parry cuts the healing too. |
+| `BuffType.DamageReduction` | Protection, as a fraction. The one buff type that isn't a stat — applied in `TakeDamage()`, not `RefreshStats()`. Negated, it's a vulnerability. |
+| `BuffType.CritChance` | Widens the crit window, in d20 points (+5% each). Applies to attacks, drains and heals. |
+| `Action.autoTargetSelf` | Self-cast actions resolve with no target click and end the turn. |
+| `Enemy.TargetingStrategy.HighestDrive` | Makes an enemy drain aim at the fullest meter rather than by health. |
+| Enemy buffs fixed | The `SendMessage` reflection path never bound — every enemy buff and debuff silently did nothing. Now calls `AddBuff` directly. |
+| Roster retuned into the band | Defense values moved into the §Phase B baseline, so **defense and its debuffs are live** and hit chances span 60–95% instead of clamping at 95%. |
+
+**Every debuff comes free** from the buff it mirrors — `ActionType.Debuff` negates `buffValue`, so
+Speed, Defense, Accuracy, Crit Chance and Damage Reduction all debuff with no extra code.
+
+Two combat-wide invariants worth knowing before touching resolution, both in `CLAUDE.md`:
+`CombatController.PerformAction()` completes the turn from a `finally` (a fault mid-resolution used
+to hand back a free extra action), and `CharacterManager.TakeDamage()` now returns health actually
+lost, which is what makes life steal honest about overkill.
+
 What exists and works today:
 
 | | |
@@ -677,7 +700,7 @@ finds it without per-prefab wiring. Maps outcome to effect:
 | Outcome | Fires from |
 |---|---|
 | `Hit` | `CharacterManager.TakeDamage()` |
-| `Crit` | same, when the attack rolled a natural 20 |
+| `Crit` | same, when the roll met `CharacterManager.CritThreshold` (20 unbuffed, lower with a `CritChance` buff — no longer a fixed natural 20) |
 | `Parry` | `TakeDamage(wasParried: true)` / `CharacterManager.Parry()` |
 | `Miss` | `CharacterManager.Miss()` |
 

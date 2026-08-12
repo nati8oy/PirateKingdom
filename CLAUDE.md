@@ -44,14 +44,25 @@ third-party and should not be modified** unless explicitly requested:
 ### First-party script map (`Assets/Scripts/`)
 
 - `Combat/`
-  - `Character.cs` — **ScriptableObject** base for all characters (stats, class, allegiance,
-    buffs, per-action cooldowns). Enemies subclass this.
-  - `Action.cs` — ScriptableObject defining an ability (Attack/Heal/Buff/Debuff/DriveGrant/
-    DriveDrain/HealthDrain, target type, damage/heal ranges, drive amount, drain ratio, cooldown,
-    windup, icon). **`ActionType` is serialized by integer value — append new members, never
-    reorder them**, same rule as `Character.BuffType` and `Enemy.TargetingStrategy`.
+  - `Character.cs` — **ScriptableObject** base for all characters: authored stats, class,
+    allegiance, art, drive multipliers, and the `BuffType` enum. Enemies subclass this.
+    **Authored data only** — buffs and per-action cooldowns live on the runtime `CharacterManager`,
+    not here (moved in Phase 1a; see "ScriptableObject data vs. MonoBehaviour runtime").
+  - `Action.cs` — ScriptableObject defining an ability. Seven `ActionType`s: Attack, Heal, Buff,
+    Debuff, DriveGrant, DriveDrain, HealthDrain. **`ActionType` is serialized by integer value —
+    append new members, never reorder them**, same rule as `Character.BuffType` and
+    `Enemy.TargetingStrategy`.
+    - The Inspector is grouped so **each value section is headed with the action types that read
+      it** — Damage (Attack, Health Drain) / Healing (Heal) / Buff-Debuff / Drive (Drive Grant,
+      Drive Drain) / Life Steal (Health Drain) / Enemy Windup. Only one section applies to any given
+      action; the Inspector showing a field does not mean that field is live.
+    - **Field order is Inspector layout only.** Unity serializes by field *name*, so regrouping is
+      safe on authored assets; renaming needs `[FormerlySerializedAs]`.
+    - `autoTargetSelf` skips target selection and resolves on the caster — see "Turn ownership".
   - `CombatController.cs` — resolves **player** actions on a target (d20 hit rolls, crits, drive
-    multipliers) and calls `TurnManager.CompleteTurn()`.
+    multipliers), then charges the cooldown and calls `TurnManager.CompleteTurn()` **from a
+    `finally`** so a fault mid-resolution can't hand back a free extra action. Also owns the
+    `autoTargetSelf` shortcut in `SelectAction()`.
   - `DriveManager.cs` / `DriveMeter.cs` / `DriveUI.cs` — the "Drive" super-meter resource system.
   - `ClickableCharacter.cs` — target selection. Implements `IPointerClickHandler` (world sprite
     body + `Collider2D` + a `Physics2DRaycaster` on the camera). Its `CharacterClicked()` is still
@@ -69,13 +80,21 @@ third-party and should not be modified** unless explicitly requested:
     `SceneManager.sceneLoaded` and by `EncounterBootstrapper` after it spawns — a single `Awake`
     snapshot goes stale the moment combatants are spawned at runtime.
   - `CharacterManager.cs` — the **runtime MonoBehaviour** wrapper around a `Character`
-    ScriptableObject: current health, taking/dealing damage, healing, feedbacks, death, drive.
+    ScriptableObject: current health, taking/dealing damage, healing, feedbacks, death, drive. Owns
+    all per-instance state — `activeBuffs`, `actionCooldowns`, and the run record — and derives the
+    buff-dependent values combat reads: `DamageReductionFraction`, `CritThreshold` /
+    `CritChancePercent`, plus the four stats in `RefreshStats()`.
+    - `TakeDamage()` returns the health **actually lost** (rounded, capped by remaining health), for
+      `HealthDrain` to siphon from. Every other caller ignores it.
+    - `SetTargeted()` / `SetHoverTargeted()` are two independent owners of the one target indicator.
   - `ActionsManager.cs` — builds the player action-button UI (incl. the End Turn button) and the
     shared `IsActionAvailable` cooldown check used by both player and enemy AI. The panel shows
     whoever's turn it is, **enemies included**, but buttons are only interactable for a
     `Player`-allegiance character — see "Turn ownership" below.
   - `ParrySystem.cs` + `ParryInputManager.cs` — real-time parry windows on incoming enemy attacks.
-  - `PlayerInputHandler.cs` — maps the Drive input action to `EnterDriveMode`.
+  - `PlayerInputHandler.cs` — maps the Drive input action to `DriveManager.TryAddDriveStack()`, one
+    stack per press, on whichever crew member currently holds the turn. (It used to be described as
+    calling `EnterDriveMode`; that's now only a `driveStacks`-backed shim — prefer the stacking API.)
   - `CursorManager.cs` — the single owner of the hardware cursor. `DontDestroyOnLoad`, lazy
     `Instance`, tolerates being absent. **Anything that swaps the cursor must go through it**
     (`SetCursor` / `ResetToDefault`) — a component calling `Cursor.SetCursor(null, …)` directly
@@ -155,7 +174,20 @@ third-party and should not be modified** unless explicitly requested:
       queued scene load.
   - **No Meta file uses `using System;`** — it would make `System.Action` collide with the
     game's own `Action` ScriptableObject. System types are fully qualified instead.
-- `Player/PlayerCombatController.cs`, `Tooltip/`, `Debugs/`, `PlayerControls.cs` (generated input).
+- `Tooltip/`
+  - `TooltipUI.cs` — scene singleton driving the one shared tooltip label. Four entry points:
+    `ShowActionTooltip` (bare), `ShowActionTooltipWithCharacter` (hover on an action button, adds
+    cooldown state), `ShowEnemyActionTooltip` (what the enemy is about to do), and
+    `ShowTargetTooltip` (hover on a target, the only one that previews an *outcome*).
+    - **All four switch on `ActionType`, so a new type renders blank in four places** unless each is
+      updated. Same for the buff formatters, which exist because `buffValue` means different units
+      per `BuffType`.
+    - `ShowTargetTooltip` must model everything that will actually modify the number — attacker's
+      drive multiplier, attacker's `CritChancePercent`, and the **target's `DamageReductionFraction`**
+      — or it quotes damage that never lands and the shortfall reads as a bug.
+    - Still carries the `DontDestroyOnLoad`-on-a-Canvas-child bug logged in `TODO.md`.
+  - `ActionButtonHover.cs` / `TargetHoverHandler.cs` — EventSystem hover handlers that call into it.
+- `Player/PlayerCombatController.cs`, `Debugs/`, `PlayerControls.cs` (generated input).
 
 ## Key architecture concepts
 

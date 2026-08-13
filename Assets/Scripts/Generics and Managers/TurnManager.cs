@@ -36,8 +36,29 @@ public class TurnManager : MonoBehaviour
              "the next turn takes the screen back before the damage numbers can be read.")]
     [SerializeField] private float statusTickSettleDelay = 0.8f;
 
+    [Tooltip("Seconds a stunned character's turn is held on screen before play moves on. A turn that " +
+             "vanishes instantly reads as a dropped turn rather than a stun.")]
+    [SerializeField] private float stunSkipDuration = 0.9f;
+
     // True while the round-transition coroutine is mid-flight. Load-bearing: see Update().
     private bool roundTransitionInProgress;
+
+    // True while a stunned character's turn is being skipped.
+    private bool turnSkipInProgress;
+
+    /// <summary>
+    /// False while a round transition or a turn skip is mid-flight. Nothing the player does should
+    /// resolve during those.
+    /// </summary>
+    /// <remarks>
+    /// <b>Necessary because <c>currentCharacterTurn</c> lags reality during both.</b> Through a round
+    /// transition it still points at the *previous* round's last character, and through a stun skip
+    /// at the character losing the turn — and in both cases the action bar is still showing whatever
+    /// was last loaded, interactable if that was a crew member. Without this the player can act
+    /// during the pause, and the resulting <c>CompleteTurn()</c> collides with the transition already
+    /// in flight.
+    /// </remarks>
+    public bool AcceptingPlayerInput => !roundTransitionInProgress && !turnSkipInProgress;
     private bool battleEnded = false;
     private bool battleStarted = false;
 
@@ -131,7 +152,7 @@ public class TurnManager : MonoBehaviour
         // so without this guard the branch fires every frame, each one calling CompleteTurn() and
         // kicking off another round transition. That is the log-spam death spiral again, just via a
         // different door.
-        if (!roundTransitionInProgress &&
+        if (AcceptingPlayerInput &&
             (currentCharacterTurn == null || currentCharacterTurn.gameObject == null))
         {
             Debug.Log("Current character died, advancing turn...");
@@ -395,11 +416,23 @@ public class TurnManager : MonoBehaviour
                 // Update buffs and stats at the start of the character's turn
                 currentCharacterTurn.UpdateBuffsForTurn();
 
-                // Status effects are NOT ticked here — they resolve for everyone at once at the top
-                // of the round, in AdvanceToNextRound(). See the remarks there for why.
+                // Damage over time is NOT ticked here — it resolves for everyone at once at the top
+                // of the round, in AdvanceToNextRound(). Stun is the exception, because it's scoped
+                // to this character's own turn: it has to be read and spent at the moment the turn
+                // it steals would have happened.
                 //
-                // D2 inserts the stun check here, since that IS per-character: read IsStunned, then
-                // skip via AdvancePastSkippedTurn() — never by calling CompleteTurn() directly.
+                // Checked before the turn marker, the action bar and the enemy AI kick-off, so a
+                // stunned character never gets a live action bar or starts an attack.
+                if (currentCharacterTurn.IsStunned)
+                {
+                    currentCharacterTurn.ConsumeStunForSkippedTurn();
+                    StartCoroutine(SkipStunnedTurnRoutine(currentCharacterTurn));
+                    return;
+                }
+
+                // They're actually acting, so the stun-resistance ramp resets — that reset is what
+                // makes the ramp self-correcting rather than a permanent accumulation.
+                currentCharacterTurn.ClearStunResistanceRamp();
 
                 // Nobody has been skipped on the way to acting, so the consecutive-skip guard resets.
                 turnSkipDepth = 0;
@@ -442,10 +475,10 @@ public class TurnManager : MonoBehaviour
     /// that turns out to be true of everyone.
     /// </summary>
     /// <remarks>
-    /// <b>Currently uncalled, and deliberately kept.</b> Its original caller — the mid-turn
-    /// bleed-out skip — is gone now that status effects tick for everyone at the top of the round
-    /// and the dead are filtered out of the turn order before it's built. Phase D2's stun is the
-    /// next skip and must route through here; the warning below is the reason it exists at all.
+    /// Called by the stun skip, via <see cref="SkipStunnedTurnRoutine"/>. Its original caller — a
+    /// mid-turn bleed-out — is gone now that status effects tick for everyone at the top of the round
+    /// and the dead are filtered out of the turn order before it's built. **Any future skip must
+    /// route through here too**; the warning below is the reason it exists at all.
     /// </remarks>
     /// <remarks>
     /// <b>This exists because it already happened.</b> <see cref="SetCharacterTurn"/> skipping via
@@ -485,6 +518,15 @@ public class TurnManager : MonoBehaviour
     public void CompleteTurn()
     {
         if (battleEnded) return;
+
+        // A transition or skip already owns the hand-over. Without this the End Turn button — which
+        // calls straight in here, bypassing CombatController entirely — can fire during a pause and
+        // advance the turn a second time.
+        if (!AcceptingPlayerInput)
+        {
+            Debug.Log("[TurnManager] CompleteTurn ignored — a round transition or turn skip is already in flight.");
+            return;
+        }
         
         // Check if currentCharacterTurn is still valid before accessing its components
         if (currentCharacterTurn != null && currentCharacterTurn.turnMarker != null)
@@ -529,6 +571,39 @@ public class TurnManager : MonoBehaviour
     /// skip-destroyed loop in <see cref="SetCharacterTurn"/> running off the end) and they must not
     /// drift apart.
     /// </remarks>
+    /// <summary>
+    /// Holds on a stunned character long enough for the player to see the turn was taken, then hands
+    /// it on.
+    /// </summary>
+    /// <remarks>
+    /// A coroutine rather than a direct call, for two reasons. It unwinds the stack, so the
+    /// <c>SetCharacterTurn → CompleteTurn → SetCharacterTurn</c> chain can't recurse into a crash
+    /// when several characters are stunned at once — which is far easier to reach than the
+    /// all-dead case, because a stunned character stays in the turn order. And a turn that vanishes
+    /// with no beat reads as a dropped turn rather than a stun.
+    /// </remarks>
+    private IEnumerator SkipStunnedTurnRoutine(CharacterManager stunned)
+    {
+        turnSkipInProgress = true;
+
+        if (stunned != null) stunned.ShowStunned();
+
+        // Always yields at least one frame, even at duration 0. A coroutine runs synchronously up to
+        // its first yield, so without the else branch a zero duration would put the whole
+        // skip → CompleteTurn → SetCharacterTurn chain back on one stack — which is the thing the
+        // coroutine exists to prevent.
+        if (stunSkipDuration > 0f) yield return new WaitForSeconds(stunSkipDuration);
+        else yield return null;
+
+        // Cleared before advancing, or CompleteTurn's own guard would reject the very call that
+        // ends this skip.
+        turnSkipInProgress = false;
+
+        if (battleEnded) yield break;
+
+        AdvancePastSkippedTurn("stunned");
+    }
+
     private void AdvanceToNextRound()
     {
         // Two coroutines running this at once would double-advance the round and roll initiative

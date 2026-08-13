@@ -36,4 +36,4 @@ MonoBehaviour:
   statusResistances: []
   damageInflictedDriveMultiplier: 2.5
   damageTakenDriveMultiplier: 10
-  parryBonusDriveMultiplier: 5
+  parryBonusDriveMultiplier: 2.5

@@ -46,7 +46,15 @@ public class CombatController : MonoBehaviour
     /// </summary>
     private bool IsPlayerControlledTurn()
     {
-        CharacterManager current = turnManager != null ? turnManager.currentCharacterTurn : null;
+        if (turnManager == null) return false;
+
+        // Nothing may resolve while a round transition or a stun skip is mid-flight. Through both,
+        // currentCharacterTurn lags reality and the action bar is still showing whatever was last
+        // loaded — so a crew member's buttons stay live during the pause, and an action resolved
+        // there would collide with the hand-over already in flight.
+        if (!turnManager.AcceptingPlayerInput) return false;
+
+        CharacterManager current = turnManager.currentCharacterTurn;
 
         return current != null
                && current.characterData != null

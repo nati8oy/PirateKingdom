@@ -38,11 +38,12 @@ public class CharacterManager : MonoBehaviour
     //[SerializeField] private TMP_Text hp;
     [FormerlySerializedAs("healthModifier")] [SerializeField] private TMP_Text actionStatusText;
 
-    [Tooltip("Seconds the '+N Drive' / '-N Drive' number stays up when NO drive feedback is wired " +
-             "above. Every other status number is cleared by its own MMF_Player (an MMF_Events " +
-             "calling HideHealthUI), so this is only the safety net for the unwired case — assign " +
-             "the feedback slots and this is never used.")]
-    [SerializeField] private float driveStatusTextDuration = 0.9f;
+    [Tooltip("Seconds a code-written status line ('+N Drive', 'STUNNED') stays up when NO feedback is " +
+             "wired for it. Damage and heal numbers are cleared by their own MMF_Player (an MMF_Events " +
+             "calling HideHealthUI); this is only the safety net for the slots that start empty — wire " +
+             "them and this is never used.")]
+    [UnityEngine.Serialization.FormerlySerializedAs("driveStatusTextDuration")]
+    [SerializeField] private float statusTextFallbackDuration = 0.9f;
     
     public Image turnMarker;
 
@@ -113,6 +114,11 @@ public class CharacterManager : MonoBehaviour
              "Deal Damage Feedback when empty — but that one is an impact flash, which reads as " +
              "being struck again rather than bleeding, so a quieter effect belongs here.")]
     public MMF_Player damageOverTimeFeedback;
+
+    [Tooltip("Optional. Played when a stun takes this character's turn away. Leave empty and the " +
+             "'STUNNED' text still shows, cleared by Status Text Fallback Duration above — but a " +
+             "skipped turn is easy to miss, so this is worth wiring.")]
+    public MMF_Player stunnedFeedback;
 
     public MMF_Player feedbackPlayer;
 
@@ -492,7 +498,94 @@ public class CharacterManager : MonoBehaviour
     {
         float authored = characterData != null ? characterData.GetStatusResistance(kind) : 0f;
 
+        // The stun ramp is added on top of the authored value, so a character who has just been
+        // stunned is genuinely harder to stun again.
+        if (kind == StatusEffectKind.Stun) authored += StunResistanceBonus;
+
         return Mathf.Clamp01(authored);
+    }
+
+    // --- Stun ---------------------------------------------------------------------------------
+
+    // Each consecutive skipped turn adds this much stun resistance. Reset the moment the character
+    // actually acts.
+    private const float StunResistancePerSkip = 0.5f;
+
+    private int stunResistanceStacks;
+
+    /// <summary>Consecutive turns this character has had stunned away. 0 once they act again.</summary>
+    public int StunResistanceStacks => stunResistanceStacks;
+
+    /// <summary>Extra stun resistance earned by being stunned — +50% per consecutive skipped turn.</summary>
+    public float StunResistanceBonus => stunResistanceStacks * StunResistancePerSkip;
+
+    /// <summary>Whether a stun is waiting to take this character's next turn.</summary>
+    public bool IsStunned => FindStatus(StatusEffectKind.Stun) != null;
+
+    /// <summary>
+    /// Spends one turn of stun because this character's turn was just skipped, and ramps their
+    /// resistance so they can't be chained.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the whole Darkest Dungeon mechanic, and it's self-correcting.</b> Each skip adds
+    /// +50%; once the ramp exceeds the incoming chance the next stun fails, the character acts, and
+    /// acting clears the ramp. So it needs no cap and can neither reach permanent immunity nor be
+    /// chained indefinitely.
+    ///
+    /// Called from the turn skip rather than from <see cref="AdvanceStatuses"/> because stun is
+    /// turn-scoped — see <see cref="StatusEffect.IsTurnScoped"/>.
+    /// </remarks>
+    public void ConsumeStunForSkippedTurn()
+    {
+        StatusEffect stun = FindStatus(StatusEffectKind.Stun);
+
+        if (stun == null) return;
+
+        stun.ReduceTurns();
+        if (stun.IsExpired) activeStatuses.Remove(stun);
+
+        stunResistanceStacks++;
+
+        Debug.Log($"[Stun] {characterData?.characterName ?? gameObject.name} loses their turn. " +
+                  $"Stun resistance now +{StunResistanceBonus:P0} ({stunResistanceStacks} stack(s)); " +
+                  $"{(stun.IsExpired ? "stun has worn off" : $"{stun.TurnsRemaining} more turn(s) stunned")}.");
+
+        StatusesChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Clears the stun resistance ramp because this character actually took a turn. The reset is
+    /// what stops the bonus accumulating forever and makes the mechanic self-correcting.
+    /// </summary>
+    public void ClearStunResistanceRamp()
+    {
+        if (stunResistanceStacks == 0) return;
+
+        Debug.Log($"[Stun] {characterData?.characterName ?? gameObject.name} took a turn — " +
+                  $"stun resistance bonus of +{StunResistanceBonus:P0} cleared.");
+
+        stunResistanceStacks = 0;
+        StatusesChanged?.Invoke();
+    }
+
+    /// <summary>Announces a skipped turn on the character, so it never looks like a dropped turn.</summary>
+    public void ShowStunned()
+    {
+        if (actionStatusText == null) return;
+
+        actionStatusText.enabled = true;
+        actionStatusText.text = $"<color={StatusEffectStyle.HexColour(StatusEffectKind.Stun)}>STUNNED</color>";
+
+        if (stunnedFeedback != null)
+        {
+            stunnedFeedback.PlayFeedbacks();
+            return;
+        }
+
+        // Same safety net as the drive numbers: this text is written by code, so with no feedback
+        // wired to clear it there is nothing to take it away again.
+        CancelInvoke(nameof(HideHealthUI));
+        Invoke(nameof(HideHealthUI), statusTextFallbackDuration);
     }
 
     /// <summary>
@@ -509,13 +602,6 @@ public class CharacterManager : MonoBehaviour
 
         // Nothing to afflict. The corpse is destroyed next Update, but health is already 0 here.
         if (isDead || CurrentHealth <= 0f) return false;
-
-        if (application.kind == StatusEffectKind.Stun)
-        {
-            Debug.LogWarning($"[CharacterManager] A Stun status was applied to " +
-                             $"{characterData?.characterName ?? gameObject.name}, but stun is not implemented " +
-                             "until Phase D2 — it will tick down and do nothing. Remove the rider or wait for D2.", this);
-        }
 
         float resistance = GetResistance(application.kind);
         float chance = Mathf.Clamp01(application.chanceToApply - resistance);
@@ -722,6 +808,11 @@ public class CharacterManager : MonoBehaviour
         // Iterated backwards so removing an expired entry can't skip the next one.
         for (int i = activeStatuses.Count - 1; i >= 0; i--)
         {
+            // Turn-scoped effects (stun) are spent by the affected character's own turn, not here.
+            // Expiring a 1-turn stun on the round tick would burn it before its owner ever reached a
+            // turn to lose.
+            if (activeStatuses[i].IsTurnScoped) continue;
+
             activeStatuses[i].ReduceTurns();
 
             if (!activeStatuses[i].IsExpired) continue;
@@ -1222,7 +1313,7 @@ public class CharacterManager : MonoBehaviour
         // Deliberately not driveParticles: DriveManager owns that one as a sustained effect it
         // starts per stack and stops in ClearStacks(), so playing it here would leave it running.
         CancelInvoke(nameof(HideHealthUI));
-        Invoke(nameof(HideHealthUI), driveStatusTextDuration);
+        Invoke(nameof(HideHealthUI), statusTextFallbackDuration);
     }
 
     public void AddBuff(Character.BuffType type, float amount, float duration)

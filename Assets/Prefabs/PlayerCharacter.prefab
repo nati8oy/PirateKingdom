@@ -954,6 +954,7 @@ RectTransform:
   - {fileID: 3621171808255996215}
   - {fileID: 3117904387093433242}
   - {fileID: 7771757804790460915}
+  - {fileID: 5700760810969453415}
   - {fileID: 2156134091541309270}
   m_Father: {fileID: 2883925891502609661}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -5815,13 +5816,8 @@ MonoBehaviour:
           ButtonText: Automatic Shaker Setup
         Owner: {fileID: 8711236214558657599}
         DebugActive: 0
-        Sfx: {fileID: 0}
-        RandomSfx:
-        - {fileID: 8300000, guid: 66d1cbeeea73743e880a7fe07e80bd31, type: 3}
-        - {fileID: 8300000, guid: e65cc8f1193b1406d8eccd95a5aba161, type: 3}
-        - {fileID: 8300000, guid: b1b964a8338f54cf3a042c4dce63d998, type: 3}
-        - {fileID: 8300000, guid: 63a184bec86e64ba287e9d0e96bb38b2, type: 3}
-        - {fileID: 8300000, guid: 98c262982d1494832b1a20e6d196aa53, type: 3}
+        Sfx: {fileID: 8300000, guid: 5765c603ecfd2442ba965fc5fbb9ee74, type: 3}
+        RandomSfx: []
         TestPlayButton:
           ButtonText: Debug Play Sound
         TestStopButton:
@@ -8999,7 +8995,7 @@ MonoBehaviour:
   healthBar: {fileID: 6854843975597813551}
   characterName: {fileID: 628673213663764507}
   actionStatusText: {fileID: 1656511942984017652}
-  driveStatusTextDuration: 0.9
+  statusTextFallbackDuration: 0.9
   turnMarker: {fileID: 5687122472208313648}
   targetIndicator: {fileID: 8680402382813641507}
   dealDamageFeedback: {fileID: 885933774631715721}
@@ -9010,6 +9006,7 @@ MonoBehaviour:
   driveGrantedFeedback: {fileID: 0}
   driveDrainedFeedback: {fileID: 0}
   damageOverTimeFeedback: {fileID: 8711236214558657599}
+  stunnedFeedback: {fileID: 8711236214558657599}
   feedbackPlayer: {fileID: 2520015946496009997}
   driveParticles: {fileID: 1588365729076261259}
   buffParticles: {fileID: 4448634062430033439}
@@ -9634,6 +9631,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StatusIconDisplay
   iconSlots:
+  - kind: 3
+    icon: {fileID: 8675530921488027496}
+    sprite: {fileID: 3900363994317415728, guid: 7a51c9b1c1d5a4228b3adeacfddd0009, type: 3}
+    useKindColour: 1
+    customTint: {r: 1, g: 0, b: 0, a: 1}
+    turnsText: {fileID: 0}
+    damageText: {fileID: 0}
   - kind: 0
     icon: {fileID: 5637980936983291916}
     sprite: {fileID: 8352252378513780126, guid: d6c1a93d2daca47ae88d07fd1da8baac, type: 3}
@@ -19373,6 +19377,81 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
+--- !u!1 &8976924327282289451
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5700760810969453415}
+  - component: {fileID: 3498957208048164419}
+  - component: {fileID: 8675530921488027496}
+  m_Layer: 0
+  m_Name: icn_stun
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &5700760810969453415
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8976924327282289451}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7169115789867907218}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 25, y: 25}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!222 &3498957208048164419
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8976924327282289451}
+  m_CullTransparentMesh: 1
+--- !u!114 &8675530921488027496
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8976924327282289451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 0.52759326, b: 0.015686274, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 3900363994317415728, guid: 7a51c9b1c1d5a4228b3adeacfddd0009, type: 3}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
 --- !u!1 &9127001440347400327
 GameObject:
   m_ObjectHideFlags: 0

@@ -402,6 +402,21 @@ third-party and should not be modified** unless explicitly requested:
       *previous* round's last character, who may have just died — without the guard that branch fires
       every frame, each one calling `CompleteTurn()` and starting another round transition. Same
       log-spam death spiral as before, through a different door.
+    - **Stun is the exception: turn-scoped, not round-scoped.** `AdvanceStatuses()` deliberately
+      skips anything where `StatusEffect.IsTurnScoped`, and `ConsumeStunForSkippedTurn()` spends it
+      at the moment the turn it steals would have happened. Expiring it on the round tick would burn
+      a 1-turn stun before its owner ever reached a turn to lose.
+    - **The stun resistance ramp is self-correcting and needs no cap.** Each consecutive skipped turn
+      adds +50% (`StunResistanceStacks`, folded into `GetResistance(Stun)`), and
+      `ClearStunResistanceRamp()` resets it the moment the character actually acts. Once the ramp
+      exceeds the incoming chance the stun fails, they act, and acting clears it — so it can neither
+      reach permanent immunity nor be chained indefinitely.
+    - **`TurnManager.AcceptingPlayerInput` is false during a round transition or a stun skip**, and
+      is checked both in `CombatController.IsPlayerControlledTurn()` and at the top of
+      `CompleteTurn()`. Through both pauses `currentCharacterTurn` lags reality and the action bar is
+      still showing whatever was last loaded — so a crew member's buttons stay live, and an action
+      (or the End Turn button, which calls `CompleteTurn` directly) would collide with the hand-over
+      already in flight. **This is a fourth turn-ownership layer; don't remove it.**
     - Buffs still tick at the end of each character's **own turn**. The two schedules differ, but
       the durations are numerically equivalent — every character gets exactly one turn per round.
   - Statuses are **per-battle** — nothing reaches `RunState`, exactly like buffs.

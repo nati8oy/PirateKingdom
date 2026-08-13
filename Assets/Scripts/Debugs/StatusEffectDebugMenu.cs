@@ -36,6 +36,11 @@ public static class StatusEffectDebugMenu
     [MenuItem(MenuRoot + "Burn Selected Character", false, 102)]
     private static void BurnSelected() => ApplyToSelection(StatusEffectKind.Burn);
 
+    // Damage 0 and a single turn: a stun steals one turn rather than dealing anything. Applying it
+    // repeatedly is the useful test — the resistance ramp should make it stop landing.
+    [MenuItem(MenuRoot + "Stun Selected Character", false, 103)]
+    private static void StunSelected() => ApplyToSelection(StatusEffectKind.Stun, 0f, 1);
+
     // --- Whole sides --------------------------------------------------------------------------
 
     [MenuItem(MenuRoot + "Bleed All Enemies", false, 120)]
@@ -43,6 +48,12 @@ public static class StatusEffectDebugMenu
 
     [MenuItem(MenuRoot + "Bleed All Crew", false, 121)]
     private static void BleedAllCrew() => ApplyToAllegiance(Character.Allegiance.Player, StatusEffectKind.Bleed);
+
+    [MenuItem(MenuRoot + "Stun All Enemies", false, 122)]
+    private static void StunAllEnemies() => ApplyToAllegiance(Character.Allegiance.Enemy, StatusEffectKind.Stun, 0f, 1);
+
+    [MenuItem(MenuRoot + "Stun All Crew", false, 123)]
+    private static void StunAllCrew() => ApplyToAllegiance(Character.Allegiance.Player, StatusEffectKind.Stun, 0f, 1);
 
     [MenuItem(MenuRoot + "Clear All Status Effects", false, 140)]
     private static void ClearEverything()
@@ -63,32 +74,59 @@ public static class StatusEffectDebugMenu
 
     // --- Plumbing -----------------------------------------------------------------------------
 
-    private static void ApplyToSelection(StatusEffectKind kind)
+    private static void ApplyToSelection(StatusEffectKind kind, float damagePerTurn = TestDamagePerTurn, int turns = TestTurns)
     {
         if (!RequirePlayMode()) return;
 
-        GameObject selected = Selection.activeGameObject;
+        CharacterManager character = ResolveTarget();
 
-        if (selected == null)
-        {
-            Debug.LogWarning("[Debug] Nothing selected. Pick a combatant in the Hierarchy first — while playing, " +
-                             "they sit under the Combatants spawn points.");
-            return;
-        }
+        if (character == null) return;
 
-        // GetComponentInParent so selecting a child (the sprite, the CharacterUI canvas) still works.
-        CharacterManager character = selected.GetComponentInParent<CharacterManager>();
-
-        if (character == null)
-        {
-            Debug.LogWarning($"[Debug] '{selected.name}' isn't a combatant — no CharacterManager on it or above it.");
-            return;
-        }
-
-        character.EditorApplyStatus(kind, TestDamagePerTurn, TestTurns);
+        character.EditorApplyStatus(kind, damagePerTurn, turns);
     }
 
-    private static void ApplyToAllegiance(Character.Allegiance allegiance, StatusEffectKind kind)
+    /// <summary>
+    /// The combatant to afflict: whatever is selected, or failing that whoever currently holds the
+    /// turn.
+    /// </summary>
+    /// <remarks>
+    /// The fallback exists because requiring a Hierarchy selection is a genuine trap — combatants are
+    /// spawned at runtime and sit nested under the Combatants spawn points, so it's easy to invoke
+    /// these with nothing selected and conclude the whole system is broken when the tool simply never
+    /// reached a character. Selecting in the <i>Game</i> view doesn't set Selection either.
+    /// </remarks>
+    private static CharacterManager ResolveTarget()
+    {
+        GameObject selected = Selection.activeGameObject;
+
+        if (selected != null)
+        {
+            // GetComponentInParent so selecting a child (the sprite, the CharacterUI canvas) works.
+            CharacterManager fromSelection = selected.GetComponentInParent<CharacterManager>();
+
+            if (fromSelection != null) return fromSelection;
+
+            Debug.LogWarning($"[Debug] '{selected.name}' isn't a combatant — no CharacterManager on it or above it. " +
+                             "Falling back to whoever's turn it is.");
+        }
+
+        TurnManager turnManager = Object.FindObjectOfType<TurnManager>();
+        CharacterManager acting = turnManager != null ? turnManager.currentCharacterTurn : null;
+
+        if (acting != null)
+        {
+            Debug.Log($"[Debug] Nothing suitable selected — using the character whose turn it is " +
+                      $"({acting.characterData?.characterName ?? acting.name}).");
+            return acting;
+        }
+
+        Debug.LogError("[Debug] No combatant selected and no character currently holds the turn — nothing to afflict. " +
+                       "Select one in the Hierarchy, or use the 'All Enemies' / 'All Crew' items instead.");
+        return null;
+    }
+
+    private static void ApplyToAllegiance(Character.Allegiance allegiance, StatusEffectKind kind,
+                                          float damagePerTurn = TestDamagePerTurn, int turns = TestTurns)
     {
         if (!RequirePlayMode()) return;
 
@@ -97,8 +135,9 @@ public static class StatusEffectDebugMenu
         foreach (CharacterManager character in Object.FindObjectsOfType<CharacterManager>())
         {
             if (character.characterData == null || character.characterData.allegiance != allegiance) continue;
+            if (!character.IsAlive) continue;
 
-            character.EditorApplyStatus(kind, TestDamagePerTurn, TestTurns);
+            character.EditorApplyStatus(kind, damagePerTurn, turns);
             afflicted++;
         }
 

@@ -23,10 +23,15 @@ public enum StatusEffectKind
     Burn,
 
     /// <summary>
-    /// Skips the affected character's turn. <b>Inert until Phase D2</b> — the substrate carries it so
-    /// the enum doesn't shift later, but nothing reads it yet and applying one currently does
-    /// nothing but tick down. <see cref="CharacterManager.TryApplyStatus"/> warns if you author one.
+    /// Skips the affected character's turn, and ramps their stun resistance each time so they can't
+    /// be chained indefinitely.
     /// </summary>
+    /// <remarks>
+    /// <b>Turn-scoped, unlike every kind above.</b> The damage kinds tick and expire together at the
+    /// top of the round; a stun is consumed by the affected character's own turn when it skips one.
+    /// See <see cref="StatusEffect.IsTurnScoped"/> — round-boundary expiry would burn a 1-turn stun
+    /// before its owner ever reached a turn to lose.
+    /// </remarks>
     Stun
 }
 
@@ -93,6 +98,18 @@ public class StatusEffect
 
     /// <summary>True for the kinds that deal recurring damage, i.e. anything but pure control.</summary>
     public bool IsDamageOverTime => damagePerTurn > 0f;
+
+    /// <summary>
+    /// True for effects consumed by the affected character's own turn rather than by the round tick.
+    /// </summary>
+    /// <remarks>
+    /// Only Stun today. It matters because damage over time resolves for everyone at the top of the
+    /// round — if a stun expired on that same schedule, a 1-turn stun applied during round N would
+    /// be gone before its owner reached their turn in round N+1 and would never skip anything.
+    /// <c>AdvanceStatuses()</c> therefore leaves these alone; <c>ConsumeStunForSkippedTurn()</c>
+    /// spends them.
+    /// </remarks>
+    public bool IsTurnScoped => kind == StatusEffectKind.Stun;
 }
 
 /// <summary>
@@ -157,7 +174,10 @@ public class StatusResistance
 public class StatusApplication
 {
     [Tooltip("Which effect to apply. Bleed, Poison and Burn are identical damage-over-time and differ " +
-             "only in presentation. Stun is inert until Phase D2.")]
+             "only in presentation.\n\n" +
+             "Stun is different: leave Damage Per Turn at 0 and set Rounds to how many of the " +
+             "target's turns to skip. Each skip ramps their stun resistance by 50% until they " +
+             "actually get a turn, so chaining one gets rapidly harder.")]
     public StatusEffectKind kind = StatusEffectKind.Bleed;
 
     [Tooltip("Damage dealt at the start of each of the victim's turns. Leave at 0 for a control " +

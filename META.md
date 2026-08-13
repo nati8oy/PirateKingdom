@@ -15,9 +15,9 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 | | |
 |---|---|
-| **D1 — Status effect substrate + damage over time** | ✅ **Code complete**, awaiting Editor verification. Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive. |
-| **D2 — Stun** ⬅ next | Skip a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
-| **E — Class definitions & level scaling** | A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
+| **D1 — Status effect substrate + damage over time** | ✅ **DONE, verified in Editor.** Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive. |
+| **D2 — Stun** | ✅ **Code complete**, awaiting Editor verification. Skip a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
+| **E — Class definitions & level scaling** ⬅ next | A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
 
 D1 and D2 share one substrate, so D2 is small once D1 lands. **E is deliberately separate and second**
 — it touches every character asset and `RefreshStats()`, which everything reads, so it should land
@@ -656,7 +656,7 @@ by choice — see §0.
 
 ---
 
-**D1 — Substrate + damage over time. ✅ CODE COMPLETE, awaiting Editor verification.**
+**D1 — Substrate + damage over time. ✅ DONE, verified in Editor.**
 
 New file `Assets/Scripts/Combat/StatusEffect.cs`:
 
@@ -744,7 +744,7 @@ target with resistance authored should visibly shrug some off.
 
 ---
 
-**D2 — Stun.**
+**D2 — Stun. ✅ CODE COMPLETE, awaiting Editor verification.**
 
 - `StatusEffectKind.Stun`, `damagePerTurn` 0.
 - `CharacterManager.IsStunned` — any live Stun status.

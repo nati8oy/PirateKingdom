@@ -361,11 +361,17 @@ third-party and should not be modified** unless explicitly requested:
     and heal numbers and a tint would leak into the next one.
     - It also logs a `[DoT]` line on every tick. Without it a tick was completely silent: it skips
       the drive block, which held the only `Debug.Log` on that path.
-    - **Tools > Pirate Kingdom > Debug** has Bleed/Poison/Burn Selected Character, Bleed All
-      Enemies / All Crew, and Clear All Status Effects — for exercising the tick without authoring an
-      action and landing an attack first. All bypass the resistance roll, and all require **Play
-      mode**: combatants are spawned at runtime, so nothing exists to afflict in edit mode.
-      `CharacterManager` also carries the same thing as a `[ContextMenu]`, but that hides on the
+    - **Tools > Pirate Kingdom > Debug** has Bleed/Poison/Burn/Stun Selected Character, Bleed and
+      Stun All Enemies / All Crew, and Clear All Status Effects — for exercising the system without
+      authoring an action and landing an attack first. All bypass the resistance roll, and all
+      require **Play mode**: combatants are spawned at runtime, so nothing exists to afflict in edit
+      mode.
+    - The "Selected Character" items **fall back to whoever holds the turn** when nothing suitable is
+      selected. That fallback exists because the selection requirement is a real trap — spawned
+      combatants sit nested under the Combatants spawn points, and clicking one in the *Game* view
+      doesn't set Selection at all, so it's easy to invoke these with nothing selected and conclude
+      the whole system is broken when the tool never reached a character. It happened.
+    - `CharacterManager` carries the same thing as a `[ContextMenu]`, but that hides on the
       *component's* ⋮ button and is easy to miss — the Tools menu is the reliable route, same
       reasoning as `RunManager`'s tools.
   - **`DamageSource.OverTime` skips both protection and drive.** Armour stops blades, not poison — so

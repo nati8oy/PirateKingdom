@@ -11,24 +11,25 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 **Phases 1 and 2 are complete and verified in the Editor, as is the 2.5D presentation refactor.**
 
-**The next three pieces of work, in order, are D1 → D2 → E:**
+**Phase D — Status effects is COMPLETE and verified in the Editor.**
 
 | | |
 |---|---|
-| **D1 — Status effect substrate + damage over time** | ✅ **DONE, verified in Editor.** Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive. |
-| **D2 — Stun** | ✅ **Code complete**, awaiting Editor verification. Skip a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
-| **E — Class definitions & level scaling** ⬅ next | A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
+| **D1 — Status effect substrate + damage over time** | ✅ **DONE, verified.** Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive, and everyone ticks together at the top of the round. |
+| **D2 — Stun** | ✅ **DONE, verified.** Skips a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
+| **E — Class definitions & level scaling** | ⬅ **NEXT.** A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
 
-D1 and D2 share one substrate, so D2 is small once D1 lands. **E is deliberately separate and second**
-— it touches every character asset and `RefreshStats()`, which everything reads, so it should land
-against a status system that's already proven rather than in the middle of building one. Nothing in D
-depends on E: resistances start authored per-character behind a single accessor, and moving that data
-onto a class later is invisible to every caller.
+**E was deliberately held until D was proven**, because it touches every character asset and
+`RefreshStats()`, which everything reads. Nothing in D depended on it: resistances are authored
+per-character behind the single `CharacterManager.GetResistance()` accessor, so moving that data onto
+a class is invisible to every caller — which is exactly the seam E now uses.
 
-**Phase C — Turn sequencing & impact effects** is queued behind these. Tunable time in combat: an
+**Phase C — Turn sequencing & impact effects** is queued behind E. Tunable time in combat: an
 authored per-turn rhythm every character follows, and an authored impact when an attack lands or is
-parried. Deliberately scoped to add time *around* resolution rather than refactor it. Note D2's stun
-skip introduces the first coroutine-driven turn beat, which is the shape Phase C generalises.
+parried. Deliberately scoped to add time *around* resolution rather than refactor it. **Phase D
+already built three of the beats C is meant to own** — `statusTickDelay`, `statusTickSettleDelay` and
+`stunSkipDuration`, all serialized on `TurnManager` — so C should absorb them rather than add a second,
+competing pacing system.
 
 **Phase 3 — the voyage map** is the next *meta-layer* work and nothing blocks it; it's simply queued
 behind the combat work above.
@@ -630,7 +631,7 @@ valid targets after a respawn.
 
 ---
 
-### Phase D — Status effects ⬅ NEXT (D1, then D2)
+### Phase D — Status effects ✅ COMPLETE (D1 and D2, both verified in the Editor)
 
 **Goal:** attacks can leave something behind. Damage over time (bleed, and the same mechanic reskinned
 as poison or fire) and stun (skip a turn), with per-character **resistance** deciding whether they
@@ -744,7 +745,7 @@ target with resistance authored should visibly shrug some off.
 
 ---
 
-**D2 — Stun. ✅ CODE COMPLETE, awaiting Editor verification.**
+**D2 — Stun. ✅ DONE, verified in Editor.**
 
 - `StatusEffectKind.Stun`, `damagePerTurn` 0.
 - `CharacterManager.IsStunned` — any live Stun status.
@@ -761,14 +762,24 @@ Held as a **plain counter, not a real buff** — `BuffType` is stat modifiers, a
 would muddy that further. `StunResistanceStacks` is exposed so the UI can show "Stun Resist +100%",
 which is the part the player needs.
 
-Turn-start order, and **step 3 must precede step 4** or a 1-turn stun is consumed before it's seen:
+**Built differently from the plan above, and the reason matters.** The original ordering — read
+`IsStunned` before `AdvanceStatuses()`, both inside the turn — stopped working once D1 moved damage
+over time to the round boundary, because `AdvanceStatuses()` then runs *before anyone's turn*. A
+1-turn stun applied in round N would have expired at the top of round N+1, before its owner ever
+reached a turn to lose.
 
-1. `TickDamageOverTime()`
-2. dead → complete the turn and stop
-3. read `IsStunned`
-4. `AdvanceStatuses()`
-5. stunned → `stunResistanceStacks++`, play the beat, skip the turn
-6. not stunned → `stunResistanceStacks = 0`, normal turn
+So **stun became turn-scoped while the damage kinds stayed round-scoped**:
+
+- `StatusEffect.IsTurnScoped` marks it, and `AdvanceStatuses()` skips those entirely.
+- `ConsumeStunForSkippedTurn()` spends it at the moment the stolen turn would have happened, ramping
+  the resistance in the same call.
+- `ClearStunResistanceRamp()` runs on the path where a character actually acts.
+
+The check sits in `SetCharacterTurn()` **before the turn marker, the action bar and the enemy AI
+kick-off**, so a stunned character never gets live buttons or starts an attack.
+
+That split is now the general rule: anything measured in the victim's own turns is turn-scoped,
+anything measured in elapsed time is round-scoped.
 
 > **The one real hazard: recursion — and it already bit during D1.** `CompleteTurn()` ends by calling
 > `SetCharacterTurn()`, so a skip that calls `CompleteTurn()` directly gives
@@ -783,16 +794,26 @@ Turn-start order, and **step 3 must precede step 4** or a 1-turn stun is consume
 > **Route the stun skip through that method — never call `CompleteTurn()` directly.**
 >
 > The guard makes a runaway survivable, not correct. A stunned character stays in the turn order, so
-> an all-stunned field is far easier to reach than an all-dead one: the skip should still run through
-> a coroutine, which unwinds the stack *and* buys the visible "STUNNED" beat — a turn that vanishes
-> instantly reads as a bug. `EnemyManager.TelegraphThenAct()` is the precedent, and it drops straight
-> into Phase C's `TurnSequence` later.
+> an all-stunned field is far easier to reach than an all-dead one. **As built**, the skip runs
+> through `SkipStunnedTurnRoutine`, a coroutine that unwinds the stack *and* buys the visible
+> "STUNNED" beat — and it yields at least one frame **even at `stunSkipDuration: 0`**, because a
+> coroutine runs synchronously up to its first yield and a zero duration would otherwise put the whole
+> chain back on one stack. `EnemyManager.TelegraphThenAct()` is the precedent.
 
-*Verify:* a stunned character's turn is visibly skipped, not silently. Stun the same character on
-consecutive turns and it should get progressively harder to land, then stop working; once they take a
-turn it should be as landable as it was at the start.
+**A hole this closed on the way past.** Making the round boundary asynchronous in D1 left the action
+bar live during the pause: `currentCharacterTurn` still pointed at the previous round's last
+character, so a crew member's buttons stayed interactable and an action resolved there collided with
+the hand-over already in flight. The stun skip has the same shape.
+**`TurnManager.AcceptingPlayerInput`** is now false during both, checked in
+`CombatController.IsPlayerControlledTurn()` *and* at the top of `CompleteTurn()` — the second because
+the End Turn button calls straight in, bypassing `CombatController`. That's a fourth turn-ownership
+layer; see `CLAUDE.md`.
 
-### Phase E — Class definitions & level scaling
+*Verified:* a stunned character's turn is visibly skipped rather than silently dropped; stunning the
+same character on consecutive turns gets progressively harder and then stops landing; once they take
+a turn it's as landable as it was at the start.
+
+### Phase E — Class definitions & level scaling ⬅ NEXT
 
 **Goal:** stop authoring every stat on every character. A class defines the baseline — health, attack,
 defense, speed, drive multipliers and **status resistances** — and level scales it. Creating a new

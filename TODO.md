@@ -426,6 +426,13 @@ comment predates cooldowns moving off the ScriptableObject. See "Different ways 
 
 **Not a task list. A direction worth defining before Phase 4 needs it.**
 
+> **Phase E answers the numbers half of this.** `META.md` now plans a `ClassDefinition`
+> ScriptableObject supplying base stats, per-level growth and status resistances per class, which is
+> what makes a class mean something numerically and gives §7's recruitment generator its bands.
+> It deliberately does **not** cover the active/passive question below — class covers numbers only,
+> because letting it gate identity, stats *and* loadout at once means no single thing is the real
+> constraint. Everything below still stands as the open decision.
+
 `Character.CharacterClass` already exists — **Duelist / Muscle / Musketeer / WitchDoctor** — and is
 authored on every character. **Nothing reads it.** The only other mention in the codebase is a
 commented-out hook in `Action.cs`:

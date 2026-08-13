@@ -103,6 +103,36 @@ public class Character : ScriptableObject
              "a drive segment appears to do nothing.")]
     [FormerlySerializedAs("buffAttackMultiplier")] [SerializeField] public float buffNextActionMultiplier = 1.5f;
 
+    [Header("Status Resistance")]
+    [Tooltip("Chance to shrug off each status effect kind. Subtracted from the effect's Chance To " +
+             "Apply, so 0.4 against a 100% bleed attack means it lands 60% of the time.\n\n" +
+             "Reduces the CHANCE only — never the damage or the duration.\n\n" +
+             "A kind with no entry here resists at 0. Listing only what this character actually " +
+             "resists is normal; the list exists rather than one field per kind so adding Poison or " +
+             "Burn later needs no change to this asset.\n\n" +
+             "Phase E moves the baseline onto the class asset, with these becoming the per-character " +
+             "exception. Armour and carried items become a further layer on top.")]
+    [SerializeField] private List<StatusResistance> statusResistances = new List<StatusResistance>();
+
+    /// <summary>
+    /// Authored resistance to one effect kind, 0 when unlisted.
+    /// </summary>
+    /// <remarks>
+    /// Read through <see cref="CharacterManager.GetResistance"/>, never directly — that's the single
+    /// accessor the equipment layer will slot into later.
+    /// </remarks>
+    public float GetStatusResistance(StatusEffectKind kind)
+    {
+        if (statusResistances == null) return 0f;
+
+        foreach (StatusResistance entry in statusResistances)
+        {
+            if (entry != null && entry.kind == kind) return Mathf.Clamp01(entry.value);
+        }
+
+        return 0f;
+    }
+
     [Header("Drive Generation")]
     [Tooltip("Drive gained per point of damage this character DEALS.")]
     [SerializeField] public float damageInflictedDriveMultiplier = 4f;

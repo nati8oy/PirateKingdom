@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -185,6 +186,17 @@ public class Action : ScriptableObject
              "Min Damage 3 a ratio below ~0.17 rounds away to nothing.")]
     [Range(0f, 1f)]
     public float healthDrainRatio = 0.5f;
+
+    [Header("Status Effects On Hit  (Attack, Health Drain)")]
+    [Tooltip("Lasting effects this tries to leave on the target — bleed, poison, burn.\n\n" +
+             "Rolled ONLY when the attack lands. A miss applies nothing, and a successful parry " +
+             "prevents them as well, so parrying a status attack is meaningfully better than eating " +
+             "it.\n\n" +
+             "Each entry rolls separately against the target's resistance for that kind, so one " +
+             "action can carry several. Re-applying a kind the target already has refreshes it " +
+             "rather than stacking — effects never pile up.\n\n" +
+             "Ignored by every action type other than Attack and Health Drain.")]
+    public List<StatusApplication> statusEffects = new List<StatusApplication>();
 
     // ---------------------------------------------------------------------------------------
     // TIMING — enemy-side presentation

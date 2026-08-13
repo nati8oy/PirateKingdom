@@ -404,6 +404,9 @@ public class CombatController : MonoBehaviour
                     Debug.Log("Attack value of " + (attackRoll + currentCharacter.AttackPower) + " hit enemy with defense value of: " + targetManager.DefenseValue);
                     targetManager.TakeDamage(damage);
                     currentCharacter.OnDamageDealt(damage);
+
+                    // Status riders roll only on a landed hit — a miss leaves nothing behind.
+                    targetManager.ApplyStatusEffectsFrom(selectedAction);
                 }
                 else
                 {
@@ -454,6 +457,9 @@ public class CombatController : MonoBehaviour
                     // passing GetNextHealingMultiplier() as well would apply drive twice to one action.
                     float healthTaken = targetManager.TakeDamage(drainDamage);
                     currentCharacter.OnDamageDealt(drainDamage);
+
+                    // Same rule as Attack: riders only land when the drain itself did.
+                    targetManager.ApplyStatusEffectsFrom(selectedAction);
 
                     float siphoned = healthTaken * selectedAction.healthDrainRatio;
 

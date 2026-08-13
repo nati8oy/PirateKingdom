@@ -109,6 +109,11 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Optional. Played when a DriveDrain action strips this character's drive meter.")]
     public MMF_Player driveDrainedFeedback;
 
+    [Tooltip("Optional. Played on each damage-over-time tick (bleed, poison, burn). Falls back to " +
+             "Deal Damage Feedback when empty — but that one is an impact flash, which reads as " +
+             "being struck again rather than bleeding, so a quieter effect belongs here.")]
+    public MMF_Player damageOverTimeFeedback;
+
     public MMF_Player feedbackPlayer;
 
 
@@ -128,6 +133,24 @@ public class CharacterManager : MonoBehaviour
     public event OnDeathHandler OnDeath;
 
     private bool isDead = false;
+
+    // Set at the end of Start(). Before that CurrentHealth is still 0, because BindToRunState() is
+    // what fills it in — see IsAlive.
+    private bool hasInitialised;
+
+    /// <summary>
+    /// Whether this character is still in the fight.
+    /// </summary>
+    /// <remarks>
+    /// <b>A character that hasn't initialised yet counts as ALIVE, and that is the whole point of
+    /// this property.</b> <c>CurrentHealth</c> is 0 until <see cref="BindToRunState"/> runs in
+    /// <c>Start()</c>, and <c>TurnManager.BeginBattle()</c> also runs during the Start phase where
+    /// Unity gives no ordering guarantee between GameObjects. Testing <c>CurrentHealth &lt;= 0</c>
+    /// directly therefore reads a perfectly healthy character as a corpse — which crashed the Editor
+    /// once already. Use this instead of rolling that comparison by hand.
+    /// </remarks>
+    public bool IsAlive => !isDead && (!hasInitialised || CurrentHealth > 0f);
+
     private DriveManager driveManager;
 
     private DriveMeter driveMeter;
@@ -235,6 +258,9 @@ public class CharacterManager : MonoBehaviour
         {
             Debug.LogError($"Character Data is missing on '{gameObject.name}'!");
         }
+
+        // Last thing: from here CurrentHealth is meaningful, so IsAlive can trust it.
+        hasInitialised = true;
         
         //hp.text = CurrentHealth + "/" + MaxHealth;
     }
@@ -422,6 +448,292 @@ public class CharacterManager : MonoBehaviour
     /// </remarks>
     public float DamageReductionFraction => Mathf.Clamp(
         SumBuffValue(Character.BuffType.DamageReduction), MinDamageReduction, MaxDamageReduction);
+
+    // --- Status effects (bleed / poison / burn, and stun from D2) ---
+    // A list of their own rather than more BuffType members: BuffType means "additive stat modifier
+    // folded into RefreshStats()", and these are neither. Two exceptions have already been carved
+    // out of that rule (DamageReduction, CritChance) and a third would make one enum mean four
+    // different things.
+    private readonly List<StatusEffect> activeStatuses = new List<StatusEffect>();
+
+    /// <summary>Live effects on this character. Per-battle — nothing here reaches <c>RunState</c>.</summary>
+    public IReadOnlyList<StatusEffect> ActiveStatuses => activeStatuses;
+
+    /// <summary>
+    /// Raised when a status is applied, refreshed or expires. Displays subscribe rather than poll,
+    /// mirroring <see cref="BuffsChanged"/>.
+    /// </summary>
+    public event System.Action StatusesChanged;
+
+    /// <summary>
+    /// Ceiling on total damage-over-time per turn, as a fraction of max health.
+    /// </summary>
+    /// <remarks>
+    /// Effects refresh rather than stack, so one kind can't run away on its own — but bleed, poison
+    /// and burn can all tick at once, none of them "stacking", and together bury a crew member. This
+    /// is the ceiling that stops that.
+    ///
+    /// A fraction rather than a flat number on purpose: the roster spans 20 to 90 max health, so a
+    /// flat cap would be trivial for the boss and lethal for a Skeleton.
+    /// </remarks>
+    public const float MaxDoTFractionPerTurn = 0.15f;
+
+    /// <summary>
+    /// This character's resistance to an effect kind, 0–1. <b>The single accessor</b> — read
+    /// resistance through here and never off <c>characterData</c> directly.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately one funnel so the layers can grow underneath without touching call sites: today
+    /// it's the authored list on <c>Character</c>, Phase E moves the baseline onto the class asset,
+    /// and armour and carried items add on top of that. Resistance is not buffable and does not read
+    /// <c>activeBuffs</c>.
+    /// </remarks>
+    public float GetResistance(StatusEffectKind kind)
+    {
+        float authored = characterData != null ? characterData.GetStatusResistance(kind) : 0f;
+
+        return Mathf.Clamp01(authored);
+    }
+
+    /// <summary>
+    /// Rolls one status rider against this character's resistance and applies it if it lands.
+    /// Returns whether it stuck.
+    /// </summary>
+    /// <remarks>
+    /// One roll, resistance subtracted from the chance — never reducing the damage or duration.
+    /// Re-applying a kind already present refreshes it (higher of each value) rather than stacking.
+    /// </remarks>
+    public bool TryApplyStatus(StatusApplication application)
+    {
+        if (application == null) return false;
+
+        // Nothing to afflict. The corpse is destroyed next Update, but health is already 0 here.
+        if (isDead || CurrentHealth <= 0f) return false;
+
+        if (application.kind == StatusEffectKind.Stun)
+        {
+            Debug.LogWarning($"[CharacterManager] A Stun status was applied to " +
+                             $"{characterData?.characterName ?? gameObject.name}, but stun is not implemented " +
+                             "until Phase D2 — it will tick down and do nothing. Remove the rider or wait for D2.", this);
+        }
+
+        float resistance = GetResistance(application.kind);
+        float chance = Mathf.Clamp01(application.chanceToApply - resistance);
+
+        if (chance <= 0f || Random.value >= chance)
+        {
+            Debug.Log($"{characterData?.characterName ?? gameObject.name} resisted {application.kind} " +
+                      $"(chance {application.chanceToApply:P0} - resistance {resistance:P0} = {chance:P0})");
+            return false;
+        }
+
+        StatusEffect existing = FindStatus(application.kind);
+
+        if (existing != null)
+        {
+            existing.Refresh(application.damagePerTurn, application.turns);
+            Debug.Log($"{characterData?.characterName ?? gameObject.name} refreshed {application.kind} " +
+                      $"to {existing.DamagePerTurn}/turn for {existing.TurnsRemaining} turns");
+        }
+        else
+        {
+            activeStatuses.Add(new StatusEffect(application.kind, application.damagePerTurn, application.turns));
+            Debug.Log($"{characterData?.characterName ?? gameObject.name} is afflicted with {application.kind} " +
+                      $"— {application.damagePerTurn}/turn for {application.turns} turns");
+        }
+
+        StatusesChanged?.Invoke();
+        return true;
+    }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Editor-only. Puts a bleed on this character so the tick can be watched without authoring an
+    /// action and getting an attack to land first.
+    /// </summary>
+    /// <remarks>
+    /// On the component's ⋮ menu while playing. Bypasses the resistance roll deliberately — this is
+    /// for checking that the tick, the floating text and the feedback all fire, not for testing
+    /// whether the effect lands.
+    /// </remarks>
+    [ContextMenu("Debug: Apply Test Bleed (3 dmg, 3 turns)")]
+    private void DebugApplyTestBleed() => EditorApplyStatus(StatusEffectKind.Bleed, 3f, 3);
+
+    /// <summary>
+    /// Editor-only. Forces a status on, bypassing the resistance roll. Used by the context menu above
+    /// and by the <c>Tools &gt; Pirate Kingdom &gt; Debug</c> items, which are the discoverable route —
+    /// <c>[ContextMenu]</c> entries hide on the component's ⋮ button and are easy to miss.
+    /// </summary>
+    public void EditorApplyStatus(StatusEffectKind kind, float damagePerTurn, int turns)
+    {
+        if (!Application.isPlaying)
+        {
+            Debug.LogWarning("[CharacterManager] Status debug tools only do anything while playing — " +
+                             "combatants are spawned at runtime, so there's nothing to afflict in edit mode.", this);
+            return;
+        }
+
+        StatusEffect existing = FindStatus(kind);
+
+        if (existing != null) existing.Refresh(damagePerTurn, turns);
+        else activeStatuses.Add(new StatusEffect(kind, damagePerTurn, turns));
+
+        StatusesChanged?.Invoke();
+
+        Debug.Log($"[Debug] {kind} applied to {characterData?.characterName ?? gameObject.name} " +
+                  $"({damagePerTurn}/turn for {turns} turns). It ticks at the start of each of THEIR OWN " +
+                  "turns — watch for a [DoT] line.", this);
+    }
+
+    /// <summary>Editor-only. Strips every status, for getting back to a clean slate mid-fight.</summary>
+    public void EditorClearStatuses()
+    {
+        if (activeStatuses.Count == 0) return;
+
+        activeStatuses.Clear();
+        StatusesChanged?.Invoke();
+
+        Debug.Log($"[Debug] Cleared all status effects from {characterData?.characterName ?? gameObject.name}.", this);
+    }
+#endif
+
+    /// <summary>Applies every status rider on an action to this character. No-op for actions with none.</summary>
+    public void ApplyStatusEffectsFrom(Action action)
+    {
+        if (action == null || action.statusEffects == null) return;
+
+        foreach (StatusApplication application in action.statusEffects)
+        {
+            if (application != null) TryApplyStatus(application);
+        }
+    }
+
+    private StatusEffect FindStatus(StatusEffectKind kind)
+    {
+        foreach (StatusEffect status in activeStatuses)
+        {
+            if (status.Kind == kind) return status;
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether this character currently has the given effect.</summary>
+    public bool HasStatus(StatusEffectKind kind) => FindStatus(kind) != null;
+
+    /// <summary>Turns left on an effect, or 0 if it isn't active.</summary>
+    public int GetStatusTurnsRemaining(StatusEffectKind kind) => FindStatus(kind)?.TurnsRemaining ?? 0;
+
+    /// <summary>
+    /// Applies this turn's damage over time. Called at the START of the character's own turn, so a
+    /// wound is felt before they act — ticking at turn end reads as weightless.
+    /// </summary>
+    /// <returns>Damage actually dealt, for the caller to decide whether the character survived.</returns>
+    /// <remarks>
+    /// All kinds are summed and the total capped, so several effects at once cannot combine into a
+    /// killing blow. Routed through <see cref="TakeDamage"/> with <see cref="DamageSource.OverTime"/>
+    /// so protection and drive are both skipped, but death, health sync and feedbacks all behave
+    /// exactly as they do for a normal hit.
+    /// </remarks>
+    public float TickDamageOverTime()
+    {
+        if (isDead || CurrentHealth <= 0f || activeStatuses.Count == 0) return 0f;
+
+        float total = 0f;
+
+        foreach (StatusEffect status in activeStatuses)
+        {
+            if (status.IsDamageOverTime) total += status.DamagePerTurn;
+        }
+
+        if (total <= 0f) return 0f;
+
+        float cap = MaxHealth * MaxDoTFractionPerTurn;
+
+        if (total > cap)
+        {
+            Debug.Log($"{characterData?.characterName ?? gameObject.name} damage-over-time capped: " +
+                      $"{total:F1} reduced to {cap:F1} ({MaxDoTFractionPerTurn:P0} of {MaxHealth:F0} max health)");
+            total = cap;
+        }
+
+        // Written BEFORE TakeDamage so the feedback animates the finished string rather than a bare
+        // "-3" that TakeDamage would otherwise have put there. TakeDamage deliberately skips its own
+        // text write for OverTime — see the note there.
+        ShowDamageOverTimeText(total);
+
+        float dealt = TakeDamage(total, wasParried: false, source: DamageSource.OverTime);
+
+        // Logged unconditionally, because a tick is otherwise completely silent: it skips the drive
+        // block, which held the only Debug.Log on this path, so there was no way to tell whether it
+        // had fired at all short of watching the health bar.
+        Debug.Log($"[DoT] {characterData?.characterName ?? gameObject.name} took {dealt:F0} from " +
+                  $"{DescribeActiveDamageOverTime()} — {CurrentHealth:F0}/{MaxHealth:F0} left. " +
+                  $"(ignores protection, grants no drive)");
+
+        return dealt;
+    }
+
+    /// <summary>
+    /// Puts the tick on the floating status text, naming the effects so it can't be mistaken for a
+    /// normal hit, and colouring them per kind.
+    /// </summary>
+    private void ShowDamageOverTimeText(float amount)
+    {
+        if (actionStatusText == null) return;
+
+        actionStatusText.enabled = true;
+        actionStatusText.text = $"-{Mathf.Round(amount)} {DescribeActiveDamageOverTime()}";
+    }
+
+    /// <summary>
+    /// Names the damage-over-time effects currently ticking, coloured — "Bleed", or "Bleed + Poison"
+    /// when several run at once. Effects never stack, so this can only ever list one per kind.
+    /// </summary>
+    private string DescribeActiveDamageOverTime()
+    {
+        string description = string.Empty;
+
+        foreach (StatusEffect status in activeStatuses)
+        {
+            if (!status.IsDamageOverTime) continue;
+
+            if (description.Length > 0) description += " + ";
+            description += StatusEffectStyle.Rich(status.Kind);
+        }
+
+        return description;
+    }
+
+    /// <summary>
+    /// Ticks every status down a turn and drops the expired ones. Called at the start of the
+    /// character's own turn, straight after <see cref="TickDamageOverTime"/>.
+    /// </summary>
+    /// <remarks>
+    /// Damage and expiry are counted in the same place on purpose, so a 2-turn bleed lands exactly
+    /// two ticks. Note this diverges from buffs, which tick at turn END in
+    /// <see cref="OnTurnComplete"/> — each system is internally coherent, and moving buff timing
+    /// would change behaviour that has already been tuned around.
+    /// </remarks>
+    public void AdvanceStatuses()
+    {
+        if (activeStatuses.Count == 0) return;
+
+        // Iterated backwards so removing an expired entry can't skip the next one.
+        for (int i = activeStatuses.Count - 1; i >= 0; i--)
+        {
+            activeStatuses[i].ReduceTurns();
+
+            if (!activeStatuses[i].IsExpired) continue;
+
+            Debug.Log($"{activeStatuses[i].Kind} wore off {characterData?.characterName ?? gameObject.name}");
+            activeStatuses.RemoveAt(i);
+        }
+
+        // Unconditional: reaching here means at least one status ticked, so any turns counter on
+        // screen is now stale even when nothing expired.
+        StatusesChanged?.Invoke();
+    }
 
     // The unbuffed crit rule: a natural 20 and nothing else, i.e. 5%.
     private const int BaseCritThreshold = 20;
@@ -659,28 +971,45 @@ public class CharacterManager : MonoBehaviour
     ///
     /// Every other caller ignores it, which is why widening this from <c>void</c> was safe.
     /// </remarks>
-    public float TakeDamage(float damage, bool wasParried = false)
+    public float TakeDamage(float damage, bool wasParried = false, DamageSource source = DamageSource.Direct)
     {
-        // First thing, before anything reads `damage`: the floating number, the health loss, the
-        // drive gain and the return value must all agree on one figure — what actually got through.
+        // Protection covers the INITIAL HIT ONLY. A damage-over-time tick ignores it entirely —
+        // armour stops blades, not poison — which makes DoT the designated counter to a
+        // heavy-protection build.
+        //
+        // For a direct hit this is the first thing, before anything reads `damage`: the floating
+        // number, the health loss, the drive gain and the return value must all agree on one figure,
+        // namely what actually got through.
         //
         // Deliberately multiplicative with a parry rather than special-cased. A parried hit arrives
         // here already reduced to its 25% chip, so protection then applies to that; the two are
         // independent mitigations and stacking them is the expected reading.
-        //
-        // It also intentionally reduces the drive earned from being hit, because the block below
-        // scales off this same figure. Protection that cut the damage but paid full drive would be
-        // a pure win, and the parry path already sets the precedent of paying drive on the damage
-        // actually taken rather than the damage swung.
-        damage = ApplyDamageReduction(damage);
+        if (source == DamageSource.Direct)
+        {
+            damage = ApplyDamageReduction(damage);
+        }
 
         // Only update the status text and play feedback if it wasn't a parry
         if (!wasParried)
         {
-            actionStatusText.enabled = true;
-            actionStatusText.text = "-" + Mathf.Round(damage);
-            dealDamageFeedback.PlayFeedbacks();
-            feedbackPlayer.PlayFeedbacks();
+            if (source == DamageSource.OverTime)
+            {
+                // Text is NOT written here: TickDamageOverTime already set it, because only it knows
+                // which effects are ticking and a bare "-3" would be indistinguishable from a hit.
+                //
+                // Its own feedback slot for the same reason — the impact flash and shake of a landed
+                // blow reads as being struck again, which is the wrong signal for a wound bleeding.
+                // Falls back rather than going silent, so an unwired slot still shows something.
+                MMF_Player tickFeedback = damageOverTimeFeedback != null ? damageOverTimeFeedback : dealDamageFeedback;
+                if (tickFeedback != null) tickFeedback.PlayFeedbacks();
+            }
+            else
+            {
+                actionStatusText.enabled = true;
+                actionStatusText.text = "-" + Mathf.Round(damage);
+                dealDamageFeedback.PlayFeedbacks();
+                feedbackPlayer.PlayFeedbacks();
+            }
         }
 
         float roundedDamage = Mathf.Round(damage);
@@ -695,8 +1024,10 @@ public class CharacterManager : MonoBehaviour
             OnDeath?.Invoke();
         }
     
-        // Add damage taken to drive meter through DriveManager
-        if (driveManager != null)
+        // Drive is earned on the INITIAL HIT ONLY — a damage-over-time tick pays nothing. The
+        // consequence is intended: an attack that deals 0 damage and exists only to apply a bleed
+        // generates no drive at all, for either side. That's the trade-off for the effect.
+        if (source == DamageSource.Direct && driveManager != null)
         {
             var driveIncrease = damage * characterData.damageTakenDriveMultiplier;
             //drive gained is multiplied by the damage in the damageTakenDriveMultiplier character data

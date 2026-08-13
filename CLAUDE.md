@@ -71,6 +71,22 @@ third-party and should not be modified** unless explicitly requested:
     under the cursor, plus valid / invalid / default cursor swaps, plus lighting that target's
     `img_target_indicator`. The line is a **player setting**
     (`GameSettings.ShowTargetingLine`, default on); the cursor and indicator feedback are always on.
+  - `StatusEffect.cs` — the status system's data types: `StatusEffectKind` (Bleed / Poison / Burn /
+    Stun, **append-only**), `DamageSource` (Direct / OverTime), the runtime `StatusEffect`, the
+    authored `StatusResistance` and `StatusApplication`. **Bleed, Poison and Burn are mechanically
+    identical** and differ only in icon and colour — adding a kind is an enum member plus Editor
+    wiring, never a system. `Stun` exists in the enum but is **inert until Phase D2**;
+    `TryApplyStatus` warns if you author one.
+  - `StatusIconDisplay.cs` — one icon slot per status kind on a combatant, driven by
+    `CharacterManager.StatusesChanged`. Sibling of `BuffIconDisplay` rather than an extension of it:
+    buffs key off `BuffType` and show a signed magnitude, statuses key off `StatusEffectKind` and
+    show damage per turn plus turns remaining.
+    - Slots default to **`StatusEffectStyle.Tint(kind)`**, the same single definition the floating
+      damage number uses, so a red `-3 Bleed` and a red bleed icon can't drift apart. `HexColour()`
+      derives from that one `Color` rather than being a second literal.
+    - **Wire it on `PlayerCharacter.prefab` only.** `EnemyCharacterVariant` is a variant of it and
+      inherits components added to the base, which is exactly how `BuffIconDisplay` already reaches
+      enemies — it exists on the base and nowhere else.
   - `ParryVisualFeedback.cs`.
 - `Generics and Managers/`
   - `TurnManager.cs` — **the heart of combat.** Initiative-based turn order (re-rolled each
@@ -224,6 +240,18 @@ third-party and should not be modified** unless explicitly requested:
     don't try to win that race with Script Execution Order.
   - `Update()` early-returns until the battle has begun. Without that guard a scene that spawns
     its combatants would count zero living players on frame one and instantly declare a defeat.
+  - **Anything that skips a turn must go through `TurnManager.AdvancePastSkippedTurn()`, never call
+    `CompleteTurn()` directly from `SetCharacterTurn()`.** The two are mutually recursive —
+    `SetCharacterTurn → CompleteTurn → SetCharacterTurn` — so a skip condition true of every
+    combatant recurses until the process dies. It happens inside one frame, so nothing can clear the
+    condition: no `Update`, no destruction of the dead, no battle-end poll. **This has killed the
+    Editor once** (93 MB log). `AdvancePastSkippedTurn` caps consecutive skips at one lap of the
+    turn order and stops with a single error.
+  - **`CurrentHealth <= 0` does not mean "dead".** It also means **"`Start()` hasn't run yet"** —
+    `BindToRunState()` is what fills it in, and `BeginBattle()` runs during the Start phase where
+    Unity's ordering between GameObjects is arbitrary. Testing health alone read every
+    not-yet-initialised character as a corpse, which is precisely what caused the crash above. Gate
+    any death test on something that proves damage was actually dealt.
   - **`CombatController.PerformAction()` charges the cooldown and calls `CompleteTurn()` from a
     `finally`.** Resolution and handover used to be a plain sequence, so anything that threw while
     applying an effect skipped both. That does not stall the game — it hands out a **free extra
@@ -315,6 +343,68 @@ third-party and should not be modified** unless explicitly requested:
     back to manual targeting rather than erroring, because an action that eats the turn without
     resolving is worse than one that just asks for a target. Player-side only — enemies already
     resolve ally-targeted buffs onto themselves.
+- **Status effects (Phase D1): bleed / poison / burn, as riders on an attack.** A separate
+  `activeStatuses` list on `CharacterManager` — **not** more `BuffType` members, because `BuffType`
+  means "additive stat modifier folded into `RefreshStats()`" and two exceptions have already been
+  carved out of that rule. Authored as a `List<StatusApplication>` on `Action`.
+  - **Riders roll only on a landed hit, and a successful parry prevents them.** The parry still eats
+    the 25% chip but stops the bleed outright, which is what makes parrying a status attack better
+    than absorbing it. Four application sites — `CombatController`'s Attack and HealthDrain branches,
+    `EnemyManager.OnAttackComplete` (guarded on `!wasParried`) and `PerformDirectAttack`.
+  - **Effects refresh, never stack.** Re-applying a kind takes the higher of each value, including
+    duration, so a weak late application can't cut short a strong one still running.
+  - **A DoT tick owns its own presentation.** `TickDamageOverTime()` writes the floating text
+    *before* calling `TakeDamage`, which deliberately skips its own text write for `OverTime` — only
+    the tick knows which effects are running, and a bare `-3` is indistinguishable from a normal hit.
+    The text names them and colours them per kind via `StatusEffectStyle`, using **TMP rich-text
+    tags rather than `actionStatusText.color`**, because that component is shared with the damage
+    and heal numbers and a tint would leak into the next one.
+    - It also logs a `[DoT]` line on every tick. Without it a tick was completely silent: it skips
+      the drive block, which held the only `Debug.Log` on that path.
+    - **Tools > Pirate Kingdom > Debug** has Bleed/Poison/Burn Selected Character, Bleed All
+      Enemies / All Crew, and Clear All Status Effects — for exercising the tick without authoring an
+      action and landing an attack first. All bypass the resistance roll, and all require **Play
+      mode**: combatants are spawned at runtime, so nothing exists to afflict in edit mode.
+      `CharacterManager` also carries the same thing as a `[ContextMenu]`, but that hides on the
+      *component's* ⋮ button and is easy to miss — the Tools menu is the reliable route, same
+      reasoning as `RunManager`'s tools.
+  - **`DamageSource.OverTime` skips both protection and drive.** Armour stops blades, not poison — so
+    DoT is the designated counter to a heavy-protection build. And drive is paid on the initial hit
+    alone, so an attack dealing 0 that only applies a bleed generates no drive at all; that's the
+    authored trade-off. `TakeDamage` takes the source as an enum, not a third bool.
+  - **Total DoT per turn is capped at `MaxDoTFractionPerTurn` (15%) of max health.** Effects refresh
+    rather than stack, but bleed, poison and burn can all tick at once without "stacking" and bury a
+    crew member. A fraction, not a flat number — the roster spans 20 to 90 health.
+  - **Resistance reduces the CHANCE only**, never damage or duration. One roll,
+    `chance − resistance`. Read through `CharacterManager.GetResistance()` and **never off
+    `characterData` directly** — that single accessor is where Phase E's class baseline and the later
+    equipment layer slot in. Resistance is deliberately *not* buffable.
+  - **Everyone ticks together at the top of the round**, in `TurnManager.AdvanceToNextRound()` —
+    not per-character at the start of their own turn. **The order inside that method is the point:**
+    tick → `GetTurnOrder()` → `SetCharacterTurn()`. Statuses resolve *before* initiative is rolled,
+    so anyone who bleeds out is simply absent from the new order and never has to be skipped
+    mid-round. It also reads as one clear beat rather than dribbling out across the round.
+    - `GetTurnOrder()` filters on **`CharacterManager.IsAlive`**, which is what makes that work: the
+      corpse is still in the scene at that moment, because Unity doesn't destroy it until the dying
+      object's next `Update()` and that can't run inside the synchronous chain.
+    - **Use `IsAlive`, never `CurrentHealth <= 0`.** An uninitialised character also reads 0 health,
+      and filtering those would empty the turn order at battle start — that comparison is what
+      crashed the Editor. `IsAlive` treats not-yet-initialised as alive on purpose.
+    - `RefreshStats()` is called before each tick, since the cap is a fraction of `MaxHealth` and the
+      tick now runs *before* `GetTurnOrder()`, which used to be what refreshed stats each round.
+    - **The round transition is a coroutine**, with `statusTickDelay` before the tick and
+      `statusTickSettleDelay` after it (both serialized on `TurnManager`). The first gives the tick
+      its own beat instead of landing on the tail of the previous turn; the second stops the next
+      character's turn taking the screen back before the damage numbers can be read. This is a
+      precursor of Phase C's `TurnSequence` and should fold into it.
+    - **`Update()`'s "current character died" branch is suppressed while
+      `roundTransitionInProgress`.** During the pause `currentCharacterTurn` still points at the
+      *previous* round's last character, who may have just died — without the guard that branch fires
+      every frame, each one calling `CompleteTurn()` and starting another round transition. Same
+      log-spam death spiral as before, through a different door.
+    - Buffs still tick at the end of each character's **own turn**. The two schedules differ, but
+      the durations are numerically equivalent — every character gets exactly one turn per round.
+  - Statuses are **per-battle** — nothing reaches `RunState`, exactly like buffs.
   - **Every buff type has a working debuff form for free.** `ActionType.Debuff` negates `buffValue`
     before calling `AddBuff`, on both the player and enemy paths, so Speed, Defense, Accuracy,
     Crit Chance and Damage Reduction all debuff with no extra code — author them as `Debuff` with a

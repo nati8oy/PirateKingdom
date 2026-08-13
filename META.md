@@ -11,13 +11,27 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 **Phases 1 and 2 are complete and verified in the Editor, as is the 2.5D presentation refactor.**
 
-**Phase C — Turn sequencing & impact effects is the next work.** Tunable time in combat: an authored
-per-turn rhythm every character follows, and an authored impact (sprite animation, feedback, or both)
-when an attack lands or is parried. Deliberately scoped to add time *around* resolution rather than
-refactor it, so it doesn't touch damage, death or the parry system.
+**The next three pieces of work, in order, are D1 → D2 → E:**
+
+| | |
+|---|---|
+| **D1 — Status effect substrate + damage over time** | ✅ **Code complete**, awaiting Editor verification. Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive. |
+| **D2 — Stun** ⬅ next | Skip a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
+| **E — Class definitions & level scaling** | A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
+
+D1 and D2 share one substrate, so D2 is small once D1 lands. **E is deliberately separate and second**
+— it touches every character asset and `RefreshStats()`, which everything reads, so it should land
+against a status system that's already proven rather than in the middle of building one. Nothing in D
+depends on E: resistances start authored per-character behind a single accessor, and moving that data
+onto a class later is invisible to every caller.
+
+**Phase C — Turn sequencing & impact effects** is queued behind these. Tunable time in combat: an
+authored per-turn rhythm every character follows, and an authored impact when an attack lands or is
+parried. Deliberately scoped to add time *around* resolution rather than refactor it. Note D2's stun
+skip introduces the first coroutine-driven turn beat, which is the shape Phase C generalises.
 
 **Phase 3 — the voyage map** is the next *meta-layer* work and nothing blocks it; it's simply queued
-behind C.
+behind the combat work above.
 
 **Phase B — Balancing & action additions** runs in parallel and is the user's track: combat content
 and tuning, with engineering help on request for anything needing new mechanics (damage over time,
@@ -616,7 +630,239 @@ valid targets after a respawn.
 
 ---
 
-### Phase C — Turn sequencing & impact effects ⬅ NEXT
+### Phase D — Status effects ⬅ NEXT (D1, then D2)
+
+**Goal:** attacks can leave something behind. Damage over time (bleed, and the same mechanic reskinned
+as poison or fire) and stun (skip a turn), with per-character **resistance** deciding whether they
+land at all.
+
+Lettered like B and C because it's combat mechanics, not meta-layer sequence. Sits ahead of Phase C
+by choice — see §0.
+
+#### Decisions already made — do not relitigate these while building
+
+| Decision | Why |
+|---|---|
+| **A separate `StatusEffect` list, NOT new `BuffType` members** | `BuffType` means "additive stat modifier folded into `RefreshStats()`". DoT and stun are neither, and two exceptions have already been carved out (`DamageReduction` reads in `TakeDamage`, `CritChance` at roll time). A third and fourth would make one enum mean four different things. |
+| **Kinds share mechanics and differ only in presentation** | Poison and fire *are* bleed with a different icon and colour. Adding one is an enum member plus Editor wiring, not a system. Per-kind mechanical differences can branch later if ever wanted. |
+| **One instance per kind — refresh, never stack** | Re-applying takes the higher `damagePerTurn` and resets duration. Keeps display and tuning legible. |
+| **DoT ignores `DamageReduction` entirely** | Protection covers the initial hit only. Armour stops blades, not poison. Consequence, and it's intended: DoT is the designated counter to a heavy-protection build. |
+| **DoT grants NO drive to the victim** | Drive is calculated on the initial hit alone. An attack that deals 0 and only applies a DoT therefore generates no drive at all — that's the authored trade-off for it. |
+| **Resistance reduces the CHANCE only** | Never the damage or the duration. Additive, resolved in one roll, matching Darkest Dungeon. |
+| **Resistance is not buffable** | Authored base only for now; armour and carried items become the modifier layer later. Every read still goes through one accessor so that layer can be added without touching call sites. |
+| **A successful parry prevents the rider** | The 25% chip still lands but the bleed does not. Makes parrying a status attack meaningfully better than eating it, and the parry is already the game's skill expression. |
+| **No source tracking** | DoT damage is unattributed. No dangling reference to a caster who has since died, and nothing needs to award them anything (see the no-drive rule above). |
+| **Statuses are per-battle** | Nothing reaches `RunState`, exactly like buffs. No `saveVersion` bump. |
+
+---
+
+**D1 — Substrate + damage over time. ✅ CODE COMPLETE, awaiting Editor verification.**
+
+New file `Assets/Scripts/Combat/StatusEffect.cs`:
+
+```csharp
+// APPEND-ONLY, like every other serialized enum in this project.
+public enum StatusEffectKind { Bleed, Poison, Burn, Stun }
+
+[System.Serializable] public class StatusEffect      { kind; damagePerTurn; turnsRemaining; }
+[System.Serializable] public class StatusResistance  { kind; [Range(0,1)] value; }   // authored on Character
+[System.Serializable] public class StatusApplication { kind; damagePerTurn; turns; [Range(0,1)] chanceToApply; }
+```
+
+`StatusApplication` is the authored *rider* on an `Action`; `StatusEffect` is the live instance on a
+`CharacterManager`. Keeping them separate is what stops authored data being mutated at runtime — the
+same rule as `Character` vs `CharacterManager`.
+
+`CharacterManager` gains:
+
+- `activeStatuses` list + `ActiveStatuses` read-only view + a `StatusesChanged` event (mirrors
+  `BuffsChanged`, so a display never polls).
+- **`GetResistance(StatusEffectKind)`** — the single accessor. Reads `Character.statusResistances`
+  today; gains the equipment layer later and no caller changes.
+- **`TryApplyStatus(StatusApplication)`** — rolls `chance − GetResistance(kind)` clamped to `[0,1]`,
+  then refreshes-or-adds. Returns whether it landed.
+- **`TickDamageOverTime()`** — sums `damagePerTurn` across DoT kinds, clamps the total to
+  `MaxHealth * MaxDoTFractionPerTurn`, applies it, returns the amount.
+- **`AdvanceStatuses()`** — decrement, drop expired, fire `StatusesChanged`.
+- `const float MaxDoTFractionPerTurn = 0.15f` — **a fraction of max health, not a flat number**,
+  because the roster spans 20–90 health and a flat cap would be trivial for the boss and lethal for a
+  Skeleton. This is the ceiling that stops several kinds ticking at once from overwhelming a crew.
+  Note the earlier "does the cap apply before or after protection" question dissolved: DoT never sees
+  protection.
+
+`TakeDamage` signature change — an enum, not a third bool, because `TakeDamage(5f, false, true)` is
+unreadable and this distinction will grow more rules:
+
+```csharp
+public enum DamageSource { Direct, OverTime }
+public float TakeDamage(float damage, bool wasParried = false, DamageSource source = DamageSource.Direct)
+```
+
+`OverTime` **skips both `ApplyDamageReduction()` and the drive block**. Existing callers are untouched
+by the default.
+
+New MMF slot `damageOverTimeFeedback` on `CharacterManager`, used when the source is `OverTime`,
+falling back to `dealDamageFeedback` when unassigned. An impact flash and shake on a bleed tick reads
+as being hit again, which is the wrong signal.
+
+`Action` gains a `List<StatusApplication> statusEffects` under a new
+**"Status Effects On Hit (Attack, Health Drain)"** header. Applied **only on a landed hit** — a miss
+applies nothing, matching how a miss already skips the parry sequence.
+
+**Four application sites**, because resolution is still duplicated: `CombatController`'s Attack and
+HealthDrain branches, and `EnemyManager`'s `OnAttackComplete` (guarded on `!wasParried`) and
+`PerformDirectAttack`. One shared `ApplyStatusEffects(action, target)` helper keeps each to one line.
+Another vote for the shared resolver in the multi-target sketch.
+
+**Round-start hook** in `TurnManager.AdvanceToNextRound()` — **everyone ticks together**, not each
+at the start of their own turn:
+
+1. `RoundComplete()` (round counter)
+2. `TickRoundStatusEffects()` — every living combatant: `RefreshStats()` → `TickDamageOverTime()` →
+   `AdvanceStatuses()`
+3. `GetTurnOrder()` — re-roll initiative, **filtered on `CharacterManager.IsAlive`**
+4. `SetCharacterTurn()`
+
+**Steps 2 and 3 being in that order is the whole design.** Anyone who bleeds out is resolved before
+initiative is rolled, so they're simply absent from the new order and never need skipping mid-round.
+That deletes the entire "a corpse has the turn" case rather than handling it.
+
+`IsAlive` is what makes the filter safe — the dead are still in the scene at that point (Unity
+destroys them on their next `Update()`, which can't run inside this synchronous chain), and an
+*uninitialised* character also reads 0 health, so a raw `CurrentHealth <= 0` test would empty the
+turn order at battle start. That exact comparison crashed the Editor once.
+
+Buffs still tick at the end of each character's own turn. The schedules differ but the durations are
+numerically equivalent, since every character gets exactly one turn per round.
+
+*Also needed:* a `StatusIconDisplay` component mirroring `BuffIconDisplay` (I write it, user wires the
+slots), and status riders shown in all four `TooltipUI` methods.
+
+*Verify:* a bleed attack should tick for its authored damage at the start of the victim's next turn,
+ignore any protection they have, grant them no drive, and expire after the right number of turns. A
+target with resistance authored should visibly shrug some off.
+
+---
+
+**D2 — Stun.**
+
+- `StatusEffectKind.Stun`, `damagePerTurn` 0.
+- `CharacterManager.IsStunned` — any live Stun status.
+- `stunResistanceStacks` (int) + `StunResistanceBonus => stacks * 0.5f`, folded into
+  `GetResistance(Stun)`.
+
+**The Darkest Dungeon ramp**, which is the whole point of the design: each consecutive skipped turn
+adds +50% stun resistance, and the stacks **reset the moment the character actually takes a turn**.
+It's self-correcting and needs no cap — once the ramp exceeds the incoming chance the stun fails, the
+character acts, and acting clears it. It can neither run away into permanent immunity nor be chained
+indefinitely.
+
+Held as a **plain counter, not a real buff** — `BuffType` is stat modifiers, and a display-only member
+would muddy that further. `StunResistanceStacks` is exposed so the UI can show "Stun Resist +100%",
+which is the part the player needs.
+
+Turn-start order, and **step 3 must precede step 4** or a 1-turn stun is consumed before it's seen:
+
+1. `TickDamageOverTime()`
+2. dead → complete the turn and stop
+3. read `IsStunned`
+4. `AdvanceStatuses()`
+5. stunned → `stunResistanceStacks++`, play the beat, skip the turn
+6. not stunned → `stunResistanceStacks = 0`, normal turn
+
+> **The one real hazard: recursion — and it already bit during D1.** `CompleteTurn()` ends by calling
+> `SetCharacterTurn()`, so a skip that calls `CompleteTurn()` directly gives
+> `SetCharacterTurn → CompleteTurn → SetCharacterTurn`, and a skip condition true of every combatant
+> recurses until the process dies. D1's DoT-death check did exactly this and **crashed the Editor with
+> a 93 MB log**; the trigger was that `CurrentHealth <= 0` also means "`Start()` hasn't run yet",
+> so every uninitialised character read as a corpse.
+>
+> Two things are already in place as a result, so D2 inherits them: the skip goes through
+> **`TurnManager.AdvancePastSkippedTurn()`**, which caps consecutive skips at one lap of the turn
+> order and stops with a single error, and `turnSkipDepth` resets whenever someone actually acts.
+> **Route the stun skip through that method — never call `CompleteTurn()` directly.**
+>
+> The guard makes a runaway survivable, not correct. A stunned character stays in the turn order, so
+> an all-stunned field is far easier to reach than an all-dead one: the skip should still run through
+> a coroutine, which unwinds the stack *and* buys the visible "STUNNED" beat — a turn that vanishes
+> instantly reads as a bug. `EnemyManager.TelegraphThenAct()` is the precedent, and it drops straight
+> into Phase C's `TurnSequence` later.
+
+*Verify:* a stunned character's turn is visibly skipped, not silently. Stun the same character on
+consecutive turns and it should get progressively harder to land, then stop working; once they take a
+turn it should be as landable as it was at the start.
+
+### Phase E — Class definitions & level scaling
+
+**Goal:** stop authoring every stat on every character. A class defines the baseline — health, attack,
+defense, speed, drive multipliers and **status resistances** — and level scales it. Creating a new
+crew member becomes "Duelist, level 3, +2 attack" instead of a dozen hand-set numbers.
+
+This collapses three things already half-planned: `Character.CharacterClass` exists and **nothing
+reads it** (`TODO.md`), §7 proposes a `CrewArchetype` per class for generating recruits, and Phase 5
+needs level to actually feed stat resolution. One asset serves all three — §7 already says it's worth
+designing once for both.
+
+```csharp
+[CreateAssetMenu(menuName = "Scriptable Objects/Class Definition")]
+public class ClassDefinition : ScriptableObject
+{
+    CharacterClass classId;
+    // Level 1 baseline
+    float maxHealth, attackPower, defenseValue, speed;
+    float buffNextActionMultiplier;
+    float damageInflictedDriveMultiplier, damageTakenDriveMultiplier, parryBonusDriveMultiplier;
+    List<StatusResistance> statusResistances;
+    // Growth per level beyond 1
+    float healthPerLevel, attackPerLevel, defensePerLevel, speedPerLevel;
+}
+```
+
+`Character` gets a `ClassDefinition` reference, and its existing flat stat fields become **deltas on
+top of the class** rather than absolutes:
+
+```
+effectiveMaxHealth = class.maxHealth + (level-1)*class.healthPerLevel + character.maxHealthDelta
+```
+
+Black Sam becomes "Duelist, +3 attack" — so the authored data answers the question that actually
+matters: *how is this character special?*
+
+**The reference is optional, and that's what makes this safe.** A null `ClassDefinition` means "use
+the flat authored values exactly as today", so the roster can be converted one asset at a time with
+everything unconverted behaving identically. It also gives enemies a clean escape hatch — a Skeleton
+Boss shouldn't inherit a crew class's curve, and doesn't have to.
+
+Resolution happens in **`CharacterManager.RefreshStats()` only**, which is already the single funnel
+every stat read passes through. Buffs, protection, crit and resistances stay exactly where they are.
+
+**Two things that will bite:**
+
+- **Level must be known before `RefreshStats()` runs.** Crew level lives in `CrewMemberState`, enemies
+  use the authored `Character.level`. `Start()` currently calls `RefreshStats()` *before*
+  `BindToRunState()`. Fine for spawned crew (the bootstrapper assigns the record before the object
+  wakes), but hand-placed crew taking the id-matching fallback would resolve at level 1 and then bind
+  health against the wrong `MaxHealth`. Needs reordering, and it would present as a save bug.
+- **Deltas read worse in the Inspector than absolutes.** "+3" doesn't tell you Black Sam hits at 15.
+  Mitigate with a `[ContextMenu]` "Log Resolved Stats" on `Character`; a custom inspector drawing them
+  live is the nicer version if it grates.
+
+**Stays per-character:** name, art, tint, audio, action slots, and the deltas. Class covers numbers
+only — class-*gated abilities* (the `allowedClasses` idea in `TODO.md`) stay a separate decision, or
+class ends up controlling identity, stats and loadout at once and no single thing is the real
+constraint.
+
+Save format is unchanged — `RunState` stores `characterId`, the Character asset references its class,
+so no new ids and no `saveVersion` bump.
+
+**What this unlocks:** the equipment layer for resistances (armour and carried items), and §7's
+generated rank-and-file crew, which needs exactly these bands to roll within.
+
+*Verify:* convert one crew member to a class and confirm their resolved stats match what they had
+before. Level them up and watch the stats move. Leave the rest unconverted and confirm nothing about
+them changes.
+
+### Phase C — Turn sequencing & impact effects
 
 **Goal:** put tunable time into combat. Every character's turn follows the same authored rhythm —
 action, attack animation, a beat to show lasting effects, a beat before the next character — and the

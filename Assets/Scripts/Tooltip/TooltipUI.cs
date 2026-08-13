@@ -66,6 +66,7 @@ public class TooltipUI : MonoBehaviour
                 break;
         }
 
+        tooltipContent += DescribeStatusRiders(action);
         tooltipContent += DescribeSelfCast(action);
 
         // Add cooldown information if applicable
@@ -75,6 +76,54 @@ public class TooltipUI : MonoBehaviour
         }
 
         tooltipText.text = tooltipContent;
+    }
+
+    /// <summary>
+    /// Lists an action's status riders, or returns empty when it has none.
+    /// </summary>
+    /// <param name="target">
+    /// Optional. When supplied, the chance shown is the REAL one against that character — their
+    /// resistance subtracted — rather than the authored base. A tooltip that promises 100% bleed
+    /// against a bleed-resistant target is lying at exactly the moment it matters.
+    /// </param>
+    private static string DescribeStatusRiders(Action action, CharacterManager target = null)
+    {
+        if (action == null || action.statusEffects == null || action.statusEffects.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        // Only these two roll riders; showing them on anything else would be a lie about the data.
+        if (action.actionType != Action.ActionType.Attack && action.actionType != Action.ActionType.HealthDrain)
+        {
+            return string.Empty;
+        }
+
+        var text = new System.Text.StringBuilder();
+
+        foreach (StatusApplication application in action.statusEffects)
+        {
+            if (application == null) continue;
+
+            float chance = application.chanceToApply;
+            if (target != null) chance = Mathf.Clamp01(chance - target.GetResistance(application.kind));
+
+            text.Append($"\n<color=#ff8080>{application.kind}</color>");
+
+            if (application.damagePerTurn > 0f)
+            {
+                text.Append($" {application.damagePerTurn:F0}/turn");
+            }
+
+            text.Append($" for {application.turns} turn{(application.turns == 1 ? "" : "s")}");
+
+            // A guaranteed effect doesn't need a percentage cluttering the line.
+            if (chance < 1f) text.Append($" ({chance:P0})");
+
+            if (Mathf.Approximately(chance, 0f)) text.Append(" <color=red>— immune</color>");
+        }
+
+        return text.ToString();
     }
 
     /// <summary>
@@ -223,6 +272,7 @@ public class TooltipUI : MonoBehaviour
                 break;
         }
         
+        tooltipContent += DescribeStatusRiders(action);
         tooltipContent += DescribeSelfCast(action);
 
         // Show cooldown information with character-specific status
@@ -302,6 +352,10 @@ public class TooltipUI : MonoBehaviour
                 tooltipContent += $"\nHeals them: {action.healthDrainRatio:P0} of health taken";
                 break;
         }
+
+        // No target known here, so this shows the base chance. Still worth it — "this one bleeds"
+        // is exactly what the player needs before deciding whether to spend their parry on it.
+        tooltipContent += DescribeStatusRiders(action);
 
         /*
         // Add target type information
@@ -403,6 +457,10 @@ public class TooltipUI : MonoBehaviour
                                       $"{maxDamage * selectedAction.healthDrainRatio:F0}" +
                                       $" ({selectedAction.healthDrainRatio:P0} of health taken)";
                 }
+
+                // The only call site that knows the target, so this is the one place the rider
+                // chance can be the REAL number rather than the authored base.
+                tooltipContent += DescribeStatusRiders(selectedAction, target);
                 break;
 
             case Action.ActionType.Heal:

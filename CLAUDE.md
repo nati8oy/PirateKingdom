@@ -379,14 +379,31 @@ third-party and should not be modified** unless explicitly requested:
     `chance − resistance`. Read through `CharacterManager.GetResistance()` and **never off
     `characterData` directly** — that single accessor is where Phase E's class baseline and the later
     equipment layer slot in. Resistance is deliberately *not* buffable.
-  - **Ticks at the START of the victim's turn**, in `TurnManager.SetCharacterTurn()`, after
-    `UpdateBuffsForTurn()` (which refreshes the `MaxHealth` the cap is a fraction of) and before the
-    action bar loads. A wound has to be felt before you act or it reads as weightless. This diverges
-    from buffs, which tick at turn *end* — each system is internally coherent and moving buff timing
-    would change behaviour already tuned around.
-  - **The tick can kill**, so `SetCharacterTurn` checks straight after and hands the turn on rather
-    than giving it to a corpse. **That check is gated on the tick having actually dealt damage, and
-    that gate is load-bearing** — see the skip-recursion warning under "Turn flow".
+  - **Everyone ticks together at the top of the round**, in `TurnManager.AdvanceToNextRound()` —
+    not per-character at the start of their own turn. **The order inside that method is the point:**
+    tick → `GetTurnOrder()` → `SetCharacterTurn()`. Statuses resolve *before* initiative is rolled,
+    so anyone who bleeds out is simply absent from the new order and never has to be skipped
+    mid-round. It also reads as one clear beat rather than dribbling out across the round.
+    - `GetTurnOrder()` filters on **`CharacterManager.IsAlive`**, which is what makes that work: the
+      corpse is still in the scene at that moment, because Unity doesn't destroy it until the dying
+      object's next `Update()` and that can't run inside the synchronous chain.
+    - **Use `IsAlive`, never `CurrentHealth <= 0`.** An uninitialised character also reads 0 health,
+      and filtering those would empty the turn order at battle start — that comparison is what
+      crashed the Editor. `IsAlive` treats not-yet-initialised as alive on purpose.
+    - `RefreshStats()` is called before each tick, since the cap is a fraction of `MaxHealth` and the
+      tick now runs *before* `GetTurnOrder()`, which used to be what refreshed stats each round.
+    - **The round transition is a coroutine**, with `statusTickDelay` before the tick and
+      `statusTickSettleDelay` after it (both serialized on `TurnManager`). The first gives the tick
+      its own beat instead of landing on the tail of the previous turn; the second stops the next
+      character's turn taking the screen back before the damage numbers can be read. This is a
+      precursor of Phase C's `TurnSequence` and should fold into it.
+    - **`Update()`'s "current character died" branch is suppressed while
+      `roundTransitionInProgress`.** During the pause `currentCharacterTurn` still points at the
+      *previous* round's last character, who may have just died — without the guard that branch fires
+      every frame, each one calling `CompleteTurn()` and starting another round transition. Same
+      log-spam death spiral as before, through a different door.
+    - Buffs still tick at the end of each character's **own turn**. The two schedules differ, but
+      the durations are numerically equivalent — every character gets exactly one turn per round.
   - Statuses are **per-battle** — nothing reaches `RunState`, exactly like buffs.
   - **Every buff type has a working debuff form for free.** `ActionType.Debuff` negates `buffValue`
     before calling `AddBuff`, on both the player and enemy paths, so Speed, Defense, Accuracy,

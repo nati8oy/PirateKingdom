@@ -1,4 +1,5 @@
 
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
@@ -25,6 +26,18 @@ public class TurnManager : MonoBehaviour
     [SerializeField] private TMP_Text battleResultText;
     [Tooltip("Start the battle automatically on Play. Uncheck when something else spawns the combatants and calls BeginBattle() itself.")]
     [SerializeField] private bool autoStartBattle = true;
+
+    [Header("Round Pacing")]
+    [Tooltip("Seconds between a round ending and damage-over-time ticking. Gives the tick its own " +
+             "beat instead of it landing on the tail of the previous character's turn. 0 skips the wait.")]
+    [SerializeField] private float statusTickDelay = 0.6f;
+
+    [Tooltip("Seconds between the damage-over-time tick and the first character acting. Without this " +
+             "the next turn takes the screen back before the damage numbers can be read.")]
+    [SerializeField] private float statusTickSettleDelay = 0.8f;
+
+    // True while the round-transition coroutine is mid-flight. Load-bearing: see Update().
+    private bool roundTransitionInProgress;
     private bool battleEnded = false;
     private bool battleStarted = false;
 
@@ -111,8 +124,15 @@ public class TurnManager : MonoBehaviour
         // Check for battle end conditions
         CheckBattleEndConditions();
         
-        // Check if the current character is still alive
-        if (currentCharacterTurn == null || currentCharacterTurn.gameObject == null)
+        // Check if the current character is still alive.
+        //
+        // Suppressed while a round transition is in flight. During that pause currentCharacterTurn
+        // still points at the LAST character of the previous round, who may well have just died —
+        // so without this guard the branch fires every frame, each one calling CompleteTurn() and
+        // kicking off another round transition. That is the log-spam death spiral again, just via a
+        // different door.
+        if (!roundTransitionInProgress &&
+            (currentCharacterTurn == null || currentCharacterTurn.gameObject == null))
         {
             Debug.Log("Current character died, advancing turn...");
             CompleteTurn();
@@ -286,6 +306,14 @@ public class TurnManager : MonoBehaviour
 
         foreach (var characterManager in characterManagers)
         {
+            // Anyone who bled out in this round's status tick is excluded here, which is the point
+            // of ticking before the roll — they're still in the scene (Unity destroys them on their
+            // next Update, which can't run inside this chain) but they must not be handed a turn.
+            //
+            // IsAlive rather than a health comparison: an uninitialised character also reads 0
+            // health, and filtering those out would empty the turn order at battle start.
+            if (!characterManager.IsAlive) continue;
+
             // Update stats before calculating initiative
             characterManager.RefreshStats();
             float initiative = characterManager.Speed + Random.Range(1, 9);
@@ -323,9 +351,7 @@ public class TurnManager : MonoBehaviour
                 // If we've gone through all characters, complete the round
                 if (currentTurnIndex >= turnOrder.Count)
                 {
-                    RoundComplete();
-                    currentTurnIndex = 0;
-                    GetTurnOrder();
+                    AdvanceToNextRound();
                     return;
                 }
                 
@@ -369,37 +395,14 @@ public class TurnManager : MonoBehaviour
                 // Update buffs and stats at the start of the character's turn
                 currentCharacterTurn.UpdateBuffsForTurn();
 
-                // --- Status effects, before the character gets to act ---
-                // Runs after UpdateBuffsForTurn because that refreshes MaxHealth, which the
-                // damage-over-time cap is a fraction of. Ticking here rather than at turn end is
-                // deliberate: a wound has to be felt before you act or it reads as weightless.
-                float damageOverTime = currentCharacterTurn.TickDamageOverTime();
-
-                // The tick can kill. The GameObject isn't destroyed until CharacterManager's next
-                // Update, so the reference is still valid — but a corpse must not be handed a turn.
+                // Status effects are NOT ticked here — they resolve for everyone at once at the top
+                // of the round, in AdvanceToNextRound(). See the remarks there for why.
                 //
-                // **Gated on the tick having actually dealt damage, and that is load-bearing.**
-                // `CurrentHealth <= 0` does NOT mean "dead": it also means "Start() hasn't run yet",
-                // because BindToRunState() is what fills CurrentHealth in and BeginBattle() runs
-                // during the Start phase, where Unity's ordering between GameObjects is arbitrary.
-                // Testing health alone read every not-yet-initialised character as a corpse, skipped
-                // the whole roster, re-snapshotted the same uninitialised characters on the wrap and
-                // recursed until the Editor died. TickDamageOverTime() returns 0 for them, so this
-                // can now only fire for a character that genuinely just bled out.
-                if (damageOverTime > 0f && (currentCharacterTurn == null || currentCharacterTurn.GetCurrentHealth() <= 0f))
-                {
-                    AdvancePastSkippedTurn("damage over time killed them");
-                    return;
-                }
+                // D2 inserts the stun check here, since that IS per-character: read IsStunned, then
+                // skip via AdvancePastSkippedTurn() — never by calling CompleteTurn() directly.
 
-                // Past every skip condition, so this character is genuinely taking a turn. Clearing
-                // the counter here is what makes the guard measure *consecutive* skips.
+                // Nobody has been skipped on the way to acting, so the consecutive-skip guard resets.
                 turnSkipDepth = 0;
-
-                // Expiry counted in the same place the damage fires, so a 2-turn bleed ticks twice.
-                // D2 inserts the stun check BETWEEN the tick and this, because a stun has to be read
-                // before it's decremented or a 1-turn stun is consumed without ever being seen.
-                currentCharacterTurn.AdvanceStatuses();
 
                 if (currentCharacterTurn.turnMarker != null)
                 {
@@ -435,9 +438,15 @@ public class TurnManager : MonoBehaviour
     private int turnSkipDepth;
 
     /// <summary>
-    /// Hands the turn on because the current character can't take it — bled out, and from D2,
-    /// stunned. Refuses to recurse forever if that's true of everyone.
+    /// Hands the turn on because the current character can't take it. Refuses to recurse forever if
+    /// that turns out to be true of everyone.
     /// </summary>
+    /// <remarks>
+    /// <b>Currently uncalled, and deliberately kept.</b> Its original caller — the mid-turn
+    /// bleed-out skip — is gone now that status effects tick for everyone at the top of the round
+    /// and the dead are filtered out of the turn order before it's built. Phase D2's stun is the
+    /// next skip and must route through here; the warning below is the reason it exists at all.
+    /// </remarks>
     /// <remarks>
     /// <b>This exists because it already happened.</b> <see cref="SetCharacterTurn"/> skipping via
     /// <see cref="CompleteTurn"/> is mutual recursion — <c>SetCharacterTurn → CompleteTurn →
@@ -493,16 +502,120 @@ public class TurnManager : MonoBehaviour
         }
         
         currentTurnIndex++;
-        
+
         // Check if we've completed a full round
         if (currentTurnIndex >= turnOrder.Count)
         {
-            RoundComplete();
-            currentTurnIndex = 0;
-            GetTurnOrder();
+            AdvanceToNextRound();
+            return;
         }
 
         SetCharacterTurn();
+    }
+
+    /// <summary>
+    /// Closes the round and opens the next one: status effects tick for everybody, then initiative
+    /// is re-rolled, then the first character acts.
+    /// </summary>
+    /// <remarks>
+    /// <b>The order here is the whole point.</b> Status effects resolve <i>before</i>
+    /// <see cref="GetTurnOrder"/> builds the new order, so anyone who bleeds out is already excluded
+    /// from it and never has to be skipped mid-round. That's why <c>GetTurnOrder</c> filters on
+    /// <c>CharacterManager.IsAlive</c> — the corpse is still in the scene at this point, because
+    /// Unity doesn't destroy it until the dying object's next <c>Update()</c>, which can't run
+    /// inside this synchronous chain.
+    ///
+    /// Extracted because the round boundary is reached from two places (a turn completing, and the
+    /// skip-destroyed loop in <see cref="SetCharacterTurn"/> running off the end) and they must not
+    /// drift apart.
+    /// </remarks>
+    private void AdvanceToNextRound()
+    {
+        // Two coroutines running this at once would double-advance the round and roll initiative
+        // twice. The Update() guard should already prevent the only path that could do it, but this
+        // is the cheap belt to that braces.
+        if (roundTransitionInProgress) return;
+
+        StartCoroutine(AdvanceToNextRoundRoutine());
+    }
+
+    private IEnumerator AdvanceToNextRoundRoutine()
+    {
+        roundTransitionInProgress = true;
+
+        try
+        {
+            RoundComplete();
+
+            // Beat before anything bleeds, so the tick reads as its own event rather than something
+            // that happened during the previous character's turn.
+            if (statusTickDelay > 0f) yield return new WaitForSeconds(statusTickDelay);
+
+            if (battleEnded) yield break;
+
+            TickRoundStatusEffects();
+
+            // Beat after, so the damage numbers are readable before the next character's turn takes
+            // the screen back. Without this the tick is technically visible and practically not.
+            if (statusTickSettleDelay > 0f) yield return new WaitForSeconds(statusTickSettleDelay);
+
+            if (battleEnded) yield break;
+
+            currentTurnIndex = 0;
+            GetTurnOrder();
+            SetCharacterTurn();
+        }
+        finally
+        {
+            // Must clear on every exit, including the battleEnded breaks above — a stuck flag would
+            // freeze the turn system with no error.
+            roundTransitionInProgress = false;
+        }
+    }
+
+    /// <summary>
+    /// Ticks damage over time on every living combatant at once, at the top of the round.
+    /// </summary>
+    /// <remarks>
+    /// Everyone bleeds together rather than each at the start of their own turn. Two reasons: the
+    /// whole board resolves before initiative is re-rolled, so a bleed-out never has to be handled
+    /// as a mid-round skip; and simultaneous ticks read as one clear beat instead of dribbling out
+    /// across the round.
+    ///
+    /// Safe to iterate while characters die — <c>Destroy</c> is deferred to end of frame, so the
+    /// array stays valid for the whole loop.
+    /// </remarks>
+    private void TickRoundStatusEffects()
+    {
+        int ticked = 0;
+        int died = 0;
+
+        foreach (CharacterManager character in FindObjectsOfType<CharacterManager>())
+        {
+            if (character == null || !character.IsAlive) continue;
+
+            // The damage-over-time cap is a fraction of MaxHealth, and this now runs BEFORE
+            // GetTurnOrder() (which used to be what refreshed stats each round), so refresh here or
+            // the cap could be computed against a stale maximum.
+            character.RefreshStats();
+
+            float damage = character.TickDamageOverTime();
+
+            // Expiry counted in the same pass the damage fires, so a 2-round bleed ticks twice.
+            character.AdvanceStatuses();
+
+            if (damage <= 0f) continue;
+
+            ticked++;
+            if (!character.IsAlive) died++;
+        }
+
+        if (ticked > 0)
+        {
+            Debug.Log($"[TurnManager] Round {roundCounterInt} status tick: {ticked} combatant(s) took " +
+                      $"damage over time, {died} died. Turn order is rolled after this, so the dead " +
+                      "never get a turn.");
+        }
     }
 
     private void RoundComplete()

@@ -133,6 +133,24 @@ public class CharacterManager : MonoBehaviour
     public event OnDeathHandler OnDeath;
 
     private bool isDead = false;
+
+    // Set at the end of Start(). Before that CurrentHealth is still 0, because BindToRunState() is
+    // what fills it in — see IsAlive.
+    private bool hasInitialised;
+
+    /// <summary>
+    /// Whether this character is still in the fight.
+    /// </summary>
+    /// <remarks>
+    /// <b>A character that hasn't initialised yet counts as ALIVE, and that is the whole point of
+    /// this property.</b> <c>CurrentHealth</c> is 0 until <see cref="BindToRunState"/> runs in
+    /// <c>Start()</c>, and <c>TurnManager.BeginBattle()</c> also runs during the Start phase where
+    /// Unity gives no ordering guarantee between GameObjects. Testing <c>CurrentHealth &lt;= 0</c>
+    /// directly therefore reads a perfectly healthy character as a corpse — which crashed the Editor
+    /// once already. Use this instead of rolling that comparison by hand.
+    /// </remarks>
+    public bool IsAlive => !isDead && (!hasInitialised || CurrentHealth > 0f);
+
     private DriveManager driveManager;
 
     private DriveMeter driveMeter;
@@ -240,6 +258,9 @@ public class CharacterManager : MonoBehaviour
         {
             Debug.LogError($"Character Data is missing on '{gameObject.name}'!");
         }
+
+        // Last thing: from here CurrentHealth is meaningful, so IsAlive can trust it.
+        hasInitialised = true;
         
         //hp.text = CurrentHealth + "/" + MaxHealth;
     }

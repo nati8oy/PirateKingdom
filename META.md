@@ -714,17 +714,26 @@ HealthDrain branches, and `EnemyManager`'s `OnAttackComplete` (guarded on `!wasP
 `PerformDirectAttack`. One shared `ApplyStatusEffects(action, target)` helper keeps each to one line.
 Another vote for the shared resolver in the multi-target sketch.
 
-**Turn-start hook** in `TurnManager.SetCharacterTurn()`, before `LoadCharacterActions`:
+**Round-start hook** in `TurnManager.AdvanceToNextRound()` — **everyone ticks together**, not each
+at the start of their own turn:
 
-1. `TickDamageOverTime()`
-2. dead → complete the turn and stop
-3. *(D2 inserts the stun check here)*
-4. `AdvanceStatuses()`
-5. normal turn
+1. `RoundComplete()` (round counter)
+2. `TickRoundStatusEffects()` — every living combatant: `RefreshStats()` → `TickDamageOverTime()` →
+   `AdvanceStatuses()`
+3. `GetTurnOrder()` — re-roll initiative, **filtered on `CharacterManager.IsAlive`**
+4. `SetCharacterTurn()`
 
-Ticking at turn *start* rather than end is deliberate — bleed has to land before the victim acts or
-it reads as weightless. It diverges from buffs, which tick in `OnTurnComplete()`; each system is
-internally coherent and moving buff timing would change behaviour already tuned around.
+**Steps 2 and 3 being in that order is the whole design.** Anyone who bleeds out is resolved before
+initiative is rolled, so they're simply absent from the new order and never need skipping mid-round.
+That deletes the entire "a corpse has the turn" case rather than handling it.
+
+`IsAlive` is what makes the filter safe — the dead are still in the scene at that point (Unity
+destroys them on their next `Update()`, which can't run inside this synchronous chain), and an
+*uninitialised* character also reads 0 health, so a raw `CurrentHealth <= 0` test would empty the
+turn order at battle start. That exact comparison crashed the Editor once.
+
+Buffs still tick at the end of each character's own turn. The schedules differ but the durations are
+numerically equivalent, since every character gets exactly one turn per round.
 
 *Also needed:* a `StatusIconDisplay` component mirroring `BuffIconDisplay` (I write it, user wires the
 slots), and status riders shown in all four `TooltipUI` methods.

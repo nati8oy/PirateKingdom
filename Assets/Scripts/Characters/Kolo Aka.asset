@@ -15,7 +15,7 @@ MonoBehaviour:
   id: kolo_aka
   characterName: Kolo Aka
   actionSlots:
-  - {fileID: 11400000, guid: 01c9599a2e2b94caabb67bf8bd183f56, type: 2}
+  - {fileID: 11400000, guid: c449bfc160d214a8eb117c2156ff0bcf, type: 2}
   - {fileID: 11400000, guid: da7ad9faeffc14185b9a4690a5382ba8, type: 2}
   - {fileID: 11400000, guid: 23e82c586daf04bea94ee15d97b596c6, type: 2}
   - {fileID: 11400000, guid: 7f69dbc00be374c08b7d96530378371e, type: 2}
@@ -33,6 +33,7 @@ MonoBehaviour:
   defenseValue: 13
   speed: 10
   buffNextActionMultiplier: 2
+  statusResistances: []
   damageInflictedDriveMultiplier: 2.5
   damageTakenDriveMultiplier: 10
   parryBonusDriveMultiplier: 5

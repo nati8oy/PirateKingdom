@@ -368,7 +368,39 @@ public class TurnManager : MonoBehaviour
                 
                 // Update buffs and stats at the start of the character's turn
                 currentCharacterTurn.UpdateBuffsForTurn();
-                
+
+                // --- Status effects, before the character gets to act ---
+                // Runs after UpdateBuffsForTurn because that refreshes MaxHealth, which the
+                // damage-over-time cap is a fraction of. Ticking here rather than at turn end is
+                // deliberate: a wound has to be felt before you act or it reads as weightless.
+                float damageOverTime = currentCharacterTurn.TickDamageOverTime();
+
+                // The tick can kill. The GameObject isn't destroyed until CharacterManager's next
+                // Update, so the reference is still valid — but a corpse must not be handed a turn.
+                //
+                // **Gated on the tick having actually dealt damage, and that is load-bearing.**
+                // `CurrentHealth <= 0` does NOT mean "dead": it also means "Start() hasn't run yet",
+                // because BindToRunState() is what fills CurrentHealth in and BeginBattle() runs
+                // during the Start phase, where Unity's ordering between GameObjects is arbitrary.
+                // Testing health alone read every not-yet-initialised character as a corpse, skipped
+                // the whole roster, re-snapshotted the same uninitialised characters on the wrap and
+                // recursed until the Editor died. TickDamageOverTime() returns 0 for them, so this
+                // can now only fire for a character that genuinely just bled out.
+                if (damageOverTime > 0f && (currentCharacterTurn == null || currentCharacterTurn.GetCurrentHealth() <= 0f))
+                {
+                    AdvancePastSkippedTurn("damage over time killed them");
+                    return;
+                }
+
+                // Past every skip condition, so this character is genuinely taking a turn. Clearing
+                // the counter here is what makes the guard measure *consecutive* skips.
+                turnSkipDepth = 0;
+
+                // Expiry counted in the same place the damage fires, so a 2-turn bleed ticks twice.
+                // D2 inserts the stun check BETWEEN the tick and this, because a stun has to be read
+                // before it's decremented or a 1-turn stun is consumed without ever being seen.
+                currentCharacterTurn.AdvanceStatuses();
+
                 if (currentCharacterTurn.turnMarker != null)
                 {
                     currentCharacterTurn.turnMarker.gameObject.SetActive(true);
@@ -397,6 +429,49 @@ public class TurnManager : MonoBehaviour
                 Debug.LogWarning("Turn order is empty!");
             }
         }
+
+    // Consecutive turns skipped without anyone actually acting. Reset the moment a character takes
+    // a real turn, so this only ever counts an unbroken run.
+    private int turnSkipDepth;
+
+    /// <summary>
+    /// Hands the turn on because the current character can't take it — bled out, and from D2,
+    /// stunned. Refuses to recurse forever if that's true of everyone.
+    /// </summary>
+    /// <remarks>
+    /// <b>This exists because it already happened.</b> <see cref="SetCharacterTurn"/> skipping via
+    /// <see cref="CompleteTurn"/> is mutual recursion — <c>SetCharacterTurn → CompleteTurn →
+    /// SetCharacterTurn</c> — and a skip condition true for every combatant recurses until the
+    /// process dies. It ran inside a single frame, so nothing could ever clear the condition:
+    /// no <c>Update</c>, no destruction of the dead, no battle-end poll. The Editor wrote a 1.1 GB
+    /// log and crashed.
+    ///
+    /// The specific cause is fixed at the call site, but the shape is the hazard, not that one bug —
+    /// D2's stun skip re-enters exactly the same way and would be far easier to trip, since a
+    /// stunned character stays in the turn order. This turns any recurrence into one error line and
+    /// a stalled turn rather than a dead Editor.
+    /// </remarks>
+    private void AdvancePastSkippedTurn(string reason)
+    {
+        string who = currentCharacterTurn != null
+            ? currentCharacterTurn.characterData?.characterName ?? currentCharacterTurn.name
+            : "someone";
+
+        turnSkipDepth++;
+
+        // +1 so a full lap of genuinely skippable combatants is allowed before we call it runaway.
+        if (turnSkipDepth > turnOrder.Count + 1)
+        {
+            Debug.LogError($"[TurnManager] Every combatant skipped their turn in one pass ({turnSkipDepth} in a row) — " +
+                           "stopping to avoid the infinite SetCharacterTurn/CompleteTurn recursion. " +
+                           $"Last reason: {reason}. The battle-end check will pick this up next frame if everyone is dead.");
+            turnSkipDepth = 0;
+            return;
+        }
+
+        Debug.Log($"[TurnManager] {who} skips their turn — {reason}.");
+        CompleteTurn();
+    }
 
     public void CompleteTurn()
     {

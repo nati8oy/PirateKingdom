@@ -10,23 +10,27 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5389001eb578f43918865af7cc0f8a4e, type: 3}
-  m_Name: Heal_Single
-  m_EditorClassIdentifier: 
-  id: heal_single
-  actionName: Nourish
-  actionIcon: {fileID: 21300000, guid: fbcccc6b3744549e1a9ed8a47d42de8f, type: 3}
-  actionType: 1
-  targetType: 1
+  m_Name: Bleed
+  m_EditorClassIdentifier: Assembly-CSharp::Action
+  id: bleed
+  actionName: Bleed
+  actionIcon: {fileID: -6277765795601180554, guid: 969d2129ce9e845989e95af113c7d951, type: 3}
+  actionType: 0
+  targetType: 0
   autoTargetSelf: 0
-  cooldown: 2
-  minDamage: 0
-  maxDamage: 0
-  minHeal: 1
-  maxHeal: 4
-  buffType: 2
+  cooldown: 0
+  minDamage: 1
+  maxDamage: 4
+  minHeal: 0
+  maxHeal: 0
+  buffType: 0
   buffValue: 0
   duration: 0
   driveAmount: 100
   healthDrainRatio: 0.5
-  statusEffects: []
+  statusEffects:
+  - kind: 0
+    damagePerTurn: 2
+    turns: 2
+    chanceToApply: 1
   attackWindupTime: 1

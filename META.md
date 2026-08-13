@@ -15,8 +15,8 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 | | |
 |---|---|
-| **D1 — Status effect substrate + damage over time** | Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive. |
-| **D2 — Stun** | Skip a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
+| **D1 — Status effect substrate + damage over time** | ✅ **Code complete**, awaiting Editor verification. Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive. |
+| **D2 — Stun** ⬅ next | Skip a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
 | **E — Class definitions & level scaling** | A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
 
 D1 and D2 share one substrate, so D2 is small once D1 lands. **E is deliberately separate and second**
@@ -656,7 +656,7 @@ by choice — see §0.
 
 ---
 
-**D1 — Substrate + damage over time.**
+**D1 — Substrate + damage over time. ✅ CODE COMPLETE, awaiting Editor verification.**
 
 New file `Assets/Scripts/Combat/StatusEffect.cs`:
 
@@ -761,13 +761,23 @@ Turn-start order, and **step 3 must precede step 4** or a 1-turn stun is consume
 5. stunned → `stunResistanceStacks++`, play the beat, skip the turn
 6. not stunned → `stunResistanceStacks = 0`, normal turn
 
-> **The one real hazard: recursion.** `CompleteTurn()` ends by calling `SetCharacterTurn()`. A stun
-> that skips by calling `CompleteTurn()` directly gives
-> `SetCharacterTurn → CompleteTurn → SetCharacterTurn`, and **a field where everyone is stunned
-> recurses until the stack overflows.** The skip must run through a coroutine, which unwinds the stack
-> *and* buys the visible "STUNNED" beat — a turn that vanishes instantly reads as a bug.
-> `EnemyManager.TelegraphThenAct()` is the existing precedent for exactly this shape, and it drops
-> straight into Phase C's `TurnSequence` later.
+> **The one real hazard: recursion — and it already bit during D1.** `CompleteTurn()` ends by calling
+> `SetCharacterTurn()`, so a skip that calls `CompleteTurn()` directly gives
+> `SetCharacterTurn → CompleteTurn → SetCharacterTurn`, and a skip condition true of every combatant
+> recurses until the process dies. D1's DoT-death check did exactly this and **crashed the Editor with
+> a 93 MB log**; the trigger was that `CurrentHealth <= 0` also means "`Start()` hasn't run yet",
+> so every uninitialised character read as a corpse.
+>
+> Two things are already in place as a result, so D2 inherits them: the skip goes through
+> **`TurnManager.AdvancePastSkippedTurn()`**, which caps consecutive skips at one lap of the turn
+> order and stops with a single error, and `turnSkipDepth` resets whenever someone actually acts.
+> **Route the stun skip through that method — never call `CompleteTurn()` directly.**
+>
+> The guard makes a runaway survivable, not correct. A stunned character stays in the turn order, so
+> an all-stunned field is far easier to reach than an all-dead one: the skip should still run through
+> a coroutine, which unwinds the stack *and* buys the visible "STUNNED" beat — a turn that vanishes
+> instantly reads as a bug. `EnemyManager.TelegraphThenAct()` is the precedent, and it drops straight
+> into Phase C's `TurnSequence` later.
 
 *Verify:* a stunned character's turn is visibly skipped, not silently. Stun the same character on
 consecutive turns and it should get progressively harder to land, then stop working; once they take a

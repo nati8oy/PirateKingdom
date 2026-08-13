@@ -686,6 +686,11 @@ public class EnemyManager : MonoBehaviour
                 }
                 
                 float healthTaken = targetManager.TakeDamage(damage);
+
+                // Landed hit, so riders roll. This path only runs with the parry system off or
+                // missing; normally an enemy Attack or Health Drain resolves in OnAttackComplete.
+                targetManager.ApplyStatusEffectsFrom(_selectedAction);
+
                 ApplyHealthDrain(healthTaken);
                 break;
 
@@ -792,6 +797,11 @@ public class EnemyManager : MonoBehaviour
             // Attack was not parried, apply full damage
             healthLost = _pendingTarget.TakeDamage(_pendingDamage);
             Debug.Log($"[EnemyManager] {gameObject.name} hit {_pendingTarget.characterData.characterName} for {_pendingDamage:F1} damage");
+
+            // Status riders land only on an unparried hit. A parry still eats the 25% chip but
+            // stops the bleed outright — that's what makes parrying a status attack meaningfully
+            // better than absorbing it, and parry is already the game's skill expression.
+            _pendingTarget.ApplyStatusEffectsFrom(_selectedAction);
         }
         else
         {

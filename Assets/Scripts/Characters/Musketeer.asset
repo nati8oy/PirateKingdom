@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
+  m_Name: Musketeer
+  m_EditorClassIdentifier: Assembly-CSharp::Character
+  id: musketeer
+  characterName: Calamari
+  actionSlots:
+  - {fileID: 11400000, guid: 89fc47f842ad44d8dbc509cf011a2095, type: 2}
+  - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
+  - {fileID: 11400000, guid: 148824dff25f94ec4884bef7e3fa2bbc, type: 2}
+  - {fileID: 11400000, guid: 01c9599a2e2b94caabb67bf8bd183f56, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  availableActions: []
+  level: 1
+  reputation: 0
+  deathSoundEffect: {fileID: 8300000, guid: 9f455b0279dc04bdba72d72013b7ffc1, type: 3}
+  characterClass: 2
+  allegiance: 0
+  characterSprite: {fileID: -1662613486703163539, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
+  characterTint: {r: 1, g: 1, b: 1, a: 1}
+  classDefinition: {fileID: 11400000, guid: 3d0563dcbd1da4c51b0dd073460701c0, type: 2}

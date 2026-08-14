@@ -89,12 +89,39 @@ public class GameManager : MonoBehaviour
     public static int GetAlivePlayerCount()
     {
         Instance.FindCharacters();
-        return PlayerCharacters.Count(player => player != null && player.GetComponent<CharacterManager>() != null);
+        return CountAlive(PlayerCharacters);
     }
 
     public static int GetAliveEnemyCount()
     {
         Instance.FindCharacters();
-        return EnemyCharacters.Count(enemy => enemy != null && enemy.GetComponent<CharacterManager>() != null);
+        return CountAlive(EnemyCharacters);
+    }
+
+    /// <summary>
+    /// Counts combatants that are actually still in the fight.
+    /// </summary>
+    /// <remarks>
+    /// Both helpers above used to count anything with a <c>CharacterManager</c> attached, which meant
+    /// they answered "exists" while being named "alive" — a character at 0 health still counted until
+    /// Unity destroyed it on its next <c>Update()</c>. Neither has a caller yet, so nothing was
+    /// getting a wrong answer, but the first one to use them would have.
+    ///
+    /// <c>IsAlive</c> rather than a health comparison: it treats a not-yet-initialised character as
+    /// alive, which is the safe direction here.
+    /// </remarks>
+    private static int CountAlive(List<GameObject> characters)
+    {
+        int count = 0;
+
+        foreach (GameObject character in characters)
+        {
+            if (character == null) continue;
+
+            CharacterManager manager = character.GetComponent<CharacterManager>();
+            if (manager != null && manager.IsAlive) count++;
+        }
+
+        return count;
     }
 }

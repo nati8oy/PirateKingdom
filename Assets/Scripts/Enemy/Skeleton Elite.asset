@@ -29,14 +29,7 @@ MonoBehaviour:
   allegiance: 1
   characterSprite: {fileID: 3671900364904746485, guid: 7d0b53df382fd499da11fc49389a692a, type: 3}
   characterTint: {r: 1, g: 0.2971698, b: 0.2971698, a: 1}
-  maxHealth: 40
-  attackPower: 10
-  defenseValue: 17
-  speed: 12
-  buffNextActionMultiplier: 2
-  damageInflictedDriveMultiplier: 5
-  damageTakenDriveMultiplier: 5
-  parryBonusDriveMultiplier: 10
+  classDefinition: {fileID: 11400000, guid: 5ce46b4667d984e4fbdddfec64fdfec6, type: 2}
   plunderReward: 15
   healThreshold: 0.2
   driveConfig:
@@ -52,4 +45,7 @@ MonoBehaviour:
   healWeight: 0.35
   buffWeight: 0.15
   debuffWeight: 0.2
+  driveGrantWeight: 0.15
+  driveDrainWeight: 0.25
+  healthDrainWeight: 0.4
   randomnessAmount: 0.1

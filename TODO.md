@@ -433,7 +433,7 @@ comment predates cooldowns moving off the ScriptableObject. See "Different ways 
 > because letting it gate identity, stats *and* loadout at once means no single thing is the real
 > constraint. Everything below still stands as the open decision.
 
-`Character.CharacterClass` already exists — **Duelist / Muscle / Musketeer / WitchDoctor** — and is
+`Character.CharacterClass` already exists — **Duelist / Muscle / Musketeer / Healer** — and is
 authored on every character. **Nothing reads it.** The only other mention in the codebase is a
 commented-out hook in `Action.cs`:
 
@@ -465,7 +465,7 @@ merely ungated — see "Different ways to use drive" below.
 
 | Class | Might spend drive on |
 |---|---|
-| WitchDoctor | `RemoveDebuff` — shake off what enemies apply |
+| Healer | `RemoveDebuff` — shake off what enemies apply |
 | Muscle | `BuffNextAttack` — the damage spike |
 | Musketeer | `ReduceCooldown` — reload the big shot |
 | Duelist | ? — parry-adjacent, given the parry system already rewards drive |

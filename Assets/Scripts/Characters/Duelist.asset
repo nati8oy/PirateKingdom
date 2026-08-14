@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
+  m_Name: Duelist
+  m_EditorClassIdentifier: Assembly-CSharp::Character
+  id: duelist
+  characterName: Black Sam
+  actionSlots:
+  - {fileID: 11400000, guid: 89fc47f842ad44d8dbc509cf011a2095, type: 2}
+  - {fileID: 11400000, guid: c449bfc160d214a8eb117c2156ff0bcf, type: 2}
+  - {fileID: 11400000, guid: f3f845005e975425e83e4e78840378d0, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  availableActions: []
+  level: 1
+  reputation: 0
+  deathSoundEffect: {fileID: 8300000, guid: f0b296e2341b543a99a2ff2128a7385d, type: 3}
+  characterClass: 0
+  allegiance: 0
+  characterSprite: {fileID: 0}
+  characterTint: {r: 1, g: 1, b: 1, a: 1}
+  classDefinition: {fileID: 0}

@@ -45,9 +45,12 @@ third-party and should not be modified** unless explicitly requested:
 
 - `Combat/`
   - `Character.cs` — **ScriptableObject** base for all characters: authored stats, class,
-    allegiance, art, drive multipliers, and the `BuffType` enum. Enemies subclass this.
-    **Authored data only** — buffs and per-action cooldowns live on the runtime `CharacterManager`,
-    not here (moved in Phase 1a; see "ScriptableObject data vs. MonoBehaviour runtime").
+    allegiance, art, drive multipliers, status resistances, and the `BuffType` enum. Enemies
+    subclass this. **Authored data only** — buffs and per-action cooldowns live on the runtime
+    `CharacterManager`, not here (moved in Phase 1a).
+  - `ClassDefinition.cs` — per-class baseline stats, per-level growth, and baseline status
+    resistances. **Optional**: a `Character` with none assigned resolves exactly as it always did.
+    See "Class-driven stats" below.
   - `Action.cs` — ScriptableObject defining an ability. Seven `ActionType`s: Attack, Heal, Buff,
     Debuff, DriveGrant, DriveDrain, HealthDrain. **`ActionType` is serialized by integer value —
     append new members, never reorder them**, same rule as `Character.BuffType` and
@@ -198,6 +201,12 @@ third-party and should not be modified** unless explicitly requested:
     - **All four switch on `ActionType`, so a new type renders blank in four places** unless each is
       updated. Same for the buff formatters, which exist because `buffValue` means different units
       per `BuffType`.
+    - **Use hex in `<color=…>`, never a colour name.** TMP recognises only black, blue, green,
+      orange, purple, red, white and yellow; anything else — `cyan`, `magenta`, `grey` — fails to
+      parse *silently* and the raw tag is drawn as literal text. `<color=cyan>` on the Buff label did
+      exactly that. The colours are now `const` hex strings at the top of `TooltipUI`.
+    - Every tag lives inside an **interpolated** (`$"…"`) string, since they reference those consts.
+      A plain `"…"` renders `{ColourBuff}` literally — the same class of bug, one layer down.
     - `ShowTargetTooltip` must model everything that will actually modify the number — attacker's
       drive multiplier, attacker's `CritChancePercent`, and the **target's `DamageReductionFraction`**
       — or it quotes damage that never lands and the shortfall reads as a bug.
@@ -221,6 +230,47 @@ third-party and should not be modified** unless explicitly requested:
     instance's buffs). `CharacterManager.GetModifiedAttackPower()` applies the Drive multiplier on
     top of the already-buffed `AttackPower`, but **nothing calls it** — see `TODO.md`.
   - `reputation` is still on `Character`; it's authored, zeroed, and never read.
+- **Class-driven stats (Phase E).** A `ClassDefinition` asset supplies **every** stat a character
+  has, scaled by level. `Character` itself holds no numbers.
+  - **A class is REQUIRED, and `Character` carries no stats of its own at all.** Health, accuracy,
+    defense, speed, the three drive rates, `buffNextActionMultiplier` and status resistances were all
+    removed from `Character` — they live only on `ClassDefinition`. `Character` is now identity and
+    content: name, id, art, audio, action slots, level, allegiance, class.
+  - **There is deliberately no per-character override.** Two characters of the same class at the same
+    level have identical numbers and differ only in name, art, audio and action slots. If a named
+    character ever needs different numbers, **give it its own one-off `ClassDefinition`** rather than
+    reintroducing per-character deltas.
+  - `Character.ValidateClassSetup()` errors on a **missing class** (the character would resolve to
+    zero everything and be clamped to 1 HP), and on a class asset disagreeing with the authored
+    `characterClass` enum for crew. Both logged from `CharacterManager.Start()`.
+  - **Read resolved values, never a class field directly.** `Character.ResolveMaxHealth(level)` and
+    friends, or the `CharacterManager` properties (`BuffNextActionMultiplier`,
+    `DamageTakenDriveMultiplier`, `ParryBonusDriveMultiplier`, …). Going straight to the
+    `ClassDefinition` skips level scaling, and going to `characterData` no longer finds anything —
+    which is why `DriveManager` and `ParrySystem` were changed to use the resolved properties.
+  - **Only health, attack, defense and speed scale with level.** The drive multipliers and
+    resistances are flat class traits: they're identity dials, not power curves, and compounding
+    them with level makes a high-level character disproportionately better at everything at once.
+  - **Resistances come from the class alone**, clamped to 0-1 at the `GetResistance()` accessor —
+    which stays the single read point, so equipment and armour can layer in there later.
+  - **`CharacterManager.Start()` order is load-bearing: `ResolveCrewState()` → `RefreshStats()` →
+    `ApplyStartingHealth()`.** The crew record carries the *level* stats resolve at, and
+    `RefreshStats` sets the `MaxHealth` that starting health is clamped against. Get it wrong and
+    crew load at the wrong health because they were sized at level 1 — which presents as a save bug.
+  - Level comes from `CrewMemberState.level` for crew in a run, and the authored `Character.level`
+    otherwise (enemies, and crew played outside a run). Floored at 1.
+  - **Enemies get the whole system for free**, since `Enemy` subclasses `Character` — the class
+    reference, `level`, and every resolver. Because enemies never bind to run state they always use
+    the authored `level`, so one class asset plus level 1 / 3 / 5 Enemy assets is a scaling family
+    with the numbers authored once.
+    - **`Enemy`'s AI config is NOT covered** — action weights, targeting strategy, drive config and
+      plunder live on `Enemy` itself, so behaviour stays per-asset even when stats are shared.
+    - The `classId` / `characterClass` agreement check is **skipped for enemies**: they're never
+      recruited and nothing reads their `characterClass`, so making an enemy class claim a crew
+      archetype would be friction for no benefit.
+  - **Save format is unchanged** — `RunState` stores a `characterId` and the Character asset carries
+    the class reference, so `ClassDefinition` needs no id in `ContentDatabase` and no `saveVersion`
+    bump.
 - **Stable asset ids.** `Character.Id` and `Action.Id` are serialized strings stamped once by
   `ContentDatabase`'s *Rebuild From Project*, derived from the asset name (`Black Sam` ->
   `black_sam`). Save data references content by these ids, so **never change an id once runs have
@@ -573,6 +623,20 @@ third-party and should not be modified** unless explicitly requested:
   (`dealDamageFeedback`, `healFeedback`, `missFeedback`, `parryFeedback`, attack/death audio).
 - **Tags matter:** player crew objects are tagged `Player`, enemies tagged `Enemy`. Much of the
   target-finding logic relies on these tags (`GameObject.FindGameObjectsWithTag`).
+  - **Tag and `Character.allegiance` are two independent notions of "side", and both are live.** The
+    tag decides who can *target* this character (`CombatController.IsValidTarget`,
+    `EnemyManager.RefreshTargetList`, `GameManager.FindCharacters`). Allegiance decides *turn
+    ownership* (`ActionsManager` button interactability, `CombatController.IsPlayerControlledTurn`,
+    whether `EnemyTurnAction()` fires), *run persistence* (only Player-allegiance binds to
+    `CrewMemberState`) and *win/lose* (`TurnManager.CountAliveCharacters`).
+  - One wrong dropdown therefore produces three unrelated-looking symptoms at once — targetable by
+    its own side, wrong action bar, counted for the wrong side at battle end. **`CharacterManager`
+    validates the two agree on `Start()`** and logs an error naming both; nothing else cross-checks
+    them, and `EncounterBootstrapper` only verifies the tag against what it meant to spawn.
+  - **Count aliveness with `CharacterManager.IsAlive`**, never by existence and never by
+    `CurrentHealth <= 0` directly. `TurnManager.CountAliveCharacters` and `GameManager`'s two
+    `GetAlive*` helpers all used to answer "exists", so a 0-health character counted until Unity
+    destroyed it on its next `Update()` — which delayed every battle end by a frame.
 
 ## Conventions & gotchas
 

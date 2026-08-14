@@ -19,8 +19,8 @@ MonoBehaviour:
   targetType: 0
   autoTargetSelf: 0
   cooldown: 0
-  minDamage: 1
-  maxDamage: 4
+  minDamage: 2
+  maxDamage: 5
   minHeal: 0
   maxHeal: 0
   buffType: 0

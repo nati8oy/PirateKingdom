@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
+  m_Name: Juan
+  m_EditorClassIdentifier: Assembly-CSharp::Character
+  id: healer
+  characterName: Juan
+  actionSlots:
+  - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
+  - {fileID: 11400000, guid: da7ad9faeffc14185b9a4690a5382ba8, type: 2}
+  - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  availableActions: []
+  level: 1
+  reputation: 0
+  deathSoundEffect: {fileID: 8300000, guid: 875d9a7457f5d4337b5ff614ebfeb3fb, type: 3}
+  characterClass: 3
+  allegiance: 0
+  characterSprite: {fileID: -6565835137778244483, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
+  characterTint: {r: 1, g: 1, b: 1, a: 1}
+  classDefinition: {fileID: 11400000, guid: e2b4970bf52b94a918255a18622edc82, type: 2}

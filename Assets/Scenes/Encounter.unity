@@ -1295,10 +1295,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RunManager
   startDebugRunIfNoSave: 1
   debugStartingCrew:
-  - {fileID: 11400000, guid: 18e8e45ffb6224195a106df36a1b5e5d, type: 2}
-  - {fileID: 11400000, guid: 2f096fa7f3fa04cc4945a2ff99c4b3bf, type: 2}
-  - {fileID: 11400000, guid: 1cd54e50bd6bb479e91e790ec6562aab, type: 2}
-  - {fileID: 11400000, guid: c51a851f6fb8443fa933bd960b73e29b, type: 2}
+  - {fileID: 11400000, guid: edc8f56779bd04c00959ecee54ca6f3c, type: 2}
+  - {fileID: 11400000, guid: c7471f8b029cc460e85a75690919b572, type: 2}
+  - {fileID: 11400000, guid: df3770fae75564aad993fc9a9866f929, type: 2}
+  - {fileID: 11400000, guid: c90c1ede1579543feb751ee6b91232ce, type: 2}
   encounterSequence: {fileID: 11400000, guid: cd7640ac07f5e4440a19472497047f94, type: 2}
   current:
     saveVersion: 1
@@ -2363,6 +2363,9 @@ MonoBehaviour:
   defeatUI: {fileID: 2030102122}
   battleResultText: {fileID: 1295939218}
   autoStartBattle: 0
+  statusTickDelay: 0.6
+  statusTickSettleDelay: 0.8
+  stunSkipDuration: 0.9
   turnOrder: []
 --- !u!1 &1409643548
 GameObject:

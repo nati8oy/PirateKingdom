@@ -9,6 +9,17 @@ public class TooltipUI : MonoBehaviour
     [SerializeField] private TMP_Text tooltipText;
     [SerializeField] private string defaultText = "Hover over actions or targets for information";
     
+    // TMP only recognises a SHORT list of colour NAMES — black, blue, green, orange, purple, red,
+    // white, yellow. Anything else (cyan, magenta, grey…) silently fails to parse and the tooltip
+    // renders the raw "<color=cyan>" as literal text. That's exactly what happened to the Buff label.
+    // Hex always parses, so every tag here is hex and no new one should use a name.
+    private const string ColourAttack = "#f0862a";
+    private const string ColourHeal   = "#5fbf5f";
+    private const string ColourBuff   = "#45c8dc";
+    private const string ColourDebuff = "#e0473c";
+    private const string ColourDrive  = "#e8c341";
+    private const string ColourStatus = "#ff8080";
+
     private static TooltipUI instance;
     public static TooltipUI Instance => instance;
     
@@ -108,7 +119,7 @@ public class TooltipUI : MonoBehaviour
             float chance = application.chanceToApply;
             if (target != null) chance = Mathf.Clamp01(chance - target.GetResistance(application.kind));
 
-            text.Append($"\n<color=#ff8080>{application.kind}</color>");
+            text.Append($"\n<color={ColourStatus}>{application.kind}</color>");
 
             if (application.damagePerTurn > 0f)
             {
@@ -120,7 +131,7 @@ public class TooltipUI : MonoBehaviour
             // A guaranteed effect doesn't need a percentage cluttering the line.
             if (chance < 1f) text.Append($" ({chance:P0})");
 
-            if (Mathf.Approximately(chance, 0f)) text.Append(" <color=red>— immune</color>");
+            if (Mathf.Approximately(chance, 0f)) text.Append($" <color={ColourDebuff}>— immune</color>");
         }
 
         return text.ToString();
@@ -137,7 +148,7 @@ public class TooltipUI : MonoBehaviour
     private static string DescribeSelfCast(Action action)
     {
         return action != null && action.autoTargetSelf
-            ? "\n<color=yellow>Self-cast — resolves at once and ends your turn</color>"
+            ? $"\n<color={ColourDrive}>Self-cast — resolves at once and ends your turn</color>"
             : string.Empty;
     }
 
@@ -217,36 +228,36 @@ public class TooltipUI : MonoBehaviour
         switch (action.actionType)
         {
             case Action.ActionType.Attack:
-                tooltipContent += $"\n<color=orange>Attack</color>";
+                tooltipContent += $"\n<color={ColourAttack}>Attack</color>";
                 tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
              
                 break;
             case Action.ActionType.Heal:
-                tooltipContent += $"\n<color=green>Heal</color>";
+                tooltipContent += $"\n<color={ColourHeal}>Heal</color>";
                 tooltipContent += $"\nHealing: {action.minHeal:F0}-{action.maxHeal:F0}";
                 break;
             case Action.ActionType.Buff:
-                tooltipContent += $"\n<color=cyan>Buff</color>";
+                tooltipContent += $"\n<color={ColourBuff}>Buff</color>";
                 tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.Debuff:
-                tooltipContent += $"\n<color=red>Debuff</color>";
+                tooltipContent += $"\n<color={ColourDebuff}>Debuff</color>";
                 tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, -action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.DriveGrant:
-                tooltipContent += $"\n<color=yellow>Drive Grant</color>";
+                tooltipContent += $"\n<color={ColourDrive}>Drive Grant</color>";
                 // Measured against the caster's own meter — every character's is authored on the
                 // same prefab today, and it's the only meter available at hover time.
                 tooltipContent += $"\nDrive: +{DescribeDrive(action.driveAmount, character)}";
                 break;
             case Action.ActionType.DriveDrain:
-                tooltipContent += $"\n<color=yellow>Drive Drain</color>";
+                tooltipContent += $"\n<color={ColourDrive}>Drive Drain</color>";
                 tooltipContent += $"\nDrive: -{DescribeDrive(action.driveAmount, character)}";
                 break;
             case Action.ActionType.HealthDrain:
-                tooltipContent += $"\n<color=orange>Health Drain</color>";
+                tooltipContent += $"\n<color={ColourAttack}>Health Drain</color>";
                 tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
                 // Shown as a healing range rather than a bare percentage — the ratio alone doesn't
                 // tell you whether it survives the rounding in Heal().
@@ -287,7 +298,7 @@ public class TooltipUI : MonoBehaviour
                 if (!isAvailable)
                 {
                     int cooldownRemaining = character.GetActionCooldownRemaining(action);
-                    tooltipContent += $"\n<color=red> Active in {cooldownRemaining} rounds</color>";
+                    tooltipContent += $"\n<color={ColourDebuff}> Active in {cooldownRemaining} rounds</color>";
                 }
                 else
                 {
@@ -311,43 +322,43 @@ public class TooltipUI : MonoBehaviour
             return;
         }
         
-        string tooltipContent = $"<color=red>{enemyName}</color>";
+        string tooltipContent = $"<color={ColourDebuff}>{enemyName}</color>";
         
         // Add action type information with more details
         switch (action.actionType)
         {
             case Action.ActionType.Attack:
-                tooltipContent += $"\n<color=orange>Attack</color>";
+                tooltipContent += $"\n<color={ColourAttack}>Attack</color>";
                 tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
                 break;
             case Action.ActionType.Heal:
-                tooltipContent += $"\n<color=green>Heal</color>";
+                tooltipContent += $"\n<color={ColourHeal}>Heal</color>";
                 tooltipContent += $"\nHealing: {action.minHeal:F0}-{action.maxHeal:F0}";
                 break;
             case Action.ActionType.Buff:
-                tooltipContent += $"\n<color=cyan>Buff</color>";
+                tooltipContent += $"\n<color={ColourBuff}>Buff</color>";
                 tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.Debuff:
-                tooltipContent += $"\n<color=red>Debuff</color>";
+                tooltipContent += $"\n<color={ColourDebuff}>Debuff</color>";
                 tooltipContent += $"\nEffect: {DescribeBuff(action.buffType, -action.buffValue)}";
                 tooltipContent += $"\nDuration: {Mathf.RoundToInt(action.duration)} turns";
                 break;
             case Action.ActionType.DriveGrant:
-                tooltipContent += $"\n<color=yellow>Drive Grant</color>";
+                tooltipContent += $"\n<color={ColourDrive}>Drive Grant</color>";
                 tooltipContent += $"\nDrive: +{action.driveAmount:F0}";
                 break;
             case Action.ActionType.DriveDrain:
                 // Worth telegraphing loudly: this is the enemy about to spend the crew's meter for
                 // them, and the player can't see it coming from the damage number.
-                tooltipContent += $"\n<color=yellow>Drive Drain</color>";
+                tooltipContent += $"\n<color={ColourDrive}>Drive Drain</color>";
                 tooltipContent += $"\nDrive: -{action.driveAmount:F0}";
                 break;
             case Action.ActionType.HealthDrain:
                 // The heal is the part worth reading before deciding whether to spend the parry —
                 // parrying this cuts the enemy's healing, not just the damage.
-                tooltipContent += $"\n<color=orange>Health Drain</color>";
+                tooltipContent += $"\n<color={ColourAttack}>Health Drain</color>";
                 tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
                 tooltipContent += $"\nHeals them: {action.healthDrainRatio:P0} of health taken";
                 break;
@@ -445,8 +456,8 @@ public class TooltipUI : MonoBehaviour
 
                 // Both annotations are shown, so a number that looks wrong always explains itself.
                 if (multiplier > 1f) tooltipContent += $" (drive x{multiplier:F1})";
-                if (protection > 0f) tooltipContent += $" (<color=cyan>-{protection:P0} protected</color>)";
-                else if (protection < 0f) tooltipContent += $" (<color=red>+{-protection:P0} vulnerable</color>)";
+                if (protection > 0f) tooltipContent += $" (<color={ColourBuff}>-{protection:P0} protected</color>)";
+                else if (protection < 0f) tooltipContent += $" (<color={ColourDebuff}>+{-protection:P0} vulnerable</color>)";
 
                 if (selectedAction.actionType == Action.ActionType.HealthDrain)
                 {
@@ -546,14 +557,14 @@ public class TooltipUI : MonoBehaviour
 
         if (Mathf.Approximately(actual, 0f))
         {
-            line += granting ? "\n<color=red>Already full — no effect.</color>"
-                             : "\n<color=red>No drive to drain — no effect.</color>";
+            line += granting ? $"\n<color={ColourDebuff}>Already full — no effect.</color>"
+                             : $"\n<color={ColourDebuff}>No drive to drain — no effect.</color>";
         }
         else if (segmentsBefore == segmentsAfter)
         {
             // The meter moves but nothing becomes spendable (or unspendable), which is the trap
             // this preview exists to expose. Segments are the unit that actually buys anything.
-            line += "\n<color=yellow>No segment change.</color>";
+            line += $"\n<color={ColourDrive}>No segment change.</color>";
         }
 
         return line;

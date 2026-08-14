@@ -8995,7 +8995,7 @@ MonoBehaviour:
   healthBar: {fileID: 6854843975597813551}
   characterName: {fileID: 628673213663764507}
   actionStatusText: {fileID: 1656511942984017652}
-  statusTextFallbackDuration: 0.9
+  statusTextFallbackDuration: 1.5
   turnMarker: {fileID: 5687122472208313648}
   targetIndicator: {fileID: 8680402382813641507}
   dealDamageFeedback: {fileID: 885933774631715721}

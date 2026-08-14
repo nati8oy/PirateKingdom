@@ -140,8 +140,8 @@ public class CharacterManager : MonoBehaviour
 
     private bool isDead = false;
 
-    // Set at the end of Start(). Before that CurrentHealth is still 0, because BindToRunState() is
-    // what fills it in — see IsAlive.
+    // Set at the end of Start(). Before that CurrentHealth is still 0, because ApplyStartingHealth()
+    // is what fills it in — see IsAlive.
     private bool hasInitialised;
 
     /// <summary>
@@ -149,7 +149,7 @@ public class CharacterManager : MonoBehaviour
     /// </summary>
     /// <remarks>
     /// <b>A character that hasn't initialised yet counts as ALIVE, and that is the whole point of
-    /// this property.</b> <c>CurrentHealth</c> is 0 until <see cref="BindToRunState"/> runs in
+    /// this property.</b> <c>CurrentHealth</c> is 0 until <see cref="ApplyStartingHealth"/> runs in
     /// <c>Start()</c>, and <c>TurnManager.BeginBattle()</c> also runs during the Start phase where
     /// Unity gives no ordering guarantee between GameObjects. Testing <c>CurrentHealth &lt;= 0</c>
     /// directly therefore reads a perfectly healthy character as a corpse — which crashed the Editor
@@ -181,7 +181,7 @@ public class CharacterManager : MonoBehaviour
     /// </summary>
     /// <remarks>
     /// This is the authoritative way to bind a spawned crew member. The id-matching fallback in
-    /// <see cref="BindToRunState"/> exists only for hand-placed crew and can't tell two crew
+    /// <see cref="ResolveCrewState"/> exists only for hand-placed crew and can't tell two crew
     /// sharing one Character asset apart.
     /// </remarks>
     public void AssignCrewState(CrewMemberState state)
@@ -249,8 +249,24 @@ public class CharacterManager : MonoBehaviour
 
         if (characterData != null)
         {
+            // ORDER IS LOAD-BEARING. Resolving the crew record has to come first, because it carries
+            // the LEVEL that RefreshStats() needs to resolve stats off a ClassDefinition — and
+            // RefreshStats sets MaxHealth, which ApplyStartingHealth then clamps against. Resolve →
+            // stats → health. Getting this wrong reads as a save bug: crew load at the wrong health
+            // because they were sized at level 1.
+            // Loud, because the failure is silent and severe: a class assigned without converting the
+            // stats to deltas leaves them as absolutes ADDED to the class baseline, roughly doubling
+            // everything — and no individual number looks obviously wrong.
+            if (!characterData.ValidateClassSetup(out string classProblem))
+            {
+                Debug.LogError($"[CharacterManager] {classProblem}", characterData);
+            }
+
+            ValidateSideAgreement();
+
+            ResolveCrewState();
             RefreshStats();
-            BindToRunState();
+            ApplyStartingHealth();
 
             // Named after the run record where there is one, so generated crew keep their rolled
             // name rather than showing the archetype's authored name.
@@ -376,29 +392,77 @@ public class CharacterManager : MonoBehaviour
     /// <see cref="CrewMemberState"/> explicitly — matching on id can't distinguish two crew
     /// sharing one Character asset.
     /// </remarks>
-    private void BindToRunState()
+    /// <summary>
+    /// Checks this combatant's GameObject tag against its authored allegiance, and reports loudly if
+    /// they disagree.
+    /// </summary>
+    /// <remarks>
+    /// <b>The game has two independent notions of "side" and nothing else cross-checks them.</b> The
+    /// <i>tag</i> drives targeting — <c>CombatController.IsValidTarget</c>,
+    /// <c>EnemyManager.RefreshTargetList</c>, <c>GameManager.FindCharacters</c>. <i>Allegiance</i>
+    /// drives turn ownership, run-state persistence and the win/lose count.
+    ///
+    /// One wrong dropdown therefore produces three unrelated-looking symptoms at once: the character
+    /// is targetable by its own side, takes a turn with the wrong action bar, and is counted for the
+    /// wrong side at battle end. Cheap to catch here; miserable to diagnose mid-fight.
+    ///
+    /// <c>EncounterBootstrapper</c> already checks the tag of what it spawns, but only against what it
+    /// meant to spawn — it never consults the asset's allegiance.
+    /// </remarks>
+    private void ValidateSideAgreement()
     {
-        CurrentHealth = MaxHealth;
+        bool isPlayerSide = characterData.allegiance == Character.Allegiance.Player;
+        string expectedTag = isPlayerSide ? "Player" : "Enemy";
 
+        if (CompareTag(expectedTag)) return;
+
+        Debug.LogError($"[CharacterManager] '{gameObject.name}' is tagged '{gameObject.tag}' but its Character " +
+                       $"asset '{characterData.name}' is authored with allegiance {characterData.allegiance}, " +
+                       $"which expects the '{expectedTag}' tag.\n" +
+                       "Tags decide who can TARGET this character; allegiance decides whose turn logic it gets, " +
+                       "whether it carries health between encounters, and which side it counts for at battle end. " +
+                       "With these disagreeing it will be targetable by its own side and counted for the other.",
+                       this);
+    }
+
+    /// <summary>
+    /// Finds the run record this character is playing as, if any. <b>Deliberately touches no stats
+    /// and no health</b> — it runs before <see cref="RefreshStats"/> because it carries the level
+    /// those stats are resolved at.
+    /// </summary>
+    /// <remarks>
+    /// Binding by <c>characterData.Id</c> is a fallback for scene-placed crew only. It can't tell two
+    /// crew sharing one Character asset apart; spawned crew are assigned their record explicitly by
+    /// <c>EncounterBootstrapper</c> before they wake, and never take this path.
+    /// </remarks>
+    private void ResolveCrewState()
+    {
         // Enemies are per-encounter; nothing about them persists between fights.
         if (characterData.allegiance != Character.Allegiance.Player) return;
 
-        // Preferred path: the spawner already told us exactly which record we are.
+        // The spawner already told us exactly which record we are.
+        if (crewState != null) return;
+
+        if (RunManager.Instance == null || !RunManager.Instance.HasActiveRun) return;
+
+        crewState = RunManager.Instance.GetCrewMember(characterData.Id);
+
         if (crewState == null)
         {
-            // Fallback for crew placed in the scene by hand, which have no spawner to bind them.
-            // Ambiguous if two crew share one Character asset — spawned crew never take this path.
-            if (RunManager.Instance == null || !RunManager.Instance.HasActiveRun) return;
-
-            crewState = RunManager.Instance.GetCrewMember(characterData.Id);
-
-            if (crewState == null)
-            {
-                Debug.LogWarning($"[CharacterManager] {characterData.characterName} (id '{characterData.Id}') " +
-                                 "isn't in the active run's crew — starting at full health.");
-                return;
-            }
+            Debug.LogWarning($"[CharacterManager] {characterData.characterName} (id '{characterData.Id}') " +
+                             "isn't in the active run's crew — starting at full health and level 1.");
         }
+    }
+
+    /// <summary>
+    /// Sets starting health: carried over from the run where there is one, full otherwise. Must run
+    /// after <see cref="RefreshStats"/>, which establishes the <c>MaxHealth</c> it clamps against.
+    /// </summary>
+    private void ApplyStartingHealth()
+    {
+        CurrentHealth = MaxHealth;
+
+        if (crewState == null) return;
 
         if (crewState.isDead)
         {
@@ -408,7 +472,8 @@ public class CharacterManager : MonoBehaviour
         }
 
         CurrentHealth = Mathf.Clamp(crewState.currentHealth, 0f, MaxHealth);
-        Debug.Log($"[CharacterManager] {crewState.displayName} joined the fight at {CurrentHealth}/{MaxHealth}.");
+        Debug.Log($"[CharacterManager] {crewState.displayName} joined the fight at {CurrentHealth}/{MaxHealth} " +
+                  $"(level {Level}).");
     }
 
     /// <summary>Pushes current health back into the run so it carries to the next encounter.</summary>
@@ -417,6 +482,37 @@ public class CharacterManager : MonoBehaviour
         if (crewState == null) return;
         crewState.currentHealth = CurrentHealth;
     }
+
+    /// <summary>
+    /// The level this character's stats resolve at: their run record's where they have one, the
+    /// authored level otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Crew level lives in <c>CrewMemberState</c> and persists across encounters; enemies have no run
+    /// record and use the level authored on the asset. Floored at 1 — a level 0 record would resolve
+    /// a character below their class baseline.
+    /// </remarks>
+    public int Level =>
+        crewState != null ? Mathf.Max(1, crewState.level)
+        : characterData != null ? Mathf.Max(1, characterData.level)
+        : 1;
+
+    // --- Resolved authored traits -------------------------------------------------------------
+    // Class baseline + level growth + this character's delta, or the character's own flat value when
+    // no class is assigned. Read these rather than characterData directly: the raw fields are deltas
+    // for a class-backed character and mean nothing on their own.
+
+    public float BuffNextActionMultiplier =>
+        characterData != null ? characterData.ResolveBuffNextActionMultiplier() : 1f;
+
+    public float DamageInflictedDriveMultiplier =>
+        characterData != null ? characterData.ResolveDamageInflictedDriveMultiplier() : 0f;
+
+    public float DamageTakenDriveMultiplier =>
+        characterData != null ? characterData.ResolveDamageTakenDriveMultiplier() : 0f;
+
+    public float ParryBonusDriveMultiplier =>
+        characterData != null ? characterData.ResolveParryBonusDriveMultiplier() : 0f;
 
     // Refresh all stats from character data, including buffs
     public void RefreshStats()
@@ -429,10 +525,12 @@ public class CharacterManager : MonoBehaviour
             // BuffType.DamageReduction is absent on purpose — it isn't a stat, so there's nothing
             // here for it to modify. It's read in TakeDamage() at the moment damage lands. See the
             // remarks on the enum member.
-            MaxHealth = Mathf.Max(1f, characterData.maxHealth + SumBuffValue(Character.BuffType.Health));
-            AttackPower = Mathf.Max(0f, characterData.attackPower + SumBuffValue(Character.BuffType.Accuracy));
-            DefenseValue = Mathf.Max(0f, characterData.defenseValue + SumBuffValue(Character.BuffType.Defense));
-            Speed = Mathf.Max(0.1f, characterData.speed + SumBuffValue(Character.BuffType.Speed));
+            int level = Level;
+
+            MaxHealth = Mathf.Max(1f, characterData.ResolveMaxHealth(level) + SumBuffValue(Character.BuffType.Health));
+            AttackPower = Mathf.Max(0f, characterData.ResolveAttackPower(level) + SumBuffValue(Character.BuffType.Accuracy));
+            DefenseValue = Mathf.Max(0f, characterData.ResolveDefenseValue(level) + SumBuffValue(Character.BuffType.Defense));
+            Speed = Mathf.Max(0.1f, characterData.ResolveSpeed(level) + SumBuffValue(Character.BuffType.Speed));
             UpdateBuffDisplay();
         }
     }
@@ -1120,7 +1218,7 @@ public class CharacterManager : MonoBehaviour
         // generates no drive at all, for either side. That's the trade-off for the effect.
         if (source == DamageSource.Direct && driveManager != null)
         {
-            var driveIncrease = damage * characterData.damageTakenDriveMultiplier;
+            var driveIncrease = damage * DamageTakenDriveMultiplier;
             //drive gained is multiplied by the damage in the damageTakenDriveMultiplier character data
             driveManager.Drive.AddDrive(driveIncrease);
             Debug.Log($"{characterData.characterName} took {damage} damage, drive increased by {driveIncrease}");
@@ -1155,7 +1253,7 @@ public class CharacterManager : MonoBehaviour
         // Add damage dealt to attacker's drive meter through DriveManager
         if (driveManager != null)
         {
-           var driveIncrease = damage * characterData.damageInflictedDriveMultiplier;
+           var driveIncrease = damage * DamageInflictedDriveMultiplier;
             
             //drive gained is multiplied by the damageInflictedDriveMultiplier in the character data
             driveManager.Drive.AddDrive(driveIncrease);
@@ -1168,7 +1266,7 @@ public class CharacterManager : MonoBehaviour
         // Add damage dealt to drive meter
         if (driveManager != null)
         {
-            var driveIncrease = damage * characterData.damageInflictedDriveMultiplier;
+            var driveIncrease = damage * DamageInflictedDriveMultiplier;
             
             //drive gained is multiplied by the damageInflictedDriveMultiplier in the character data
             driveManager.Drive.AddDrive(driveIncrease);

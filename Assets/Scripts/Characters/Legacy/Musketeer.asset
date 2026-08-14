@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
-  m_Name: Biku Bale
+  m_Name: Musketeer
   m_EditorClassIdentifier: 
   id: biku_bale
   characterName: Biku Bale
@@ -29,11 +29,13 @@ MonoBehaviour:
   allegiance: 0
   characterSprite: {fileID: -779178000821955330, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
   characterTint: {r: 1, g: 1, b: 1, a: 1}
+  classDefinition: {fileID: 11400000, guid: 3d0563dcbd1da4c51b0dd073460701c0, type: 2}
   maxHealth: 26
   attackPower: 11
   defenseValue: 13
   speed: 10
   buffNextActionMultiplier: 2
+  statusResistances: []
   damageInflictedDriveMultiplier: 10
   damageTakenDriveMultiplier: 5
   parryBonusDriveMultiplier: 5

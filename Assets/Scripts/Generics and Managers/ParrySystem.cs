@@ -48,7 +48,7 @@ public class ParrySystem : MonoBehaviour
     private void Awake()
     {
         //set the bonus for the parrying of the attack based on the character's stats
-        parryDriveBonus = GetComponent<CharacterManager>().characterData.parryBonusDriveMultiplier;
+        parryDriveBonus = GetComponent<CharacterManager>().ParryBonusDriveMultiplier;
         
         
         characterManager = GetComponent<CharacterManager>();
@@ -271,11 +271,11 @@ public class ParrySystem : MonoBehaviour
             if (driveManager?.Drive != null)
             {
                 // Calculate drive bonus: incoming damage × parry multiplier
-                var driveIncrease = damageParried * characterManager.characterData.parryBonusDriveMultiplier;
+                var driveIncrease = damageParried * characterManager.ParryBonusDriveMultiplier;
                 driveManager.Drive.AddDrive(driveIncrease);
                 
                 Debug.Log($"[ParrySystem] {characterManager.characterData.characterName} parried incoming damage of {damageParried}! " +
-                          $"Drive increased by {driveIncrease} ({damageParried} × {characterManager.characterData.parryBonusDriveMultiplier})");
+                          $"Drive increased by {driveIncrease} ({damageParried} × {characterManager.ParryBonusDriveMultiplier})");
             }
         }
 

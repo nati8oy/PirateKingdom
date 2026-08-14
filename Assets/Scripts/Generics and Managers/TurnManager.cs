@@ -201,22 +201,36 @@ public class TurnManager : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Living combatants on one side. Drives win/lose.
+    /// </summary>
+    /// <remarks>
+    /// <b>Counts <c>IsAlive</c>, not merely "exists".</b> It used to count any <c>CharacterManager</c>
+    /// with a matching allegiance, so a character at 0 health still counted until Unity destroyed it
+    /// on its next <c>Update()</c> — which delayed every battle end by a frame and meant the last
+    /// enemy dying didn't register on the frame it happened.
+    ///
+    /// <c>IsAlive</c> is also the safe test rather than <c>CurrentHealth &lt;= 0</c>: it treats a
+    /// not-yet-initialised character as alive, so this can't declare a premature defeat if it ever
+    /// runs before a combatant's <c>Start()</c>.
+    /// </remarks>
     private int CountAliveCharacters(Character.Allegiance allegiance)
     {
         var allCharacters = FindObjectsOfType<CharacterManager>();
         int count = 0;
-        
+
         foreach (var character in allCharacters)
         {
-            if (character != null && 
-                character.gameObject != null && 
-                character.characterData != null && 
-                character.characterData.allegiance == allegiance)
+            if (character != null &&
+                character.gameObject != null &&
+                character.characterData != null &&
+                character.characterData.allegiance == allegiance &&
+                character.IsAlive)
             {
                 count++;
             }
         }
-        
+
         return count;
     }
     

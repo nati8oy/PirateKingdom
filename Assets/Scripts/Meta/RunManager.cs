@@ -284,11 +284,18 @@ public class RunManager : MonoBehaviour
             // Crew lost in an earlier encounter took no part in this one, so they're not in the report.
             if (member.isDead && !diedHere) continue;
 
+            // Resolved here because this is the only place that has both the character asset and the
+            // member's level to hand — max health comes from the class, scaled by level.
+            Character authored = ContentDatabase.Instance != null
+                ? ContentDatabase.Instance.GetCharacter(member.characterId)
+                : null;
+
             result.crew.Add(new EncounterResult.CrewOutcome
             {
                 characterId = member.characterId,
                 displayName = member.displayName,
                 endHealth = member.currentHealth,
+                maxHealth = authored != null ? authored.ResolveMaxHealth(member.level) : 0f,
                 died = diedHere
             });
         }

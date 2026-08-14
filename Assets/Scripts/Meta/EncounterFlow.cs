@@ -95,7 +95,7 @@ public class EncounterFlow : MonoBehaviour
 
     /// <summary>
     /// One block per encounter: where the run is, and what state it left the crew in. Health is
-    /// shown as a fraction of max, resolved through <see cref="ContentDatabase"/>, because the raw
+    /// shown as a fraction of the max carried on the report, because the raw
     /// number means nothing across crew with different pools.
     /// </summary>
     private void LogAttrition(EncounterResult result)
@@ -122,19 +122,17 @@ public class EncounterFlow : MonoBehaviour
                 continue;
             }
 
-            Character authored = ContentDatabase.Instance != null
-                ? ContentDatabase.Instance.GetCharacter(outcome.characterId)
-                : null;
-
-            if (authored == null || authored.maxHealth <= 0)
+            // Read off the report rather than looked up: max health is resolved from the character's
+            // class at their level, and only RunManager had the level to hand when this was built.
+            if (outcome.maxHealth <= 0f)
             {
                 log.Append($"{outcome.endHealth:0} hp");
                 continue;
             }
 
-            float fraction = outcome.endHealth / authored.maxHealth;
+            float fraction = outcome.endHealth / outcome.maxHealth;
 
-            log.Append($"{outcome.endHealth:0}/{authored.maxHealth:0} ({fraction:P0})");
+            log.Append($"{outcome.endHealth:0}/{outcome.maxHealth:0} ({fraction:P0})");
             if (fraction <= lowHealthWarning) log.Append("  <-- low");
         }
 

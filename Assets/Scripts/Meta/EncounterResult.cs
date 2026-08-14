@@ -29,6 +29,17 @@ public class EncounterResult
         /// <summary>Health they finished on. Zero for casualties.</summary>
         public float endHealth;
 
+        /// <summary>
+        /// Their maximum health, so <c>endHealth</c> can be read as a fraction.
+        /// </summary>
+        /// <remarks>
+        /// Carried on the report rather than looked up later, because max health is resolved from the
+        /// character's class <i>at their level</i> — and the level lives in <c>CrewMemberState</c>,
+        /// which a consumer of this report has no reason to hold. Resolving it here keeps the report
+        /// self-contained, which is the point of it.
+        /// </remarks>
+        public float maxHealth;
+
         /// <summary>True only for crew who died in <i>this</i> encounter, not earlier ones.</summary>
         public bool died;
     }

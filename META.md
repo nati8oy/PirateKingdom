@@ -17,12 +17,16 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 |---|---|
 | **D1 — Status effect substrate + damage over time** | ✅ **DONE, verified.** Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive, and everyone ticks together at the top of the round. |
 | **D2 — Stun** | ✅ **DONE, verified.** Skips a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
-| **E — Class definitions & level scaling** | ⬅ **NEXT.** A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
+| **E — Class definitions & level scaling** | ✅ **Code complete**, awaiting Editor verification. A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
 
 **E was deliberately held until D was proven**, because it touches every character asset and
 `RefreshStats()`, which everything reads. Nothing in D depended on it: resistances are authored
 per-character behind the single `CharacterManager.GetResistance()` accessor, so moving that data onto
 a class is invisible to every caller — which is exactly the seam E now uses.
+
+**Phase F — Counter / riposte** is queued behind E and **not designed yet** — a placeholder capturing
+the idea (parry + an extra button, spending drive, for a set amount of damage) along with the
+complications already visible in the code. Read it before designing, not after.
 
 **Phase C — Turn sequencing & impact effects** is queued behind E. Tunable time in combat: an
 authored per-turn rhythm every character follows, and an authored impact when an attack lands or is
@@ -813,7 +817,7 @@ layer; see `CLAUDE.md`.
 same character on consecutive turns gets progressively harder and then stops landing; once they take
 a turn it's as landable as it was at the start.
 
-### Phase E — Class definitions & level scaling ⬅ NEXT
+### Phase E — Class definitions & level scaling ✅ CODE COMPLETE, awaiting Editor verification
 
 **Goal:** stop authoring every stat on every character. A class defines the baseline — health, attack,
 defense, speed, drive multipliers and **status resistances** — and level scales it. Creating a new
@@ -849,10 +853,17 @@ effectiveMaxHealth = class.maxHealth + (level-1)*class.healthPerLevel + characte
 Black Sam becomes "Duelist, +3 attack" — so the authored data answers the question that actually
 matters: *how is this character special?*
 
-**The reference is optional, and that's what makes this safe.** A null `ClassDefinition` means "use
-the flat authored values exactly as today", so the roster can be converted one asset at a time with
-everything unconverted behaving identically. It also gives enemies a clean escape hatch — a Skeleton
-Boss shouldn't inherit a crew class's curve, and doesn't have to.
+**As built, a class is REQUIRED and `Character` holds no stats of its own.** The plan above had the
+class as an optional baseline with per-character deltas on top; that was simplified once the roster
+was going to be rebuilt from scratch. Health, accuracy, defense, speed, the drive rates and the
+resistance list were removed from `Character` entirely — it is now identity and content only (name,
+id, art, audio, action slots, level, allegiance, class).
+
+**The trade, stated plainly:** two characters of the same class at the same level are numerically
+identical, so a named anchor like Black Sam can't differ from a generic member of their class by
+stats alone — only by action slots, art and name. If that becomes a problem, the answer is a one-off
+`ClassDefinition` for that character, not reintroducing deltas. The "Adopt Class" migration tooling
+was dropped for the same reason.
 
 Resolution happens in **`CharacterManager.RefreshStats()` only**, which is already the single funnel
 every stat read passes through. Buffs, protection, crit and resistances stay exactly where they are.
@@ -882,6 +893,74 @@ generated rank-and-file crew, which needs exactly these bands to roll within.
 *Verify:* convert one crew member to a class and confirm their resolved stats match what they had
 before. Level them up and watch the stats move. Leave the rest unconverted and confirm nothing about
 them changes.
+
+### Phase F — Counter / riposte — queued behind E, not designed yet
+
+**The idea, as stated:** a crew member with drive available who parries an attack can *counter* it —
+instead of pressing the parry button alone, they press an additional button at the same time, and are
+granted the opportunity to counter for a set amount of damage.
+
+**Deliberately not designed here.** This is a placeholder so the idea and its known complications
+survive; the shape is still to be worked out. What follows is what already exists to build on and
+what will need deciding, not a plan.
+
+#### What it can build on
+
+The parry system already does most of the hard part. `ParrySystem` opens a timing window during
+`EnemyAttack`'s windup, knows the incoming damage (`SetIncomingDamage`), records the outcome in
+`ParrySucceeded`, and already pays out on success. A counter is another branch off
+`PerformSuccessfulParry()` rather than a new system.
+
+#### Four complications worth knowing before designing it
+
+- **The two input paths don't share an asset instance.** `ParryInputManager` uses a serialized
+  `InputActionReference`, which resolves to the **shared project-wide** `PlayerControls.inputactions`;
+  `PlayerInputHandler` does `new PlayerControls()` and gets its own **private** instance. So "parry
+  and the counter button pressed together" currently spans two different asset instances. Either the
+  counter action joins the shared asset, or the check has to reach across both. This is already
+  logged as a gotcha in `CLAUDE.md` and it lands squarely on this feature.
+- **"One attempt per attack" is deliberate, and wider than the timing window.**
+  `EnemyAttack.BeginParrySequence()` arms a single attempt at the *start of the windup* precisely so
+  an early press is caught and **spent**, which is what stops mashing being a strategy. A two-button
+  counter has to answer: does pressing the counter button alone spend the attempt? How far apart can
+  the two presses be and still count as "at the same time"? Simultaneity in input is a tolerance
+  window, not an instant — and whatever that window is, it must not become a way to get two bites.
+- **A counter deals damage during the enemy's turn**, which nothing currently does.
+  `EnemyAttack.ExecuteAttackSequence()` is mid-coroutine and `EnemyManager.OnAttackComplete()` will
+  still fire and call `CompleteTurn()`. **If the counter kills the attacker**, that's death
+  mid-sequence — the same sharp edge already flagged for Phase C and for damage over time, and it
+  needs the same care: `CharacterManager` destroys the GameObject on its next `Update()`.
+- **A parry already pays out drive twice** — the parry bonus, plus `damageTakenDriveMultiplier` on
+  the 25% chip. If a counter *spends* drive, you'd be spending and earning in the same instant, so
+  the economics need looking at rather than assuming.
+
+#### Open questions
+
+- **Input shape:** simultaneous press, hold-a-modifier through the parry, or a follow-up prompt after
+  a successful parry (a riposte). The third sidesteps the simultaneity problem entirely.
+- **Cost:** segments, drive stacks, or just "any drive available"? And how much.
+- **Damage:** flat authored number, scaled by the damage prevented, or off a stat.
+- **Where it's authored.** If counters are class-flavoured — a Duelist counters harder — then
+  **Phase E's `ClassDefinition` is the natural home, and E lands first**, so the field can go in from
+  the start rather than being retrofitted onto every asset later.
+- **Which attacks can be countered?** Only the parryable ones, presumably — currently `Attack` and
+  `HealthDrain`.
+- **Do enemies get it?** Everything else in combat has been built symmetrically, and enemies can't
+  parry at all today (`parryBonusDriveMultiplier` on enemy assets is authored and never read — see
+  `TODO.md`). Countering may be the thing that finally makes enemy parry worth wiring, or the place
+  to decide it's deliberately player-only.
+
+#### One caution
+
+`TODO.md` already calls the parry **"the single biggest accessibility barrier"** in the game — a
+real-time reflex check inside an otherwise turn-based system. Requiring two buttons at once raises
+that floor again. The settings list already carries "Parry assist / auto-parry / disable" as an
+unbuilt item; whatever shape the counter takes should be reachable by a player using that assist, or
+it becomes content they can never see.
+
+**Sequencing note:** Phase C is also queued behind E, and a counter is exactly the kind of thing C's
+impact effects are for — the counter's hit is an authored beat. Doing C first would likely make this
+cheaper, but that's a call for when it comes up.
 
 ### Phase C — Turn sequencing & impact effects
 
@@ -1241,7 +1320,7 @@ Realistically you need **8-12 recruitable crew**. Two ways there:
 
 - *Author them all.* Most control, most work — each needs stats, drive multipliers, art, audio.
 - *Archetype + generation.* A `CrewArchetype` SO per class (Duelist / Muscle / Musketeer /
-  WitchDoctor) plus a pirate name pool; generated crew roll stats within an archetype band.
+  Healer) plus a pirate name pool; generated crew roll stats within an archetype band.
   Named characters stay as hand-authored uniques.
 
 I'd recommend the hybrid: your 4 named crew as anchors, generated rank-and-file for the rest.

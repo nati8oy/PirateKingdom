@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using UnityEngine.Serialization;
 
 [CreateAssetMenu(fileName = "Character", menuName = "Scriptable Objects/Character")]
 public class Character : ScriptableObject
@@ -33,8 +32,10 @@ public class Character : ScriptableObject
     [Tooltip("Unused. Intended as a pool to draw actionSlots from; nothing reads it yet.")]
     [SerializeField] private List<Action> availableActions = new List<Action>();
 
-    [Tooltip("Authored starting level. Run state tracks level per crew member, but it does not yet " +
-             "feed stat resolution — that arrives with progression.")]
+    [Tooltip("Level used to resolve stats when this character has NO run record — i.e. enemies, and " +
+             "crew played outside a run. Crew in a run use their CrewMemberState.level instead.\n\n" +
+             "Growth per level comes from the Class Definition, so raising this on an enemy asset is " +
+             "how you make a tougher version of the same class.")]
     public int level = 1;
 
     [Tooltip("Unused — authored but never read. Kept as a hook for a future meta currency or " +
@@ -45,12 +46,17 @@ public class Character : ScriptableObject
     [Tooltip("Sound effect played when this character dies")]
     public AudioClip deathSoundEffect;
 
+    /// <remarks>
+    /// Serialized by integer value, so members may be RENAMED freely but must not be reordered —
+    /// <c>WitchDoctor</c> became <c>Healer</c> without touching a single asset, because it stayed at
+    /// position 3. Append new classes at the end.
+    /// </remarks>
     public enum CharacterClass
     {
         Duelist,
         Muscle,
         Musketeer,
-        WitchDoctor
+        Healer
     }
     public enum Allegiance
     {
@@ -58,7 +64,9 @@ public class Character : ScriptableObject
         Enemy
     }
 
-    [Tooltip("Archetype label. Not read by combat yet — recruitment and generation will use it.")]
+    [Tooltip("Archetype label. Combat resolves stats from the Class Definition asset below, not from " +
+             "this — but the two should agree, and a mismatch is reported by 'Log Resolved Stats'. " +
+             "Recruitment and generation will use it.")]
     [SerializeField] public CharacterClass characterClass;
 
     [Tooltip("Which side this fights on. Load-bearing: only Player-allegiance characters bind to " +
@@ -76,77 +84,141 @@ public class Character : ScriptableObject
     [SerializeField] public Color characterTint = Color.white;
 
 
-    [Header("Stats")]
-    [Tooltip("Full health. Crew carry damage between encounters, so this is the ceiling they heal " +
-             "back to, not what they start every fight on.")]
-    [SerializeField] public float maxHealth = 100f;
+    [Header("Class")]
+    [Tooltip("REQUIRED. Supplies every stat this character has — health, accuracy, defense, speed, " +
+             "drive rates and status resistances — scaled by level.\n\n" +
+             "There are no per-character stat overrides: two characters of the same class at the same " +
+             "level have identical numbers and differ only in name, art, audio and action slots. If a " +
+             "named character needs different numbers, give it its own one-off Class Definition.\n\n" +
+             "Use 'Log Resolved Stats' on this asset's ⋮ menu to see what the numbers come out as.")]
+    [SerializeField] private ClassDefinition classDefinition;
 
-    [Tooltip("ACCURACY, not damage. Added to a d20 roll and compared against the target's Defense " +
-             "Value — it never affects how hard a hit lands.\n\n" +
-             "Minimum roll to hit = target Defense - this + 1 (floored at 2, since a natural 1 " +
-             "always misses). So only the GAP between the two matters.")]
-    [SerializeField] public float attackPower = 10f;
 
-    [Tooltip("The number attackers must reach to hit this character.\n\n" +
-             "Set it BELOW an attacker's Attack Power and the roll clamps — they hit 95% of the " +
-             "time and this stat does nothing. It only starts mattering at roughly Attack Power + 5 " +
-             "or higher.")]
-    [SerializeField] public float defenseValue = 5f;
+    /// <summary>The class supplying this character's stats. Required — see <see cref="ValidateClassSetup"/>.</summary>
+    public ClassDefinition Class => classDefinition;
 
-    [Tooltip("Turn order. Initiative = this + a random 1-9, re-rolled every round, so a gap smaller " +
-             "than about 8 will not reliably win the first turn.")]
-    [SerializeField] public float speed = 5f;
-
-    [Tooltip("Damage multiplier from the FIRST drive stack. Later stacks add diminishing amounts of " +
-             "the same bonus, hard-capped at 2x.\n\n" +
-             "Below about 1.5 the bonus rounds away to nothing on small damage ranges, and spending " +
-             "a drive segment appears to do nothing.")]
-    [FormerlySerializedAs("buffAttackMultiplier")] [SerializeField] public float buffNextActionMultiplier = 1.5f;
-
-    [Header("Status Resistance")]
-    [Tooltip("Chance to shrug off each status effect kind. Subtracted from the effect's Chance To " +
-             "Apply, so 0.4 against a 100% bleed attack means it lands 60% of the time.\n\n" +
-             "Reduces the CHANCE only — never the damage or the duration.\n\n" +
-             "A kind with no entry here resists at 0. Listing only what this character actually " +
-             "resists is normal; the list exists rather than one field per kind so adding Poison or " +
-             "Burn later needs no change to this asset.\n\n" +
-             "Phase E moves the baseline onto the class asset, with these becoming the per-character " +
-             "exception. Armour and carried items become a further layer on top.")]
-    [SerializeField] private List<StatusResistance> statusResistances = new List<StatusResistance>();
+    /// <summary>False means this character has no stats at all — an authoring error.</summary>
+    public bool UsesClass => classDefinition != null;
 
     /// <summary>
-    /// Authored resistance to one effect kind, 0 when unlisted.
+    /// Resistance to one effect kind, from this character's class. 0 when there's no class or the
+    /// class doesn't list that kind.
     /// </summary>
     /// <remarks>
     /// Read through <see cref="CharacterManager.GetResistance"/>, never directly — that's the single
-    /// accessor the equipment layer will slot into later.
+    /// accessor the equipment layer will slot into later, and where the value is clamped.
     /// </remarks>
     public float GetStatusResistance(StatusEffectKind kind)
     {
-        if (statusResistances == null) return 0f;
-
-        foreach (StatusResistance entry in statusResistances)
-        {
-            if (entry != null && entry.kind == kind) return Mathf.Clamp01(entry.value);
-        }
-
-        return 0f;
+        return classDefinition != null ? classDefinition.GetStatusResistance(kind) : 0f;
     }
 
-    [Header("Drive Generation")]
-    [Tooltip("Drive gained per point of damage this character DEALS.")]
-    [SerializeField] public float damageInflictedDriveMultiplier = 4f;
+    // ---------------------------------------------------------------------------------------
+    // RESOLVED STATS — supplied entirely by the class, scaled by level.
+    //
+    // Every consumer goes through these. There is deliberately no per-character override: two
+    // characters of the same class at the same level have identical numbers, and differ only in
+    // name, art, audio and action slots. If a named character ever needs to differ numerically,
+    // give it its own one-off ClassDefinition rather than reintroducing per-character deltas.
+    // ---------------------------------------------------------------------------------------
 
-    [Tooltip("Drive gained per point of damage this character TAKES. A tank identity dial.\n\n" +
-             "Note a parry pays out twice — the parry bonus below, plus this on the 25% that still " +
-             "lands.\n\n" +
-             "Measured on damage ACTUALLY TAKEN, so anything that reduces the hit reduces the drive " +
-             "with it: a Damage Reduction buff cuts both. A tank built to farm drive by getting hit " +
-             "gets less of it while protected.")]
-    [SerializeField] public float damageTakenDriveMultiplier = 4f;
-    [Tooltip("Drive gained on a successful parry = damage prevented x this value. Target is ~25 drive (a quarter segment) for a typical 5-damage hit.")]
-    [SerializeField] public float parryBonusDriveMultiplier = 5f;
-    
+    public float ResolveMaxHealth(int level) =>
+        classDefinition != null ? classDefinition.MaxHealthAtLevel(level) : 0f;
+
+    public float ResolveAttackPower(int level) =>
+        classDefinition != null ? classDefinition.AttackPowerAtLevel(level) : 0f;
+
+    public float ResolveDefenseValue(int level) =>
+        classDefinition != null ? classDefinition.DefenseValueAtLevel(level) : 0f;
+
+    public float ResolveSpeed(int level) =>
+        classDefinition != null ? classDefinition.SpeedAtLevel(level) : 0f;
+
+    // Flat class traits — deliberately NOT level-scaled. These are identity dials rather than power
+    // curves, and compounding them with level would make a high-level character disproportionately
+    // better at everything at once.
+    public float ResolveBuffNextActionMultiplier() =>
+        classDefinition != null ? classDefinition.buffNextActionMultiplier : 1f;
+
+    public float ResolveDamageInflictedDriveMultiplier() =>
+        classDefinition != null ? classDefinition.damageInflictedDriveMultiplier : 0f;
+
+    public float ResolveDamageTakenDriveMultiplier() =>
+        classDefinition != null ? classDefinition.damageTakenDriveMultiplier : 0f;
+
+    public float ResolveParryBonusDriveMultiplier() =>
+        classDefinition != null ? classDefinition.parryBonusDriveMultiplier : 0f;
+
+
+    /// <summary>
+    /// Whether this asset is in a coherent state. Currently only catches the class asset and the
+    /// authored <see cref="characterClass"/> enum disagreeing.
+    /// </summary>
+    /// <remarks>
+    /// The two are redundant by design for now — combat resolves stats from the asset, while the enum
+    /// is what recruitment and generation will read. Letting them drift means the character plays as
+    /// one class and gets recruited as another.
+    ///
+    /// <b>Only checked for crew.</b> Enemies inherit the whole class system (Enemy subclasses
+    /// Character), but they're never recruited and nothing reads their <see cref="characterClass"/>,
+    /// so forcing an enemy class asset to also claim one of the crew archetypes would be friction for
+    /// no benefit. An enemy can use a ClassDefinition and simply ignore the enum.
+    /// </remarks>
+    public bool ValidateClassSetup(out string problem)
+    {
+        problem = null;
+
+        if (classDefinition == null)
+        {
+            problem = $"'{name}' has no Class Definition assigned. Every stat now comes from the class, so " +
+                      "this character resolves to zero health, accuracy, defense, speed, drive and resistances " +
+                      "— it will be clamped to 1 HP and be useless in a fight. Assign one.";
+            return false;
+        }
+
+        if (allegiance != Allegiance.Player) return true;
+
+        if (classDefinition.classId != characterClass)
+        {
+            problem = $"'{name}' is authored as {characterClass} but references the " +
+                      $"{classDefinition.classId} class asset. Combat reads the asset, so the enum is the " +
+                      "one that's wrong — but they should agree.";
+            return false;
+        }
+
+        return true;
+    }
+
+#if UNITY_EDITOR
+
+
+    /// <summary>
+    /// Editor-only. Prints what this character actually resolves to. The counter to deltas being
+    /// harder to read than absolutes — "+3" doesn't tell you Black Sam hits at 15.
+    /// </summary>
+    [ContextMenu("Log Resolved Stats")]
+    private void LogResolvedStats()
+    {
+        int atLevel = Mathf.Max(1, level);
+
+        string source = classDefinition != null
+            ? $"{classDefinition.DisplayName} at level {atLevel} + this character's deltas"
+            : "its own flat values (no class assigned)";
+
+        Debug.Log($"[Character] '{name}' resolves from {source}:\n" +
+                  $"  Health  {ResolveMaxHealth(atLevel):0.##}\n" +
+                  $"  Attack  {ResolveAttackPower(atLevel):0.##}\n" +
+                  $"  Defense {ResolveDefenseValue(atLevel):0.##}\n" +
+                  $"  Speed   {ResolveSpeed(atLevel):0.##}\n" +
+                  $"  Drive   next-action x{ResolveBuffNextActionMultiplier():0.##}, " +
+                  $"dealt {ResolveDamageInflictedDriveMultiplier():0.##}, " +
+                  $"taken {ResolveDamageTakenDriveMultiplier():0.##}, " +
+                  $"parry {ResolveParryBonusDriveMultiplier():0.##}", this);
+
+        if (!ValidateClassSetup(out string problem)) Debug.LogWarning($"[Character] {problem}", this);
+    }
+#endif
+
     /// <remarks>
     /// Unity serializes enums by their integer value, so these may be renamed but **must not be
     /// reordered** — moving a member silently repoints every authored Action asset at a different

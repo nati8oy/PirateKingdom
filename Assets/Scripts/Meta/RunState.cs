@@ -46,12 +46,16 @@ public class CrewMemberState
                              "encounters. Change its allegiance if it's meant to be crew.");
         }
 
+        const int startingLevel = 1;
+
         var state = new CrewMemberState
         {
             characterId = character.Id,
             displayName = character.characterName,
-            currentHealth = character.maxHealth,
-            level = 1,
+            // Resolved through the class at the level they start on — health is no longer authored
+            // on the Character itself.
+            currentHealth = character.ResolveMaxHealth(startingLevel),
+            level = startingLevel,
             xp = 0,
             isDead = false
         };

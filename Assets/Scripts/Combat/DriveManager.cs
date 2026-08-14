@@ -69,7 +69,7 @@ public class DriveManager : MonoBehaviour
         
         characterManager = GetComponent<CharacterManager>();
 
-        buffAttackMultiplier = characterManager.characterData.buffNextActionMultiplier;
+        buffAttackMultiplier = characterManager.BuffNextActionMultiplier;
         
         characterManager = GetComponent<CharacterManager>();
         driveMeter.Initialize();

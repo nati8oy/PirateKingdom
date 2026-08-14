@@ -480,6 +480,10 @@ third-party and should not be modified** unless explicitly requested:
     before calling `AddBuff`, on both the player and enemy paths, so Speed, Defense, Accuracy,
     Crit Chance and Damage Reduction all debuff with no extra code — author them as `Debuff` with a
     positive `buffValue`. There is no separate debuff enum and there should not be one.
+    - **`buffValue` is `[Min(0f)]` for that reason.** A negative value on a `Debuff` double-negates
+      into a *buff* — a "Slow" authored at `-3` speed made its target **faster** — and nothing about
+      the number looks wrong until you check the sign. The clamp only applies as the Inspector draws
+      the field, so an already-saved negative survives until that asset is opened and re-entered.
   - **`attackPower` affects accuracy only, never damage** — and so do `BuffType.Accuracy` buffs,
     which stack onto it in `RefreshStats()`. **Damage bonuses are drive's job alone.** Keeping the
     two disjoint is a deliberate decision: letting accuracy buffs also raise damage was tried and

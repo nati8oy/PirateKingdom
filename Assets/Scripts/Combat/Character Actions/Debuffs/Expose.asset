@@ -24,8 +24,9 @@ MonoBehaviour:
   minHeal: 0
   maxHeal: 0
   buffType: 1
-  buffValue: -3
+  buffValue: 3
   duration: 3
   driveAmount: 100
   healthDrainRatio: 0.5
+  statusEffects: []
   attackWindupTime: 1

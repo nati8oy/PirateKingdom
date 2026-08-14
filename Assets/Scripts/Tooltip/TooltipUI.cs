@@ -90,6 +90,75 @@ public class TooltipUI : MonoBehaviour
     }
 
     /// <summary>
+    /// Name and health, the header every character hover starts with.
+    /// </summary>
+    private static string DescribeCharacterHeader(CharacterManager character)
+    {
+        string name = character.characterData != null ? character.characterData.characterName : character.name;
+
+        return $"<b>{name}</b>\n{character.CurrentHealth:F0}/{character.MaxHealth:F0} HP";
+    }
+
+    /// <summary>
+    /// Lists everything currently affecting a character — buffs, debuffs and status effects — with
+    /// turns remaining, coloured to match their icons. Empty when there's nothing on them.
+    /// </summary>
+    /// <remarks>
+    /// <para>Buffs are aggregated per <c>BuffType</c> rather than listed per instance, which is what
+    /// <c>BuffIconDisplay</c> does — so the tooltip and the icons can't disagree, and a +2 and a -2 of
+    /// the same type read as nothing rather than as two contradictory rows.</para>
+    ///
+    /// <para>Status colours come from <see cref="StatusEffectStyle"/>, the same single definition the
+    /// floating damage number and the status icons use. Buffs have no per-type colour, so they take
+    /// the buff/debuff colours by sign.</para>
+    /// </remarks>
+    private static string DescribeActiveEffects(CharacterManager character)
+    {
+        if (character == null) return string.Empty;
+
+        var text = new System.Text.StringBuilder();
+
+        foreach (Character.BuffType type in System.Enum.GetValues(typeof(Character.BuffType)))
+        {
+            float net = character.GetNetBuffValue(type);
+            if (Mathf.Approximately(net, 0f)) continue;
+
+            string colour = net > 0f ? ColourBuff : ColourDebuff;
+
+            text.Append($"\n<color={colour}>{DescribeBuff(type, net)}</color> {DescribeTurns(character.GetBuffTurnsRemaining(type))}");
+        }
+
+        foreach (StatusEffect status in character.ActiveStatuses)
+        {
+            // Damage kinds show their per-turn bite; a stun has none, so it just names itself.
+            string amount = status.IsDamageOverTime ? $" {status.DamagePerTurn:0.##}/turn" : "";
+
+            text.Append($"\n<color={StatusEffectStyle.HexColour(status.Kind)}>{status.Kind}</color>" +
+                        $"{amount} {DescribeTurns(status.TurnsRemaining)}");
+        }
+
+        return text.ToString();
+    }
+
+    private static string DescribeTurns(int turns) => $"({turns} turn{(turns == 1 ? "" : "s")})";
+
+    /// <summary>
+    /// Hovering a character with no action selected: who they are, how hurt they are, and what's on
+    /// them. Also used for a target the selected action can't legally be used on, since their
+    /// condition is still worth reading.
+    /// </summary>
+    public void ShowCharacterTooltip(CharacterManager character)
+    {
+        if (character == null)
+        {
+            ShowDefaultText();
+            return;
+        }
+
+        tooltipText.text = DescribeCharacterHeader(character) + DescribeActiveEffects(character);
+    }
+
+    /// <summary>
     /// Lists an action's status riders, or returns empty when it has none.
     /// </summary>
     /// <param name="target">
@@ -404,14 +473,14 @@ public class TooltipUI : MonoBehaviour
             return;
         }
         
-        // Check if this is a valid target for the selected action
+        // Not a legal target for this action, so no combat preview — but their condition is still
+        // worth reading, which is exactly what ShowCharacterTooltip covers.
         if (!IsValidTarget(selectedAction, target))
         {
-            // Show just the character name and HP without combat details
-            tooltipText.text = $"<b>{target.characterData.characterName} \n({target.CurrentHealth:F0}/{target.MaxHealth:F0} HP)</b>";
+            ShowCharacterTooltip(target);
             return;
         }
-        
+
         string tooltipContent = $"<b>{target.characterData.characterName} ({target.CurrentHealth:F0}/{target.MaxHealth:F0} HP)</b>\n";
         
         switch (selectedAction.actionType)
@@ -516,6 +585,10 @@ public class TooltipUI : MonoBehaviour
                 tooltipContent += DescribeDriveOutcome(selectedAction, target);
                 break;
         }
+
+        // What's already on them, after the preview of what you're about to do. Relevant to the
+        // decision: whether they're already bleeding, or already protected against what you're aiming.
+        tooltipContent += DescribeActiveEffects(target);
 
         tooltipText.text = tooltipContent;
     }

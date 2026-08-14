@@ -34,8 +34,10 @@ public class TargetHoverHandler : MonoBehaviour, IPointerEnterHandler, IPointerE
             }
             else if (characterManager != null)
             {
-                // Show basic character info if no action is selected
-                TooltipUI.Instance.ShowCustomText($"{characterManager.characterData.characterName}\nHP: {characterManager.CurrentHealth}/{characterManager.MaxHealth}");
+                // No action selected — name, health, and whatever is currently on them. Built in
+                // TooltipUI rather than here so the effect colours stay with the rest of the
+                // tooltip formatting, and so health is rounded rather than printing "17.5".
+                TooltipUI.Instance.ShowCharacterTooltip(characterManager);
             }
         }
     }

@@ -150,6 +150,10 @@ public class Action : ScriptableObject
              "drains AND heals. Capped at 50%; as a Debuff it switches crits off entirely.")]
     public Character.BuffType buffType;
 
+    // Min(0) enforces the "author positive" rule rather than leaving it to the tooltip. A negative
+    // value on a Debuff double-negates into a BUFF — a "Slow" with -3 speed made the target FASTER —
+    // and nothing about the resulting number looks wrong until you read the sign.
+    [Min(0f)]
     [Tooltip("Size of the change. Debuff actions negate this, so author it POSITIVE either way.\n\n" +
              "Units depend on Buff Type — check before typing a number:\n" +
              "Accuracy / Defense / Speed / Health — flat points (e.g. 2)\n" +

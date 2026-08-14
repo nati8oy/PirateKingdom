@@ -27,6 +27,6 @@ MonoBehaviour:
   deathSoundEffect: {fileID: 8300000, guid: f0b296e2341b543a99a2ff2128a7385d, type: 3}
   characterClass: 0
   allegiance: 0
-  characterSprite: {fileID: 0}
+  characterSprite: {fileID: 4025885058500790527, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
   characterTint: {r: 1, g: 1, b: 1, a: 1}
-  classDefinition: {fileID: 0}
+  classDefinition: {fileID: 11400000, guid: a39baf1a23144431aa7e90a096579f69, type: 2}

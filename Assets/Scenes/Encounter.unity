@@ -1295,10 +1295,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RunManager
   startDebugRunIfNoSave: 1
   debugStartingCrew:
+  - {fileID: 11400000, guid: c90c1ede1579543feb751ee6b91232ce, type: 2}
   - {fileID: 11400000, guid: edc8f56779bd04c00959ecee54ca6f3c, type: 2}
   - {fileID: 11400000, guid: c7471f8b029cc460e85a75690919b572, type: 2}
   - {fileID: 11400000, guid: df3770fae75564aad993fc9a9866f929, type: 2}
-  - {fileID: 11400000, guid: c90c1ede1579543feb751ee6b91232ce, type: 2}
   encounterSequence: {fileID: 11400000, guid: cd7640ac07f5e4440a19472497047f94, type: 2}
   current:
     saveVersion: 1

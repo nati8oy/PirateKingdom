@@ -16,16 +16,17 @@ MonoBehaviour:
   actionName: Sturdy
   actionIcon: {fileID: -1107388990112613645, guid: 595fd7b4871114b86a557486ed1d85a0, type: 3}
   actionType: 2
-  targetType: 0
+  targetType: 1
   autoTargetSelf: 0
   cooldown: 2
   minDamage: 0
   maxDamage: 0
   minHeal: 0
   maxHeal: 0
-  buffType: 0
-  buffValue: 10
+  buffType: 4
+  buffValue: 0.3
   duration: 3
   driveAmount: 100
   healthDrainRatio: 0.5
+  statusEffects: []
   attackWindupTime: 1

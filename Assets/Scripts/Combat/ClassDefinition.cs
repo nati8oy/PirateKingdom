@@ -14,13 +14,17 @@ using UnityEngine;
 ///
 /// <para><b>Enemies use these too.</b> <c>Enemy</c> subclasses <c>Character</c>, so an Enemy asset
 /// inherits the class reference, the level field and every resolver — one "Skeleton Grunt" class plus
-/// level 1 / 3 / 5 Enemy assets is a scaling family with the numbers authored once. Set
-/// <see cref="classId"/> to <c>None</c> on an enemy class; that field is for crew recruitment and
-/// means nothing here. The enemy's <b>AI</b> config (action weights, targeting strategy, drive
-/// config, plunder) lives on <c>Enemy</c> itself and is <i>not</i> covered here, so behaviour stays
-/// per-asset even when stats are shared.</para>
+/// level 1 / 3 / 5 Enemy assets is a scaling family with the numbers authored once. The enemy's
+/// <b>AI</b> config (action weights, targeting strategy, drive config, plunder) lives on
+/// <c>Enemy</c> itself and is <i>not</i> covered here, so behaviour stays per-asset even when stats
+/// are shared.</para>
 ///
-/// <para>Class covers <b>numbers only</b>. Class-gated <i>abilities</i> are deliberately a separate,
+/// <para><b>This asset IS the class identity.</b> There is no enum — adding a class means creating
+/// one of these, with no code change and no reordering hazard. The asset name and
+/// <see cref="DisplayName"/> are what name it, and <c>Action.allowedClasses</c> refers to it by
+/// reference.</para>
+///
+/// <para>Class covers <b>numbers and gating</b>. Class-gated <i>abilities</i> are deliberately a separate,
 /// still-open decision — see "Defining hero classes" in <c>TODO.md</c> — because letting class drive
 /// identity, stats and loadout at once means no single thing is the real constraint.</para>
 ///
@@ -32,15 +36,6 @@ using UnityEngine;
 public class ClassDefinition : ScriptableObject
 {
     [Header("Identity")]
-    [Tooltip("Which crew archetype this defines, for recruitment and generation later. Combat reads " +
-             "the numbers below, never this.\n\n" +
-             "Set it to None for an ENEMY class — enemies are never recruited and nothing reads their " +
-             "Character Class, so making a Skeleton claim to be a Duelist is misleading noise.\n\n" +
-             "For a crew class it must match the Character Class on every Character using it, or " +
-             "that character reports an error: it would play as one archetype and be recruited as " +
-             "another.")]
-    public Character.CharacterClass classId;
-
     [Tooltip("Shown in logs and, later, on recruitment screens. Falls back to the asset name.")]
     [SerializeField] private string displayName;
 
@@ -100,13 +95,16 @@ public class ClassDefinition : ScriptableObject
     public float parryBonusDriveMultiplier = 5f;
 
     [Header("Status Resistance")]
-    [Tooltip("Resistance to each status kind for every character of this class — the 'all Duelists " +
-             "shrug off poison equally' dial. Subtracted from an effect's Chance To Apply, so 0.4 " +
-             "against a 100% bleed attack means it lands 60% of the time.\n\n" +
-             "Reduces the CHANCE only, never the damage or duration. Kinds with no entry resist at 0.\n\n" +
+    [Tooltip("Resistance to each status kind for every character of this class — the 'all Surgeons " +
+             "shrug off bleed equally' dial.\n\n" +
+             "THE ONLY THING that can stop an effect landing: actions carry no chance of their own, so " +
+             "an effect lands (1 - resistance) of the time. 0.4 means it lands 60% of the time.\n\n" +
+             "Band it boldly — below about 0.3 it is barely felt. At 0.2, across a fight with three " +
+             "applications, it stops nothing at all roughly half the time. Use 0.4-0.6 where a class " +
+             "is MEANT to resist something.\n\n" +
+             "Reduces the chance only, never the damage or duration. Kinds with no entry resist at 0.\n\n" +
              "This is the only source of resistance — characters have no list of their own. Armour and " +
-             "carried items become a further layer on top later, added inside " +
-             "CharacterManager.GetResistance().")]
+             "carried items become a further layer later, added inside CharacterManager.GetResistance().")]
     [SerializeField] private List<StatusResistance> statusResistances = new List<StatusResistance>();
 
     /// <summary>Baseline resistance to one kind, 0 when unlisted.</summary>

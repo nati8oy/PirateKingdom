@@ -240,9 +240,20 @@ third-party and should not be modified** unless explicitly requested:
     level have identical numbers and differ only in name, art, audio and action slots. If a named
     character ever needs different numbers, **give it its own one-off `ClassDefinition`** rather than
     reintroducing per-character deltas.
-  - `Character.ValidateClassSetup()` errors on a **missing class** (the character would resolve to
-    zero everything and be clamped to 1 HP), and on a class asset disagreeing with the authored
-    `characterClass` enum for crew. Both logged from `CharacterManager.Start()`.
+  - **There is no `CharacterClass` enum — the `ClassDefinition` asset reference IS the class
+    identity.** Adding a class is creating an asset: no code change, no append-only hazard, nothing
+    to keep in sync. The enum and `Character.characterClass` were deleted because they stored the
+    same fact a second time, which is the only reason the two could ever disagree.
+  - `Character.ValidateClassSetup()` errors on a **missing class** — the character would resolve to
+    zero everything and be clamped to 1 HP. Logged from `CharacterManager.Start()`.
+  - **Class-gated actions: `Action.allowedClasses`**, a `ClassDefinition[]` where **empty means
+    anyone**. That default is what keeps it cheap — most actions are unrestricted, so you fill it in
+    only for the class-defining ones, and adding a class never means revisiting them.
+    - **Nothing enforces it at combat time, deliberately.** `ActionsManager` builds the bar straight
+      from `actionSlots`, and refusing to draw an authored slot would present as a missing action
+      rather than the authoring mistake it is. `Character.ValidateActionSlots()` warns instead.
+      Gating becomes a real constraint at Phase 5's loadout screen, which is the first point a
+      *player* chooses what goes in a slot.
   - **Read resolved values, never a class field directly.** `Character.ResolveMaxHealth(level)` and
     friends, or the `CharacterManager` properties (`BuffNextActionMultiplier`,
     `DamageTakenDriveMultiplier`, `ParryBonusDriveMultiplier`, …). Going straight to the
@@ -265,12 +276,10 @@ third-party and should not be modified** unless explicitly requested:
     with the numbers authored once.
     - **`Enemy`'s AI config is NOT covered** — action weights, targeting strategy, drive config and
       plunder live on `Enemy` itself, so behaviour stays per-asset even when stats are shared.
-    - The `classId` / `characterClass` agreement check is **skipped for enemies**: they're never
-      recruited and nothing reads their `characterClass`. Set both to **`CharacterClass.None`** on an
-      enemy — it exists so a Skeleton doesn't have to claim to be a Duelist. It's appended *last*
-      rather than sitting at 0, because the enum serializes by integer and putting it first would
-      silently reclassify every existing Duelist; the cost is that a new asset still defaults to
-      Duelist and has to be set by hand.
+    - **Enemy classes need nothing special.** There's no archetype label to fill in any more, so a
+      "Skeleton Grunt" class is just an asset with numbers — it never has to claim to be a crew
+      archetype. (An earlier `CharacterClass.None` existed for exactly that problem and went with
+      the enum.)
   - **Save format is unchanged** — `RunState` stores a `characterId` and the Character asset carries
     the class reference, so `ClassDefinition` needs no id in `ContentDatabase` and no `saveVersion`
     bump.
@@ -434,9 +443,22 @@ third-party and should not be modified** unless explicitly requested:
   - **Total DoT per turn is capped at `MaxDoTFractionPerTurn` (15%) of max health.** Effects refresh
     rather than stack, but bleed, poison and burn can all tick at once without "stacking" and bury a
     crew member. A fraction, not a flat number — the roster spans 20 to 90 health.
-  - **Resistance reduces the CHANCE only**, never damage or duration. One roll,
-    `chance − resistance`. Read through `CharacterManager.GetResistance()` and **never off
-    `characterData` directly** — that single accessor is where Phase E's class baseline and the later
+  - **A rider always applies unless the target resists it.** Actions carry no chance of their own —
+    `StatusApplication` has `kind`, `damagePerTurn` and `turns`, and nothing else. One roll, against
+    `1 − resistance`.
+    - **`chanceToApply` was removed because subtractive resistance didn't scale.** Under the old
+      `chance − resistance`, a given resistance was worth wildly different amounts depending on the
+      action it met: 25% resistance ate a quarter of a 100% rider but *all* of a 25% one, producing
+      silent immunity from two innocuous numbers meeting. With one dial that can't happen, and 25%
+      resistance always means exactly 25% fewer applications.
+    - **Consequence for authoring:** damage and duration now carry *all* the differentiation between
+      two riders of the same kind, so those ranges have to spread more than they otherwise would.
+    - **Band resistances boldly — 0.4–0.6 where a class is meant to resist something.** Below ~0.3
+      it's barely felt: at 0.2, across a fight with three applications, resistance stops nothing at
+      all about half the time.
+  - **Resistance reduces the CHANCE only**, never damage or duration, so the outcome is binary — full
+    effect or nothing. Read through `CharacterManager.GetResistance()` and **never off
+    `characterData` directly** — that single accessor is where the class baseline and the later
     equipment layer slot in. Resistance is deliberately *not* buffable.
   - **Everyone ticks together at the top of the round**, in `TurnManager.AdvanceToNextRound()` —
     not per-character at the start of their own turn. **The order inside that method is the point:**

@@ -10,24 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a6d4a36f7876a47ac997ac8bc5388c21, type: 3}
-  m_Name: Healer
+  m_Name: Master-at-arms
   m_EditorClassIdentifier: Assembly-CSharp::ClassDefinition
-  classId: 0
-  displayName: 
-  maxHealth: 20
-  attackPower: 11
-  defenseValue: 11
-  speed: 14
-  healthPerLevel: 5
+  displayName: Master-at-arms
+  maxHealth: 32
+  attackPower: 13
+  defenseValue: 15
+  speed: 10
+  healthPerLevel: 2
   attackPerLevel: 1
   defensePerLevel: 1
   speedPerLevel: 0.5
-  buffNextActionMultiplier: 1.75
-  damageInflictedDriveMultiplier: 2
-  damageTakenDriveMultiplier: 4
-  parryBonusDriveMultiplier: 8
+  buffNextActionMultiplier: 2
+  damageInflictedDriveMultiplier: 4
+  damageTakenDriveMultiplier: 2
+  parryBonusDriveMultiplier: 6
   statusResistances:
   - kind: 0
-    value: 0.1
+    value: 0.4
   - kind: 3
-    value: 0.1
+    value: 0.4

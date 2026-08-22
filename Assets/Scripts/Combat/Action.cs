@@ -214,9 +214,32 @@ public class Action : ScriptableObject
              "which resolve immediately.")]
     [SerializeField] private float attackWindupTime = 1.0f; // Default 1 second
 
-    //[Header("Requirements")]
-    //public int minimumLevel;
-    //public Character.CharacterClass[] allowedClasses;
+    [Header("Requirements")]
+    [Tooltip("Which classes may use this action. LEAVE EMPTY for 'anyone' — most actions should be, " +
+             "so you only fill this in for the class-defining ones.\n\n" +
+             "Refers to Class Definition assets directly, so adding a class needs no change here and " +
+             "an unrestricted action never has to be revisited.\n\n" +
+             "NOT enforced during combat: a character with this slotted can still use it, and " +
+             "Character's 'Log Resolved Stats' reports the mismatch instead. Gating becomes a real " +
+             "constraint at the loadout screen, which is Phase 5.")]
+    public ClassDefinition[] allowedClasses = new ClassDefinition[0];
+
+    /// <summary>
+    /// Whether a class may use this action. An empty <see cref="allowedClasses"/> means anyone can —
+    /// that default is what keeps the common case free of authoring work.
+    /// </summary>
+    public bool IsAllowedFor(ClassDefinition characterClass)
+    {
+        if (allowedClasses == null || allowedClasses.Length == 0) return true;
+        if (characterClass == null) return false;
+
+        foreach (ClassDefinition allowed in allowedClasses)
+        {
+            if (allowed == characterClass) return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Get the attack windup time for this action

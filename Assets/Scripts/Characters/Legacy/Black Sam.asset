@@ -25,15 +25,7 @@ MonoBehaviour:
   level: 1
   reputation: 0
   deathSoundEffect: {fileID: 8300000, guid: 614d38b7e72914c12b227e2a87b44442, type: 3}
-  characterClass: 0
   allegiance: 0
   characterSprite: {fileID: -5918137915363136097, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
   characterTint: {r: 1, g: 1, b: 1, a: 1}
-  maxHealth: 40
-  attackPower: 15
-  defenseValue: 13
-  speed: 15
-  buffNextActionMultiplier: 1.75
-  damageInflictedDriveMultiplier: 5
-  damageTakenDriveMultiplier: 2.5
-  parryBonusDriveMultiplier: 7
+  classDefinition: {fileID: 11400000, guid: 2bd7b368b63a4989aee2b5afcfc46ecc, type: 2}

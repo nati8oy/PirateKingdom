@@ -153,23 +153,39 @@ public static class StatusEffectStyle
 }
 
 /// <summary>
-/// A character's authored resistance to one effect kind. Reduces the CHANCE of being afflicted —
-/// never the damage or the duration.
+/// A class's resistance to one effect kind. <b>The only thing that can stop an effect landing</b> —
+/// actions carry no chance of their own.
 /// </summary>
+/// <remarks>
+/// Reduces the CHANCE of being afflicted, never the damage or the duration. So the outcome is binary:
+/// the full effect, or nothing.
+/// </remarks>
 [System.Serializable]
 public class StatusResistance
 {
     public StatusEffectKind kind;
 
-    [Tooltip("0 = no resistance, 1 = immune. Subtracted from the effect's Chance To Apply.")]
+    [Tooltip("Chance to shrug the effect off entirely. The effect lands (1 - this) of the time, so " +
+             "0.4 means it lands 60% of the time. 1 is genuine immunity.\n\n" +
+             "BAND THIS BOLDLY. Below about 0.3 it is barely felt — at 0.2, across a fight with three " +
+             "applications, it stops nothing at all about half the time. Use 0.4-0.6 for a class that " +
+             "is MEANT to resist something, and 0.1-0.2 only for incidental resistance.\n\n" +
+             "Reduces the chance only — never the damage or duration.")]
     [Range(0f, 1f)]
     public float value;
 }
 
 /// <summary>
-/// An effect an <see cref="Action"/> tries to apply on a landed hit. <b>Authored data — never mutated
-/// at runtime</b>; the live copy is a <see cref="StatusEffect"/>.
+/// An effect an <see cref="Action"/> applies on a landed hit.
 /// </summary>
+/// <remarks>
+/// <b>It always applies unless the target resists it.</b> There is no per-action chance — the
+/// target's <see cref="StatusResistance"/> is the only thing that can stop one. So two bleed actions
+/// differ by damage and duration alone, and those ranges have to carry all the differentiation
+/// between them.
+///
+/// <b>Authored data, never mutated at runtime</b>; the live copy is a <see cref="StatusEffect"/>.
+/// </remarks>
 [System.Serializable]
 public class StatusApplication
 {
@@ -193,11 +209,4 @@ public class StatusApplication
              "next turn.")]
     [Min(1)]
     public int turns = 2;
-
-    [Tooltip("Base chance before resistance. The target's resistance for this kind is SUBTRACTED " +
-             "from it, so 1.0 against a 40%-resistant target lands 60% of the time.\n\n" +
-             "Only rolled when the attack itself lands — a miss applies nothing, and a successful " +
-             "parry prevents it too.")]
-    [Range(0f, 1f)]
-    public float chanceToApply = 1f;
 }

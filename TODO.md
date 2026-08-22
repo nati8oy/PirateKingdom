@@ -447,18 +447,13 @@ comment predates cooldowns moving off the ScriptableObject. See "Different ways 
 > because letting it gate identity, stats *and* loadout at once means no single thing is the real
 > constraint. Everything below still stands as the open decision.
 
-`Character.CharacterClass` already exists — **Duelist / Muscle / Musketeer / Healer** — and is
-authored on every character. **Nothing reads it.** The only other mention in the codebase is a
-commented-out hook in `Action.cs`:
+**Partly answered since this was written.** `ClassDefinition` now supplies every stat, and
+`Action.allowedClasses` (a `ClassDefinition[]`, empty = anyone) is the **active** half of gating —
+wired, though not enforced until Phase 5's loadout screen exists. The `CharacterClass` enum is gone;
+the asset reference is the identity.
 
-```csharp
-//[Header("Requirements")]
-//public int minimumLevel;
-//public Character.CharacterClass[] allowedClasses;
-```
-
-So the intent was there early and was never wired. Today two characters of different classes are
-distinguished only by stat values and which actions someone happened to slot.
+`minimumLevel` from the original commented-out hook is still unbuilt, and would sit beside
+`allowedClasses` as a second requirement.
 
 The direction: **classes should differ in what they can *do*, not just in their numbers.**
 
@@ -479,10 +474,14 @@ merely ungated — see "Different ways to use drive" below.
 
 | Class | Might spend drive on |
 |---|---|
-| Healer | `RemoveDebuff` — shake off what enemies apply |
-| Muscle | `BuffNextAttack` — the damage spike |
-| Musketeer | `ReduceCooldown` — reload the big shot |
-| Duelist | ? — parry-adjacent, given the parry system already rewards drive |
+| A healer class | `RemoveDebuff` — shake off what enemies apply |
+| A bruiser class | `BuffNextAttack` — the damage spike |
+| A gunner class | `ReduceCooldown` — reload the big shot |
+| A duellist class | ? — parry-adjacent, given the parry system already rewards drive |
+
+**Build this as a field on `ClassDefinition`** — a `List<DriveAction>` per class — rather than a
+`switch` on class somewhere. Every class-gated behaviour wants to be data on the class asset; a
+switch is what made adding a class a code change in the first place.
 
 `DriveManager.GetAvailableActions()` is the natural gate: it already decides what the utility menu
 would offer, so filtering it by `characterData.characterClass` is a small change once the menu exists.

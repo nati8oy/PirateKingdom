@@ -10,24 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a6d4a36f7876a47ac997ac8bc5388c21, type: 3}
-  m_Name: Duelist
+  m_Name: Witch Doctor
   m_EditorClassIdentifier: Assembly-CSharp::ClassDefinition
-  classId: 0
-  displayName: 
-  maxHealth: 28
-  attackPower: 15
-  defenseValue: 13
+  displayName: Witch Doctor
+  maxHealth: 20
+  attackPower: 11
+  defenseValue: 11
   speed: 14
-  healthPerLevel: 5
+  healthPerLevel: 3
   attackPerLevel: 1
   defensePerLevel: 1
   speedPerLevel: 0.5
   buffNextActionMultiplier: 1.75
-  damageInflictedDriveMultiplier: 4
-  damageTakenDriveMultiplier: 3
-  parryBonusDriveMultiplier: 6
+  damageInflictedDriveMultiplier: 2
+  damageTakenDriveMultiplier: 4
+  parryBonusDriveMultiplier: 8
   statusResistances:
-  - kind: 0
-    value: 0.1
-  - kind: 3
-    value: 0.1
+  - kind: 2
+    value: 0.4
+  - kind: 1
+    value: 0.4

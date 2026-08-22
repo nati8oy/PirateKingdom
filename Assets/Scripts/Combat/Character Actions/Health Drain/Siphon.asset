@@ -30,3 +30,4 @@ MonoBehaviour:
   healthDrainRatio: 0.5
   statusEffects: []
   attackWindupTime: 1
+  allowedClasses: []

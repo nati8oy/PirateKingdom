@@ -46,42 +46,11 @@ public class Character : ScriptableObject
     [Tooltip("Sound effect played when this character dies")]
     public AudioClip deathSoundEffect;
 
-    /// <remarks>
-    /// Serialized by integer value, so members may be RENAMED freely but must not be reordered —
-    /// <c>WitchDoctor</c> became <c>Healer</c> without touching a single asset, because it stayed at
-    /// position 3. Append new classes at the end.
-    /// </remarks>
-    public enum CharacterClass
-    {
-        Duelist,
-        Muscle,
-        Musketeer,
-        Healer,
-
-        /// <summary>
-        /// Not a crew archetype. For enemies and anything else that takes its numbers from a
-        /// <see cref="ClassDefinition"/> without ever being recruited.
-        /// </summary>
-        /// <remarks>
-        /// Last rather than first, which reads oddly for a "None" — but the members are serialized by
-        /// integer value and putting this at 0 would silently turn every existing Duelist into it.
-        /// The cost is that a brand new asset still defaults to Duelist, so an enemy has to be set to
-        /// None by hand.
-        /// </remarks>
-        None
-    }
     public enum Allegiance
     {
         Player,
         Enemy
     }
-
-    [Tooltip("Archetype label, for recruitment and generation later. Combat resolves stats from the " +
-             "Class Definition asset, never from this.\n\n" +
-             "Set it to None for an enemy — nothing reads it on that side, and leaving it at the " +
-             "default Duelist is misleading. For crew it must match the Class Definition's Class Id, " +
-             "and a mismatch is reported as an error.")]
-    [SerializeField] public CharacterClass characterClass;
 
     [Tooltip("Which side this fights on. Load-bearing: only Player-allegiance characters bind to " +
              "run state and carry health between encounters, and only they can use action buttons " +
@@ -165,18 +134,13 @@ public class Character : ScriptableObject
 
 
     /// <summary>
-    /// Whether this asset is in a coherent state. Currently only catches the class asset and the
-    /// authored <see cref="characterClass"/> enum disagreeing.
+    /// Whether this asset can actually fight. A missing class is the only way to fail.
     /// </summary>
     /// <remarks>
-    /// The two are redundant by design for now — combat resolves stats from the asset, while the enum
-    /// is what recruitment and generation will read. Letting them drift means the character plays as
-    /// one class and gets recruited as another.
-    ///
-    /// <b>Only checked for crew.</b> Enemies inherit the whole class system (Enemy subclasses
-    /// Character), but they're never recruited and nothing reads their <see cref="characterClass"/>,
-    /// so forcing an enemy class asset to also claim one of the crew archetypes would be friction for
-    /// no benefit. An enemy can use a ClassDefinition and simply ignore the enum.
+    /// There used to be a second check here, that a <c>CharacterClass</c> enum on this asset agreed
+    /// with the class asset's own id. Both are gone: the <c>ClassDefinition</c> reference IS the
+    /// class identity now, so there is no second copy of that fact to drift out of sync — and adding
+    /// a class is creating an asset rather than editing an enum.
     /// </remarks>
     public bool ValidateClassSetup(out string problem)
     {
@@ -184,23 +148,44 @@ public class Character : ScriptableObject
 
         if (classDefinition == null)
         {
-            problem = $"'{name}' has no Class Definition assigned. Every stat now comes from the class, so " +
-                      "this character resolves to zero health, accuracy, defense, speed, drive and resistances " +
-                      "— it will be clamped to 1 HP and be useless in a fight. Assign one.";
-            return false;
-        }
-
-        if (allegiance != Allegiance.Player) return true;
-
-        if (classDefinition.classId != characterClass)
-        {
-            problem = $"'{name}' is authored as {characterClass} but references the " +
-                      $"{classDefinition.classId} class asset. Combat reads the asset, so the enum is the " +
-                      "one that's wrong — but they should agree.";
+            problem = $"'{name}' has no Class Definition assigned. Every stat comes from the class, so this " +
+                      "character resolves to zero health, accuracy, defense, speed, drive and resistances — it " +
+                      "will be clamped to 1 HP and be useless in a fight. Assign one.";
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Reports any slotted action this character's class isn't allowed to use.
+    /// </summary>
+    /// <remarks>
+    /// <b>Nothing enforces gating at combat time, deliberately.</b> <c>ActionsManager</c> builds the
+    /// bar straight from <see cref="actionSlots"/>, and refusing to draw a button for an already
+    /// authored slot would present as a missing action rather than as the authoring mistake it is.
+    /// So this reports and lets it through. Phase 5's loadout screen is where gating becomes a real
+    /// constraint, because that's the first point a player chooses what goes in a slot.
+    /// </remarks>
+    public bool ValidateActionSlots(out string problem)
+    {
+        problem = null;
+
+        if (actionSlots == null || classDefinition == null) return true;
+
+        var rejected = new List<string>();
+
+        foreach (Action action in actionSlots)
+        {
+            if (action != null && !action.IsAllowedFor(classDefinition)) rejected.Add(action.actionName);
+        }
+
+        if (rejected.Count == 0) return true;
+
+        problem = $"'{name}' has actions slotted that {classDefinition.DisplayName} isn't allowed to use: " +
+                  $"{string.Join(", ", rejected)}. They will still work in combat — nothing gates at runtime — " +
+                  "but the loadout is authored wrong.";
+        return false;
     }
 
 #if UNITY_EDITOR
@@ -230,6 +215,7 @@ public class Character : ScriptableObject
                   $"parry {ResolveParryBonusDriveMultiplier():0.##}", this);
 
         if (!ValidateClassSetup(out string problem)) Debug.LogWarning($"[Character] {problem}", this);
+        if (!ValidateActionSlots(out string slotProblem)) Debug.LogWarning($"[Character] {slotProblem}", this);
     }
 #endif
 

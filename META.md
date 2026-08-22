@@ -653,7 +653,8 @@ by choice — see §0.
 | **One instance per kind — refresh, never stack** | Re-applying takes the higher `damagePerTurn` and resets duration. Keeps display and tuning legible. |
 | **DoT ignores `DamageReduction` entirely** | Protection covers the initial hit only. Armour stops blades, not poison. Consequence, and it's intended: DoT is the designated counter to a heavy-protection build. |
 | **DoT grants NO drive to the victim** | Drive is calculated on the initial hit alone. An attack that deals 0 and only applies a DoT therefore generates no drive at all — that's the authored trade-off for it. |
-| **Resistance reduces the CHANCE only** | Never the damage or the duration. Additive, resolved in one roll, matching Darkest Dungeon. |
+| **Resistance reduces the CHANCE only** | Never the damage or the duration, so the outcome is binary. |
+| **Resistance is the ONLY gate** | Actions carry no `chanceToApply`; a rider lands `1 − resistance` of the time. The original subtractive `chance − resistance` was dropped because it didn't scale — a 25% resistance ate a quarter of a 100% rider but *all* of a 25% one, giving silent immunity. Damage and duration now carry all the differentiation between riders. |
 | **Resistance is not buffable** | Authored base only for now; armour and carried items become the modifier layer later. Every read still goes through one accessor so that layer can be added without touching call sites. |
 | **A successful parry prevents the rider** | The 25% chip still lands but the bleed does not. Makes parrying a status attack meaningfully better than eating it, and the parry is already the game's skill expression. |
 | **No source tracking** | DoT damage is unattributed. No dangling reference to a caster who has since died, and nothing needs to award them anything (see the no-drive rule above). |
@@ -823,16 +824,20 @@ a turn it's as landable as it was at the start.
 defense, speed, drive multipliers and **status resistances** — and level scales it. Creating a new
 crew member becomes "Duelist, level 3, +2 attack" instead of a dozen hand-set numbers.
 
-This collapses three things already half-planned: `Character.CharacterClass` exists and **nothing
-reads it** (`TODO.md`), §7 proposes a `CrewArchetype` per class for generating recruits, and Phase 5
+This collapses three things already half-planned: `Character.CharacterClass` existed and **nothing
+read it** (`TODO.md`), §7 proposes a `CrewArchetype` per class for generating recruits, and Phase 5
 needs level to actually feed stat resolution. One asset serves all three — §7 already says it's worth
 designing once for both.
+
+**As built, that enum is deleted.** The `ClassDefinition` reference *is* the class identity, so
+adding a class is creating an asset — no code change, no append-only reordering hazard, and no second
+copy of the same fact to drift out of sync. `Action.allowedClasses` (a `ClassDefinition[]`, empty =
+anyone) gates abilities by reference for the same reason.
 
 ```csharp
 [CreateAssetMenu(menuName = "Scriptable Objects/Class Definition")]
 public class ClassDefinition : ScriptableObject
 {
-    CharacterClass classId;
     // Level 1 baseline
     float maxHealth, attackPower, defenseValue, speed;
     float buffNextActionMultiplier;

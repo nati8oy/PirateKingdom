@@ -185,8 +185,9 @@ public class TooltipUI : MonoBehaviour
         {
             if (application == null) continue;
 
-            float chance = application.chanceToApply;
-            if (target != null) chance = Mathf.Clamp01(chance - target.GetResistance(application.kind));
+            // Riders always apply, so with no target known there is nothing uncertain to report.
+            // Against a known target the percentage is purely how much THEY shrug it off.
+            float chance = target != null ? Mathf.Clamp01(1f - target.GetResistance(application.kind)) : 1f;
 
             text.Append($"\n<color={ColourStatus}>{application.kind}</color>");
 

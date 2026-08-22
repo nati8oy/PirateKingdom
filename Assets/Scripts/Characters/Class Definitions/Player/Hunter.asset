@@ -10,24 +10,21 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a6d4a36f7876a47ac997ac8bc5388c21, type: 3}
-  m_Name: Musketeer
+  m_Name: Hunter
   m_EditorClassIdentifier: Assembly-CSharp::ClassDefinition
-  classId: 0
-  displayName: 
-  maxHealth: 22
-  attackPower: 16
-  defenseValue: 12
+  displayName: Hunter
+  maxHealth: 28
+  attackPower: 15
+  defenseValue: 13
   speed: 14
-  healthPerLevel: 5
+  healthPerLevel: 4
   attackPerLevel: 1
   defensePerLevel: 1
   speedPerLevel: 0.5
-  buffNextActionMultiplier: 1.75
+  buffNextActionMultiplier: 2
   damageInflictedDriveMultiplier: 4
-  damageTakenDriveMultiplier: 5
+  damageTakenDriveMultiplier: 3
   parryBonusDriveMultiplier: 6
   statusResistances:
-  - kind: 0
-    value: 0.1
   - kind: 3
-    value: 0.1
+    value: 0.4

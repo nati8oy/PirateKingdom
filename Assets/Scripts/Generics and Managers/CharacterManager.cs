@@ -262,6 +262,13 @@ public class CharacterManager : MonoBehaviour
                 Debug.LogError($"[CharacterManager] {classProblem}", characterData);
             }
 
+            // A warning, not an error: the action still works, so this is a loadout that shouldn't
+            // have been authored rather than something broken. Nothing gates at combat time.
+            if (!characterData.ValidateActionSlots(out string slotProblem))
+            {
+                Debug.LogWarning($"[CharacterManager] {slotProblem}", characterData);
+            }
+
             ValidateSideAgreement();
 
             ResolveCrewState();
@@ -701,13 +708,21 @@ public class CharacterManager : MonoBehaviour
         // Nothing to afflict. The corpse is destroyed next Update, but health is already 0 here.
         if (isDead || CurrentHealth <= 0f) return false;
 
+        // A rider always applies unless the target resists it. Resistance is the ONLY thing that can
+        // stop one — actions carry no per-action chance.
+        //
+        // Removing that second dial fixed a scaling bug as well as simplifying authoring: the old
+        // `chance - resistance` meant a given resistance was worth wildly different amounts depending
+        // on the action it met (25% resistance ate a quarter of a 100% rider, but ALL of a 25% one,
+        // producing silent immunity). With one number that can't happen, and 25% resistance always
+        // means exactly 25% fewer applications.
         float resistance = GetResistance(application.kind);
-        float chance = Mathf.Clamp01(application.chanceToApply - resistance);
+        float chance = Mathf.Clamp01(1f - resistance);
 
         if (chance <= 0f || Random.value >= chance)
         {
             Debug.Log($"{characterData?.characterName ?? gameObject.name} resisted {application.kind} " +
-                      $"(chance {application.chanceToApply:P0} - resistance {resistance:P0} = {chance:P0})");
+                      $"({resistance:P0} resistance, so it lands {chance:P0} of the time)");
             return false;
         }
 

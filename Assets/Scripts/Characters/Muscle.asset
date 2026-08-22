@@ -25,8 +25,7 @@ MonoBehaviour:
   level: 1
   reputation: 0
   deathSoundEffect: {fileID: 8300000, guid: 614d38b7e72914c12b227e2a87b44442, type: 3}
-  characterClass: 1
   allegiance: 0
   characterSprite: {fileID: -4187769825804618121, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
   characterTint: {r: 1, g: 1, b: 1, a: 1}
-  classDefinition: {fileID: 11400000, guid: d9c00ef5bd0b443f18805d565ec03741, type: 2}
+  classDefinition: {fileID: 11400000, guid: 48565f5b163349fda71c3edc473d7931, type: 2}

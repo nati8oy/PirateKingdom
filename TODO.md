@@ -11,20 +11,21 @@ that's due.
 
 ## Outstanding right now
 
-### Parry drive retune — mostly applied, one asset left
-`Character.cs`'s default is `5f`, but existing assets keep their serialized values, so each has to be
-set by hand. Current state:
+### Phase E — class assets don't exist yet
+`Character` no longer holds any stats; they all come from a `ClassDefinition`, and **a class is
+required** — an asset without one logs an error and fights at 1 HP. Nothing about Phase E can be
+verified until the class assets are authored and every Character and Enemy asset points at one.
+See `META.md` Phase E.
 
-| Asset | `parryBonusDriveMultiplier` | Note |
+### Three action assets are mis-authored
+| Asset | Currently | Should be |
 |---|---|---|
-| `Tephi.asset` | **8** | was the untouched `40f` default — brought down, above the 5 baseline by choice |
-| `Black Sam.asset` | **7** | was 10 |
-| `Biku Bale.asset` | **5** | baseline |
-| `Kolo Aka.asset` | **5** | **still unadjusted.** Target ~2.5, because his `damageTakenDriveMultiplier` of 10 means a parry already pays him twice — see "A parry pays out drive twice" below |
+| `Slow` | Debuff / Speed / **-3** | **3** — Debuff already negates, so -3 makes the target *faster* |
+| `Expose` | Debuff / Defense / **-3** | **3** — same double negation, currently makes the target *harder* to hit |
+| `Sturdy` | Buff / **Accuracy** / 10 | Probably `Damage Reduction / 0.25` or `Defense / 3`; +10 accuracy isn't sturdiness |
 
-Reference point: a clean parry pays ~25 drive (a quarter segment at the current 100-per-segment) for
-a typical ~5-damage hit. Tephi and Black Sam now sit deliberately above that; only Kolo Aka is
-outstanding, and only because of the double-payout interaction rather than the baseline.
+`buffValue` is `[Min(0f)]` now, but that only clamps as the Inspector draws the field — the saved
+negatives survive until each asset is opened and re-entered.
 
 ---
 
@@ -62,41 +63,54 @@ The one asset still outside the band is **`Witch Healer` (defense 3)**, which ev
 
 Speed buffs work as expected — initiative is `Speed + Random(1,9)`, re-rolled each round.
 
-### Most of the roster caps on the *first* drive stack
-The multiplier is `1 + baseBonus·(1 + d + d² + …)` where `baseBonus = buffNextActionMultiplier - 1`,
-hard-capped at 2.0×. At `buffNextActionMultiplier: 2.0`, one stack already computes `1 + 1.0 = 2.0`
-and hits the cap — so **stacks 2, 3 and 4 do literally nothing** for Kolo Aka, Biku Bale, Skeleton
-and Skeleton Elite.
+### `buffNextActionMultiplier` has a narrow usable band — roughly 1.4 to 1.6
 
-Only Tephi (1.5) sees the intended 1.50 / 1.75 / 1.875 / 1.9375 curve.
+Now a **per-class** value on `ClassDefinition`, so this is a decision per class rather than per
+character. The dial is squeezed from both ends and the middle is not wide.
 
-The stacking system is therefore a one-stack system for most of the game, and committing further
-segments is a pure loss. Either bring `buffNextActionMultiplier` down to roughly 1.4-1.6 across the
-roster so the curve has room, or raise the cap. Worth settling before tuning the meter's size — and
-it's an argument for spending drive *sideways* rather than deeper, see "Different ways to use drive".
+The multiplier for *n* committed stacks is `1 + baseBonus·(1 + d + d² + …)`, where
+`baseBonus = buffNextActionMultiplier - 1` and `d = decayRate` (0.5), **hard-capped at 2.0×**.
 
-### A low `buffNextActionMultiplier` reads as a broken drive system — resolved for Black Sam
-Black Sam was authored at **1.25** against **2.0** on Kolo Aka, Biku Bale, Skeleton and Skeleton
-Elite. Since `baseBonus = buffNextActionMultiplier - 1`, that gave him **1.25×** on the first stack
-where a Skeleton got **2.0×**, and stack 2 took him only to 1.375× (capping at 1.47× on four stacks
-against the roster's 1.9375×). Raised in the Inspector, which fixed the feel.
+**The ceiling.** At `2.0`, one stack already computes `1 + 1.0 = 2.0` and hits the cap — so stacks
+2, 3 and 4 do *literally nothing*, and committing them is a pure loss. Anything at or above ~1.9 is
+effectively a one-stack system. At `1.5` you get the intended 1.50 / 1.75 / 1.875 / 1.9375 curve.
 
-**The generalizable trap:** drive multipliers are applied to small integer damage ranges and then
-put through `Mathf.Round` in `TakeDamage`. On Black Sam's loadout — Stab 2–4, Slash 3–7 — a 1.25×
-multiplier frequently moved the damage number by **0 or 1**. So committing a whole drive segment,
-which is an expensive and deliberate player choice, produced no visible feedback. The system was
-working perfectly; the reward was rounding away.
+**The floor.** Drive multipliers are applied to small integer damage ranges and then rounded in
+`TakeDamage`. Below about `1.5` the bonus frequently moves the damage number by **0 or 1**, so
+committing a whole segment — an expensive, deliberate choice — produces no visible feedback. The
+system works; the reward rounds away. This is what made an early `1.25` character read as a broken
+drive system.
 
-Consequences worth keeping in mind:
+Consequences worth keeping:
 
-- **Any `buffNextActionMultiplier` below ~1.5 is invisible at current damage scales.** Tephi is
-  still at 1.5, which is the weakest case left on the roster.
-- **Diminishing returns compress this further.** Stacks 3 and 4 add `baseBonus·d²` and
-  `baseBonus·d³` — at `decayRate` 0.5 and a low base bonus those are fractions of a point, i.e.
-  segments spent for literally nothing after rounding.
-- **A spender needs to be legible at the smallest damage roll it can apply to**, not just on
-  average. Sanity-check new drive tuning against `minDamage`, not the midpoint.
-- The same rounding applies to heals (`Heal` rounds too), so low heal ranges have the same problem.
+- **Diminishing returns compress the floor further.** Stacks 3 and 4 add `baseBonus·d²` and
+  `baseBonus·d³` — at a low base bonus those are fractions of a point, i.e. segments spent for
+  nothing after rounding.
+- **Check legibility at the SMALLEST damage roll a class can apply**, not the midpoint. A multiplier
+  that reads well on a 7-damage swing can be invisible on a 2-damage one.
+- **The same rounding applies to heals** (`Heal` rounds too), so a healer class with low heal ranges
+  has the identical problem.
+- The narrowness of the band is itself an argument for spending drive **sideways** rather than
+  deeper — see "Different ways to use drive".
+
+### Parry drive is paid twice, so the two dials have to be set together
+
+Also per-class now. A successful parry pays out from *both*:
+
+1. `parryBonusDriveMultiplier` × damage prevented, and
+2. `damageTakenDriveMultiplier` × the 25% chip that still lands, via the normal `TakeDamage` path.
+
+**Reference point:** a clean parry should pay roughly **25 drive** — a quarter segment at the current
+100-per-segment meter — for a typical ~5-damage hit. That's `parryBonusDriveMultiplier ≈ 5`.
+
+**So a tank class wants a *lower* parry bonus, not a higher one.** A class built around
+`damageTakenDriveMultiplier` (getting hit builds drive) is already collecting on the chip, and giving
+it a high parry bonus on top double-dips. Historically the character with `damageTakenDriveMultiplier`
+of 10 needed his parry bonus down near 2.5 to sit level with the rest of the roster.
+
+If you'd rather it paid once, gate the drive block in `TakeDamage` behind `if (!wasParried)` — then
+every class can use the same ~5 baseline. That's a feel change to the "tank builds drive by getting
+hit" identity, so it should be its own decision.
 
 ---
 
@@ -524,6 +538,38 @@ Follow-ups it opened:
   way to reach `DriveManager.ClearStacks()`, which is currently private.
 - **`HealthDrain` landed alongside it** — an attack that heals the attacker for a share of the
   health the target actually lost. See the drive/health drain notes in `CLAUDE.md`.
+
+### Death blow drive bonus — idea, not built
+
+Killing an enemy currently pays exactly the same drive as any other hit of that damage. A bonus for
+the finishing blow would reward committing drive to close a fight rather than chipping, and would
+give a reason to aim at the nearly-dead target that isn't purely "remove a threat".
+
+What's already there and what isn't:
+
+- **The hook exists and is unused.** `CharacterManager.OnDeath` has **zero subscribers**. It's the
+  obvious place.
+- **It doesn't carry the killer.** `OnDeath` is a parameterless delegate, so it can't say who to pay.
+  Either it grows a `CharacterManager killer` parameter, or the award happens at the damage site —
+  `CombatController` and `EnemyManager` both already know both parties there, which is probably
+  simpler and avoids a per-death event that needs unsubscribing.
+- **`OnDeath` fires TWICE per death** — once from `TakeDamage` when health hits 0, once from
+  `Update` on the frame the object is destroyed. Harmless today only because nothing listens. Fix
+  that before hanging anything off it, or the bonus pays double.
+- Decide whether it's a flat amount, a fraction of a segment, or scaled by the victim's max health
+  (so a boss kill pays more than a Skeleton). And whether **enemies** get it too — the drive economy
+  has been kept symmetric so far.
+
+### Overkill pays full drive, on both sides
+
+`OnDamageDealt` receives the *rolled* damage, not health actually removed, so a 20-damage hit on a
+3 HP target earns drive for 20. Both sides do this, so it's at least consistent — but it sits oddly
+next to `HealthDrain`, which deliberately siphons from health **actually lost** so overkill isn't
+rewarded.
+
+`TakeDamage` already returns the health lost, so aligning them is a one-line change at each damage
+site. Left alone because it's a balance decision — rewarding overkill makes big hits better than they
+look, which may well be wanted — rather than an oversight.
 
 ### Directions worth exploring
 

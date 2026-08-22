@@ -266,8 +266,11 @@ third-party and should not be modified** unless explicitly requested:
     - **`Enemy`'s AI config is NOT covered** — action weights, targeting strategy, drive config and
       plunder live on `Enemy` itself, so behaviour stays per-asset even when stats are shared.
     - The `classId` / `characterClass` agreement check is **skipped for enemies**: they're never
-      recruited and nothing reads their `characterClass`, so making an enemy class claim a crew
-      archetype would be friction for no benefit.
+      recruited and nothing reads their `characterClass`. Set both to **`CharacterClass.None`** on an
+      enemy — it exists so a Skeleton doesn't have to claim to be a Duelist. It's appended *last*
+      rather than sitting at 0, because the enum serializes by integer and putting it first would
+      silently reclassify every existing Duelist; the cost is that a new asset still defaults to
+      Duelist and has to be set by hand.
   - **Save format is unchanged** — `RunState` stores a `characterId` and the Character asset carries
     the class reference, so `ClassDefinition` needs no id in `ContentDatabase` and no `saveVersion`
     bump.
@@ -525,6 +528,14 @@ third-party and should not be modified** unless explicitly requested:
       `CharacterManager.Heal(amount, driveMultiplier)` takes the caster's multiplier as a
       parameter and must never look one up itself — its own `driveManager` belongs to the heal's
       *target*, so doing so spent the healer's segments while consuming the target's idle stacks.
+  - **Both sides earn drive from damage dealt**, via `CharacterManager.OnDamageDealt()` →
+    `damageInflictedDriveMultiplier`. The player pays it from `CombatController`; enemies pay it from
+    `EnemyManager.GrantDriveForDamageDealt()`, called on all three damage paths — direct, parryable,
+    and the 25% chip that survives a parry. **The enemy side was missing entirely until it was
+    fixed**, so `damageInflictedDriveMultiplier` was authored on every Enemy asset and never read,
+    and enemies could only build drive from being hit and from turn regeneration.
+  - **There is no death-blow bonus** — a kill pays the same as any other hit of that damage. Idea and
+    its complications are logged in `TODO.md`; note `OnDeath` currently fires twice per death.
   - **Player input:** each press of the Drive action adds one stack to the selected crew member
     (`PlayerInputHandler` → `TryAddDriveStack()`). Sound + particles fire on **every** stack.
   - **Drive manipulation actions (`DriveGrant` / `DriveDrain`).** An `Action` can move raw drive on

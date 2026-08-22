@@ -17,7 +17,7 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 |---|---|
 | **D1 — Status effect substrate + damage over time** | ✅ **DONE, verified.** Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive, and everyone ticks together at the top of the round. |
 | **D2 — Stun** | ✅ **DONE, verified.** Skips a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
-| **E — Class definitions & level scaling** | ✅ **Code complete**, awaiting Editor verification. A class asset supplies base stats and resistances; level scales them; per-character values become deltas. Stops every new character needing a dozen hand-set numbers. |
+| **E — Class definitions & level scaling** | ✅ **Code complete**, ⬅ **blocked on Editor work.** A `ClassDefinition` asset supplies *every* stat and resistance a character has, scaled by level. `Character` now holds no numbers at all, and **a class is required** — an asset without one errors and fights at 1 HP. Nothing can be verified until the class assets exist and the roster is rebuilt against them. |
 
 **E was deliberately held until D was proven**, because it touches every character asset and
 `RefreshStats()`, which everything reads. Nothing in D depended on it: resistances are authored

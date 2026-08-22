@@ -56,7 +56,19 @@ public class Character : ScriptableObject
         Duelist,
         Muscle,
         Musketeer,
-        Healer
+        Healer,
+
+        /// <summary>
+        /// Not a crew archetype. For enemies and anything else that takes its numbers from a
+        /// <see cref="ClassDefinition"/> without ever being recruited.
+        /// </summary>
+        /// <remarks>
+        /// Last rather than first, which reads oddly for a "None" — but the members are serialized by
+        /// integer value and putting this at 0 would silently turn every existing Duelist into it.
+        /// The cost is that a brand new asset still defaults to Duelist, so an enemy has to be set to
+        /// None by hand.
+        /// </remarks>
+        None
     }
     public enum Allegiance
     {
@@ -64,9 +76,11 @@ public class Character : ScriptableObject
         Enemy
     }
 
-    [Tooltip("Archetype label. Combat resolves stats from the Class Definition asset below, not from " +
-             "this — but the two should agree, and a mismatch is reported by 'Log Resolved Stats'. " +
-             "Recruitment and generation will use it.")]
+    [Tooltip("Archetype label, for recruitment and generation later. Combat resolves stats from the " +
+             "Class Definition asset, never from this.\n\n" +
+             "Set it to None for an enemy — nothing reads it on that side, and leaving it at the " +
+             "default Duelist is misleading. For crew it must match the Class Definition's Class Id, " +
+             "and a mismatch is reported as an error.")]
     [SerializeField] public CharacterClass characterClass;
 
     [Tooltip("Which side this fights on. Load-bearing: only Player-allegiance characters bind to " +

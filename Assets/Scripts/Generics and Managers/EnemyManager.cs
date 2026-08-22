@@ -686,6 +686,7 @@ public class EnemyManager : MonoBehaviour
                 }
                 
                 float healthTaken = targetManager.TakeDamage(damage);
+                GrantDriveForDamageDealt(damage);
 
                 // Landed hit, so riders roll. This path only runs with the parry system off or
                 // missing; normally an enemy Attack or Health Drain resolves in OnAttackComplete.
@@ -796,6 +797,7 @@ public class EnemyManager : MonoBehaviour
         {
             // Attack was not parried, apply full damage
             healthLost = _pendingTarget.TakeDamage(_pendingDamage);
+            GrantDriveForDamageDealt(_pendingDamage);
             Debug.Log($"[EnemyManager] {gameObject.name} hit {_pendingTarget.characterData.characterName} for {_pendingDamage:F1} damage");
 
             // Status riders land only on an unparried hit. A parry still eats the 25% chip but
@@ -810,6 +812,10 @@ public class EnemyManager : MonoBehaviour
 
             float reducedDamage = _pendingDamage * parryDamageReduction;
             healthLost = _pendingTarget.TakeDamage(reducedDamage, wasParried: true);  // <-- Pass wasParried = true!
+
+            // The chip still counts. Drive follows damage actually dealt, and the parried player
+            // is already paid for that same chip via damageTakenDriveMultiplier.
+            GrantDriveForDamageDealt(reducedDamage);
             Debug.Log($"[EnemyManager] {gameObject.name}'s attack was parried! Reduced damage: {reducedDamage:F1} ({parryDamageReduction * 100}% of {_pendingDamage:F1})");
         }
 
@@ -866,6 +872,28 @@ public class EnemyManager : MonoBehaviour
     /// makes it slightly more visible, because an enemy's crit is gated behind landing a separate
     /// to-hit roll first while the player's buffed high roll both hits and crits by construction.
     /// </remarks>
+    /// <summary>
+    /// Pays this enemy the drive it earned for dealing damage, the same way <c>CombatController</c>
+    /// pays the player.
+    /// </summary>
+    /// <remarks>
+    /// <b>This was simply missing.</b> Every enemy damage path called <c>TakeDamage</c> and stopped
+    /// there, so <c>damageInflictedDriveMultiplier</c> was authored on every Enemy asset and never
+    /// read — enemies could only build drive from being hit and from turn regeneration, while the
+    /// player's path had called <c>OnDamageDealt</c> all along. The two sides had quietly different
+    /// drive economies.
+    ///
+    /// Passes the damage DEALT rather than health actually lost, matching the player exactly. So
+    /// overkill pays in full on both sides — consistent, and logged in <c>TODO.md</c> as its own
+    /// question rather than silently changed for one side here.
+    /// </remarks>
+    private void GrantDriveForDamageDealt(float damage)
+    {
+        if (damage <= 0f) return;
+
+        _characterManager?.OnDamageDealt(damage);
+    }
+
     private bool RollForCritical()
     {
         int roll = Random.Range(1, 21); // d20 roll

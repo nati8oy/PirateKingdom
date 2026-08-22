@@ -2,26 +2,27 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// The numeric baseline for a character class: what every Duelist starts with, and how those numbers
-/// grow per level. Referenced by <see cref="Character"/>, which then only has to author what makes
-/// that particular character <i>different</i>.
+/// Every number a character has: stats, growth per level, drive rates and status resistances.
+/// <see cref="Character"/> holds none of these — it references one of these assets instead.
 /// </summary>
 /// <remarks>
-/// <para><b>Assigning one is optional, and that's what keeps this safe.</b> A <c>Character</c> with no
-/// class assigned resolves exactly as it did before this existed — its own flat values, used
-/// verbatim. So the roster converts one asset at a time with everything unconverted behaving
-/// identically, and enemies can opt out entirely rather than inheriting a crew class's curve.</para>
+/// <para><b>Required.</b> A <c>Character</c> without one resolves to zero everything and gets clamped
+/// to 1 HP, and says so loudly via <c>ValidateClassSetup</c>. There are no per-character overrides:
+/// two characters of the same class at the same level are numerically identical and differ only in
+/// name, art, audio and action slots. A named character that needs different numbers gets its own
+/// one-off asset rather than a delta.</para>
 ///
-/// <para><b>Enemies can use these too.</b> <c>Enemy</c> subclasses <c>Character</c>, so an Enemy asset
-/// inherits the class reference, the level field and every resolver — a "Skeleton Grunt" class plus
-/// level 1 / 3 / 5 Enemy assets is a scaling family with the numbers authored once. Note the enemy's
-/// <b>AI</b> config (action weights, targeting strategy, drive config, plunder) lives on
-/// <c>Enemy</c> itself and is <i>not</i> covered here, so behaviour is still per-asset.</para>
+/// <para><b>Enemies use these too.</b> <c>Enemy</c> subclasses <c>Character</c>, so an Enemy asset
+/// inherits the class reference, the level field and every resolver — one "Skeleton Grunt" class plus
+/// level 1 / 3 / 5 Enemy assets is a scaling family with the numbers authored once. Set
+/// <see cref="classId"/> to <c>None</c> on an enemy class; that field is for crew recruitment and
+/// means nothing here. The enemy's <b>AI</b> config (action weights, targeting strategy, drive
+/// config, plunder) lives on <c>Enemy</c> itself and is <i>not</i> covered here, so behaviour stays
+/// per-asset even when stats are shared.</para>
 ///
-/// <para>Class covers <b>numbers only</b>. Names, art, audio, action slots and per-character deltas
-/// stay on the Character. Class-gated <i>abilities</i> are deliberately a separate, still-open
-/// decision — see "Defining hero classes" in <c>TODO.md</c> — because letting class drive identity,
-/// stats and loadout at once means no single thing is the real constraint.</para>
+/// <para>Class covers <b>numbers only</b>. Class-gated <i>abilities</i> are deliberately a separate,
+/// still-open decision — see "Defining hero classes" in <c>TODO.md</c> — because letting class drive
+/// identity, stats and loadout at once means no single thing is the real constraint.</para>
 ///
 /// <para>Not registered in <c>ContentDatabase</c> and not referenced by save data: <c>RunState</c>
 /// stores a <c>characterId</c>, and the Character asset carries the class reference. So this needs no
@@ -31,11 +32,13 @@ using UnityEngine;
 public class ClassDefinition : ScriptableObject
 {
     [Header("Identity")]
-    [Tooltip("Which crew archetype this defines. Used for recruitment and generation later; combat " +
-             "reads the numbers below, not this.\n\n" +
-             "Only meaningful for CREW classes — a crew Character whose own Character Class disagrees " +
-             "with this is reported as an error. Enemy classes can leave it at anything, since enemies " +
-             "are never recruited and nothing reads their Character Class.")]
+    [Tooltip("Which crew archetype this defines, for recruitment and generation later. Combat reads " +
+             "the numbers below, never this.\n\n" +
+             "Set it to None for an ENEMY class — enemies are never recruited and nothing reads their " +
+             "Character Class, so making a Skeleton claim to be a Duelist is misleading noise.\n\n" +
+             "For a crew class it must match the Character Class on every Character using it, or " +
+             "that character reports an error: it would play as one archetype and be recruited as " +
+             "another.")]
     public Character.CharacterClass classId;
 
     [Tooltip("Shown in logs and, later, on recruitment screens. Falls back to the asset name.")]
@@ -97,10 +100,13 @@ public class ClassDefinition : ScriptableObject
     public float parryBonusDriveMultiplier = 5f;
 
     [Header("Status Resistance")]
-    [Tooltip("Baseline resistance to each status kind for this class — the 'all Duelists shrug off " +
-             "poison equally' dial. A character's own list is ADDED on top of this, and the total is " +
-             "clamped to 0-1.\n\n" +
-             "Kinds with no entry resist at 0.")]
+    [Tooltip("Resistance to each status kind for every character of this class — the 'all Duelists " +
+             "shrug off poison equally' dial. Subtracted from an effect's Chance To Apply, so 0.4 " +
+             "against a 100% bleed attack means it lands 60% of the time.\n\n" +
+             "Reduces the CHANCE only, never the damage or duration. Kinds with no entry resist at 0.\n\n" +
+             "This is the only source of resistance — characters have no list of their own. Armour and " +
+             "carried items become a further layer on top later, added inside " +
+             "CharacterManager.GetResistance().")]
     [SerializeField] private List<StatusResistance> statusResistances = new List<StatusResistance>();
 
     /// <summary>Baseline resistance to one kind, 0 when unlisted.</summary>
@@ -118,7 +124,7 @@ public class ClassDefinition : ScriptableObject
 
     // ---------------------------------------------------------------------------------------
 
-    /// <summary>Health for a given level, before any per-character delta.</summary>
+    /// <summary>Health for a given level.</summary>
     public float MaxHealthAtLevel(int level) => maxHealth + LevelsAbove(level) * healthPerLevel;
 
     public float AttackPowerAtLevel(int level) => attackPower + LevelsAbove(level) * attackPerLevel;

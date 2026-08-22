@@ -23,8 +23,8 @@ MonoBehaviour:
   defensePerLevel: 1
   speedPerLevel: 0.5
   buffNextActionMultiplier: 1.5
-  damageInflictedDriveMultiplier: 4
-  damageTakenDriveMultiplier: 4
+  damageInflictedDriveMultiplier: 2
+  damageTakenDriveMultiplier: 3
   parryBonusDriveMultiplier: 5
   statusResistances:
   - kind: 0

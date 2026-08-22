@@ -293,7 +293,12 @@ public class CombatController : MonoBehaviour
     /// </summary>
     public bool IsValidTarget(CharacterManager targetManager)
     {
-        if (selectedAction == null)
+        if (selectedAction == null || targetManager == null)
+            return false;
+
+        // Hidden characters can't be attacked, debuffed or drained — but can still be healed and
+        // buffed, which is the whole point of hiding a support character.
+        if (selectedAction.IsHostile && targetManager.IsHiddenFromHostileActions)
             return false;
 
         switch (selectedAction.targetType)
@@ -531,7 +536,15 @@ public class CombatController : MonoBehaviour
                           $"{selectedAction.driveAmount} drive to {targetManager.characterData?.characterName ?? targetManager.name}");
                 break;
 
-            case Action.ActionType.DriveDrain:
+            // Applies its riders and nothing else — no roll, no damage. Resistance is the only gate,
+        // and beneficial kinds (Stealth) skip even that.
+        case Action.ActionType.ApplyStatus:
+            targetManager.ApplyStatusEffectsFrom(selectedAction);
+            Debug.Log($"{currentCharacter?.characterData?.characterName ?? "Someone"} applied " +
+                      $"{selectedAction.actionName} to {targetManager.characterData?.characterName ?? targetManager.name}");
+            break;
+
+        case Action.ActionType.DriveDrain:
                 targetManager.LoseDrive(selectedAction.driveAmount);
                 Debug.Log($"{currentCharacter?.characterData?.characterName ?? "Someone"} drained " +
                           $"{selectedAction.driveAmount} drive from {targetManager.characterData?.characterName ?? targetManager.name}");
@@ -541,6 +554,14 @@ public class CombatController : MonoBehaviour
     }
     finally
     {
+        // Acting hostilely drops the caster's own stealth, whether or not the effect resolved
+        // cleanly — being seen is a consequence of swinging, not of connecting. Friendly actions
+        // leave it intact, so a hidden Surgeon can keep healing.
+        if (selectedAction != null && selectedAction.IsHostile)
+        {
+            currentCharacter?.BreakStealthFromHostileAction();
+        }
+
         // Everything here runs even if resolving the effect above threw — see the method remarks.
         // Using an action costs its cooldown and the turn together; splitting them means a fault
         // mid-resolution hands back a free, off-cooldown action.

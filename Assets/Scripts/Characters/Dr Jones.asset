@@ -10,22 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 21935d8ccc60e463fa5473d0d88296b1, type: 3}
-  m_Name: Muscle
+  m_Name: Dr Jones
   m_EditorClassIdentifier: Assembly-CSharp::Character
-  id: muscle
-  characterName: Tankard
+  id: healer
+  characterName: Dr Jones
   actionSlots:
+  - {fileID: 11400000, guid: 7336d16e55f164244a66a2b7eb61aed1, type: 2}
+  - {fileID: 11400000, guid: da7ad9faeffc14185b9a4690a5382ba8, type: 2}
   - {fileID: 11400000, guid: 5357e68ed7fe24323ba8d2f9e7cff4ce, type: 2}
-  - {fileID: 11400000, guid: 148824dff25f94ec4884bef7e3fa2bbc, type: 2}
-  - {fileID: 11400000, guid: 0c3a78bd8ba1e4200a81e9368f3e8197, type: 2}
-  - {fileID: 11400000, guid: 73a4ecfd977dd472f9765f6ca8453fcf, type: 2}
+  - {fileID: 11400000, guid: af0473d1024cf44a0827ed0811e8f49a, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   availableActions: []
   level: 1
   reputation: 0
-  deathSoundEffect: {fileID: 8300000, guid: 614d38b7e72914c12b227e2a87b44442, type: 3}
+  deathSoundEffect: {fileID: 8300000, guid: 875d9a7457f5d4337b5ff614ebfeb3fb, type: 3}
   allegiance: 0
-  characterSprite: {fileID: -4187769825804618121, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
+  characterSprite: {fileID: -6565835137778244483, guid: d8c643aae0a954d51b147630b2e179e4, type: 3}
   characterTint: {r: 1, g: 1, b: 1, a: 1}
-  classDefinition: {fileID: 11400000, guid: 48565f5b163349fda71c3edc473d7931, type: 2}
+  classDefinition: {fileID: 11400000, guid: ec249b75a6164cc8877208cba7fb48c6, type: 2}

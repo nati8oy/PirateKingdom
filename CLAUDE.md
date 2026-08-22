@@ -500,6 +500,56 @@ third-party and should not be modified** unless explicitly requested:
       already in flight. **This is a fourth turn-ownership layer; don't remove it.**
     - Buffs still tick at the end of each character's **own turn**. The two schedules differ, but
       the durations are numerically equivalent — every character gets exactly one turn per round.
+  - **Stealth (`StatusEffectKind.Stealth`) — the first BENEFICIAL status, and the first that changes
+    what's *legal* rather than dealing damage.** A hidden character can't be targeted by a hostile
+    action, but can still be healed and buffed — which is the whole reason to hide a support
+    character.
+    - **Hostility derives from `Action.IsHostile`, which reads `ActionType` — never `TargetType`.**
+      That's load-bearing: `TargetType` is read caster-relatively by enemies, so an enemy's
+      "SingleEnemy" points at the crew, whereas an Attack is hostile whoever swings it. `ApplyStatus`
+      is judged by its payload instead: a stealth cast is friendly, a poison dart isn't.
+    - **Beneficial kinds skip the resistance roll** (`StatusEffectRules.IsBeneficial`) — being good
+      at shrugging off poison must not make an ally's stealth harder to receive.
+    - **Stealth breaks when its bearer acts hostilely**, on both sides. Without that a hidden
+      character attacks with impunity for the duration, which isn't a defensive tool — it's a win.
+      Friendly actions leave it intact.
+    - **Turn-scoped, like stun** — `turns` counts the bearer's OWN turns, and
+      `ConsumeStealthForCompletedTurn()` spends one from `OnTurnComplete()`. So `turns: 1` means
+      "hidden until the end of your next turn", which always covers a full round of enemy turns.
+      **Round-scoping it was a real bug:** stealth is applied part-way through a round, so expiring
+      at the round tick would have covered every enemy turn if the caster acted first and *none at
+      all* if they acted last. A skipped turn still spends it — being stunned shouldn't extend how
+      long you stay hidden.
+    - **A turn already underway can't consume it** (`StatusEffect.SkipNextTurnConsumption`, granted
+      by `GrantGraceIfAppliedDuringOwnTurn` when the bearer is the acting character). Without that a
+      **self-cast** is applied and consumed inside one frame — `OnTurnComplete` fires for the very
+      turn it was cast in — so it never visibly happens at all. Ally-casts don't get the grace,
+      since their turn hasn't started, and both routes end up protecting for about one round.
+    - **Two presentation channels, mirroring buffs exactly** — `stealthFeedback` (`MMF_Player`,
+      one-shot burst on entering stealth, like `buffFeedback`) and `stealthParticles`
+      (`ParticleImage`, sustained for the duration, like `buffParticles`). **The types are not
+      interchangeable:** `ParticleImage` genuinely holds between `Play()` and `Stop()`, whereas
+      `MMF_Player.PlayFeedbacks()` runs its feedbacks once through. Using an MMF_Player alone for a
+      sustained effect was a bug and read as "stealth has no feedback at all".
+    - **A "Visible" line is written to `actionStatusText`** — the same floating text the parry and
+      stun messages use — whenever stealth ends, by any route. Driven from the same transition as the
+      feedback, so it can't be missed at one of the three exits.
+    - Both are driven from `NotifyStatusesChanged()` — the single funnel every status mutation goes
+      through. Stealth ends three different ways (turn spent, broken by acting, debug clear), so
+      deriving the effect from current state in one place is what stops one of them leaving it
+      running forever.
+    - **Enforced in exactly two places**: `CombatController.IsValidTarget` (which
+      `ActionTargetingLine` and `TooltipUI` both now defer to) and `EnemyManager.SelectTarget`.
+    - **`EnemyManager.FilterHiddenTargets` falls back to attacking a hidden target when *every*
+      candidate is hidden.** Otherwise a fully hidden party makes every enemy forfeit its turn, which
+      stalls the fight rather than adding tension. Single-ally-only stealth makes that hard to reach
+      but not impossible — three crew hiding each other in sequence gets there.
+    - `TooltipUI` no longer keeps its own copy of the targeting rules. It did, and stealth is exactly
+      what made the duplicate bite: hover said "valid" while the click refused.
+  - **`ActionType.ApplyStatus` applies riders and nothing else** — no damage, no to-hit roll. Generic
+    rather than an `ActionType.Stealth` so future beneficial statuses (regeneration, haste) cost
+    nothing but an enum member. For a status that *can* miss, use an Attack with 0 damage and a rider
+    — that path rolls to hit and this one doesn't.
   - Statuses are **per-battle** — nothing reaches `RunState`, exactly like buffs.
   - **Every buff type has a working debuff form for free.** `ActionType.Debuff` negates `buffValue`
     before calling `AddBuff`, on both the player and enemy paths, so Speed, Defense, Accuracy,

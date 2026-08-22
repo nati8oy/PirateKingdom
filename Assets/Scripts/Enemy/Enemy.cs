@@ -69,6 +69,12 @@ public class Enemy : Character
     [SerializeField, Range(0f, 1f)]
     public float driveDrainWeight = 0.25f;
 
+    [Tooltip("Weight for ApplyStatus actions — stealth, and any pure status application. Note a " +
+             "hostile one (a poison dart) is weighted by the same number as a friendly one (hiding a " +
+             "wounded ally), so an enemy carrying both will pick between them at random.")]
+    [SerializeField, Range(0f, 1f)]
+    public float applyStatusWeight = 0.2f;
+
     [Tooltip("Weight for HealthDrain actions. Scored separately from Attack because it doubles as " +
              "this enemy's sustain — a high weight here is what makes an attrition fight, since the " +
              "crew have to out-damage the healing rather than just survive it.")]

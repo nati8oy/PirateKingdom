@@ -39,7 +39,23 @@ public class Action : ScriptableObject
         /// and heals the attacker for <see cref="healthDrainRatio"/> of the health the target
         /// actually lost. A miss heals nothing.
         /// </summary>
-        HealthDrain
+        HealthDrain,
+
+        /// <summary>
+        /// Applies this action's <see cref="statusEffects"/> to the target and nothing else. No
+        /// damage, no to-hit roll — the target's resistance is the only thing that can stop it, and
+        /// beneficial kinds skip even that.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately generic rather than an <c>ActionType.Stealth</c>: stealth is one status among
+        /// several, and every future beneficial effect (regeneration, haste) then costs nothing but a
+        /// <see cref="StatusEffectKind"/> member. It also makes a pure debuff-status action possible —
+        /// a poison dart that deals no damage.
+        ///
+        /// For a status that CAN miss, use an Attack with 0 damage and a rider instead; that path
+        /// rolls to hit and this one doesn't.
+        /// </remarks>
+        ApplyStatus
     }
 
     public enum TargetType
@@ -93,7 +109,9 @@ public class Action : ScriptableObject
              "Drive Grant — adds Drive Amount to the target's drive meter\n" +
              "Drive Drain — removes Drive Amount from the target's drive meter\n" +
              "Health Drain — rolls Min/Max Damage, then heals the attacker for Life Steal Ratio " +
-             "of what the target actually lost")]
+             "of what the target actually lost\n" +
+             "Apply Status — applies the Status Effects below and nothing else, with no to-hit roll. " +
+             "This is how Stealth is cast.")]
     public ActionType actionType;
 
     [Tooltip("Who this may be used on. Enforced by CombatController.IsValidTarget, which also drives " +
@@ -223,6 +241,53 @@ public class Action : ScriptableObject
              "Character's 'Log Resolved Stats' reports the mismatch instead. Gating becomes a real " +
              "constraint at the loadout screen, which is Phase 5.")]
     public ClassDefinition[] allowedClasses = new ClassDefinition[0];
+
+    /// <summary>
+    /// Whether this action is an attack on its target, as opposed to help for them.
+    /// </summary>
+    /// <remarks>
+    /// <b>Derived from <see cref="actionType"/>, never from <see cref="targetType"/>.</b> That's
+    /// load-bearing: TargetType is read caster-relatively by enemies, so an enemy's "Single Enemy"
+    /// action points at the crew — but an Attack is hostile no matter who swings it. Deriving from
+    /// the action's effect sidesteps that ambiguity entirely.
+    ///
+    /// Used for stealth (hidden characters can't be targeted by hostile actions, but can still be
+    /// healed and buffed) and for deciding whether acting breaks the caster's own stealth.
+    ///
+    /// ApplyStatus is judged by its payload: a stealth cast is friendly, a poison dart is not.
+    /// </remarks>
+    public bool IsHostile
+    {
+        get
+        {
+            switch (actionType)
+            {
+                case ActionType.Attack:
+                case ActionType.Debuff:
+                case ActionType.DriveDrain:
+                case ActionType.HealthDrain:
+                    return true;
+
+                case ActionType.ApplyStatus:
+                    return HasHostileStatusEffects();
+
+                default:
+                    return false;
+            }
+        }
+    }
+
+    private bool HasHostileStatusEffects()
+    {
+        if (statusEffects == null) return false;
+
+        foreach (StatusApplication application in statusEffects)
+        {
+            if (application != null && !StatusEffectRules.IsBeneficial(application.kind)) return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Whether a class may use this action. An empty <see cref="allowedClasses"/> means anyone can —

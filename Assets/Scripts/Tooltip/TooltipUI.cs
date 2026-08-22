@@ -75,6 +75,10 @@ public class TooltipUI : MonoBehaviour
                 tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
                 tooltipContent += $"\nDrains: {action.healthDrainRatio:P0} of health taken";
                 break;
+            case Action.ActionType.ApplyStatus:
+                // The riders themselves are appended below, so this only names the shape.
+                tooltipContent += $"\nAlways applies";
+                break;
         }
 
         tooltipContent += DescribeStatusRiders(action);
@@ -173,8 +177,10 @@ public class TooltipUI : MonoBehaviour
             return string.Empty;
         }
 
-        // Only these two roll riders; showing them on anything else would be a lie about the data.
-        if (action.actionType != Action.ActionType.Attack && action.actionType != Action.ActionType.HealthDrain)
+        // Only these three carry riders; showing them on anything else would be a lie about the data.
+        if (action.actionType != Action.ActionType.Attack
+            && action.actionType != Action.ActionType.HealthDrain
+            && action.actionType != Action.ActionType.ApplyStatus)
         {
             return string.Empty;
         }
@@ -334,6 +340,9 @@ public class TooltipUI : MonoBehaviour
                 tooltipContent += $"\nHeals you: {action.minDamage * action.healthDrainRatio:F0}-" +
                                   $"{action.maxDamage * action.healthDrainRatio:F0}";
                 break;
+            case Action.ActionType.ApplyStatus:
+                tooltipContent += $"\n<color={ColourBuff}>Apply Status</color>";
+                break;
         }
 
         // Add target type information
@@ -431,6 +440,9 @@ public class TooltipUI : MonoBehaviour
                 tooltipContent += $"\n<color={ColourAttack}>Health Drain</color>";
                 tooltipContent += $"\nDamage: {action.minDamage:F0}-{action.maxDamage:F0}";
                 tooltipContent += $"\nHeals them: {action.healthDrainRatio:P0} of health taken";
+                break;
+            case Action.ActionType.ApplyStatus:
+                tooltipContent += $"\n<color={ColourBuff}>Apply Status</color>";
                 break;
         }
 
@@ -585,6 +597,12 @@ public class TooltipUI : MonoBehaviour
                 tooltipContent += $"Success Chance: 100%\n";
                 tooltipContent += DescribeDriveOutcome(selectedAction, target);
                 break;
+
+            case Action.ActionType.ApplyStatus:
+                // No roll of its own — resistance is the only gate, and DescribeStatusRiders reports
+                // it per rider against this specific target.
+                tooltipContent += $"Applies unless resisted:";
+                break;
         }
 
         // What's already on them, after the preview of what you're about to do. Relevant to the
@@ -644,24 +662,23 @@ public class TooltipUI : MonoBehaviour
         return line;
     }
     
+    /// <summary>
+    /// Whether the selected action may be used on this target.
+    /// </summary>
+    /// <remarks>
+    /// <b>Delegates to <see cref="CombatController.IsValidTarget"/> rather than keeping its own copy
+    /// of the rules.</b> There used to be a duplicate switch here, and it drifted the moment stealth
+    /// arrived: hover said "valid" on a hidden character while the click refused. One authority.
+    /// </remarks>
     private bool IsValidTarget(Action action, CharacterManager target)
     {
-        if (action == null || target == null)
-            return false;
+        if (action == null || target == null) return false;
 
-        switch (action.targetType)
-        {
-            case Action.TargetType.SingleEnemy:
-                return target.gameObject.CompareTag("Enemy");
-            case Action.TargetType.SingleAlly:
-                return target.gameObject.CompareTag("Player");
-            case Action.TargetType.AllAllies:
-                return target.gameObject.CompareTag("Player");
-            case Action.TargetType.AllEnemies:
-                return target.gameObject.CompareTag("Enemy");
-            default:
-                return false;
-        }
+        CombatController combatController = FindObjectOfType<CombatController>();
+
+        // No controller in the scene is not a reason to hide the target's health, so fall back to
+        // permissive — the preview is cosmetic and execution has its own guard.
+        return combatController == null || combatController.IsValidTarget(target);
     }
     
     private int CalculateHitChance(CharacterManager attacker, CharacterManager target)

@@ -32,7 +32,37 @@ public enum StatusEffectKind
     /// See <see cref="StatusEffect.IsTurnScoped"/> — round-boundary expiry would burn a 1-turn stun
     /// before its owner ever reached a turn to lose.
     /// </remarks>
-    Stun
+    Stun,
+
+    /// <summary>
+    /// Hidden. Cannot be targeted by a hostile action while it lasts; friendly ones still reach them.
+    /// </summary>
+    /// <remarks>
+    /// <b>The first BENEFICIAL kind</b>, which is why <see cref="StatusEffectRules.IsBeneficial"/>
+    /// exists — a friendly effect must not be stopped by the target's own resistance.
+    ///
+    /// Also the first kind that changes what is *legal*, rather than dealing damage or skipping a
+    /// turn. It's enforced in <c>CombatController.IsValidTarget</c> and
+    /// <c>EnemyManager.SelectTarget</c>, which are the two places that decide who can be hit.
+    /// </remarks>
+    Stealth
+}
+
+/// <summary>
+/// Rules about a kind that aren't presentation and aren't per-instance.
+/// </summary>
+public static class StatusEffectRules
+{
+    /// <summary>
+    /// Whether this kind helps its bearer. Beneficial kinds skip the resistance roll — being good at
+    /// shrugging off poison should not make an ally's stealth harder to cast on you.
+    /// </summary>
+    public static bool IsBeneficial(StatusEffectKind kind) => kind == StatusEffectKind.Stealth;
+
+    /// <summary>
+    /// Whether this kind stops its bearer being targeted by hostile actions.
+    /// </summary>
+    public static bool HidesFromHostileActions(StatusEffectKind kind) => kind == StatusEffectKind.Stealth;
 }
 
 /// <summary>
@@ -100,16 +130,40 @@ public class StatusEffect
     public bool IsDamageOverTime => damagePerTurn > 0f;
 
     /// <summary>
-    /// True for effects consumed by the affected character's own turn rather than by the round tick.
+    /// True for effects measured in the BEARER'S OWN TURNS rather than in rounds. Consumed when one
+    /// of their turns happens, not by the round tick.
     /// </summary>
     /// <remarks>
-    /// Only Stun today. It matters because damage over time resolves for everyone at the top of the
-    /// round — if a stun expired on that same schedule, a 1-turn stun applied during round N would
-    /// be gone before its owner reached their turn in round N+1 and would never skip anything.
-    /// <c>AdvanceStatuses()</c> therefore leaves these alone; <c>ConsumeStunForSkippedTurn()</c>
-    /// spends them.
+    /// Stun and Stealth. Both are applied part-way through a round, so expiring them on the round
+    /// boundary measures something initiative-dependent rather than a turn:
+    /// <list type="bullet">
+    /// <item>A 1-turn <b>stun</b> would be gone before its owner ever reached a turn to lose.</item>
+    /// <item>A 1-turn <b>stealth</b> would cover only the remainder of the current round — all of it
+    /// if the caster acted first, and <i>nothing at all</i> if they acted last.</item>
+    /// </list>
+    /// <c>AdvanceStatuses()</c> leaves these alone. <c>ConsumeStunForSkippedTurn()</c> and
+    /// <c>ConsumeStealthForCompletedTurn()</c> spend them at the turn that measures them.
     /// </remarks>
-    public bool IsTurnScoped => kind == StatusEffectKind.Stun;
+    public bool IsTurnScoped => kind == StatusEffectKind.Stun || kind == StatusEffectKind.Stealth;
+
+    [SerializeField] private bool skipNextTurnConsumption;
+
+    /// <summary>
+    /// True while this effect should survive one turn-completion untouched.
+    /// </summary>
+    /// <remarks>
+    /// <b>For an effect applied to a character during their OWN turn</b> — a self-cast stealth. That
+    /// turn is already underway, so counting it would consume the effect at the end of the very turn
+    /// it was cast in: applied and gone inside one frame, which is exactly what happened.
+    ///
+    /// Only granted when the bearer is the acting character, so an ally-cast stealth is unaffected
+    /// and both routes end up protecting for about one round.
+    /// </remarks>
+    public bool SkipNextTurnConsumption => skipNextTurnConsumption;
+
+    public void GrantTurnConsumptionGrace() => skipNextTurnConsumption = true;
+
+    public void SpendTurnConsumptionGrace() => skipNextTurnConsumption = false;
 }
 
 /// <summary>
@@ -135,6 +189,7 @@ public static class StatusEffectStyle
             StatusEffectKind.Poison => new Color(0.435f, 0.749f, 0.278f),
             StatusEffectKind.Burn => new Color(0.941f, 0.549f, 0.157f),
             StatusEffectKind.Stun => new Color(0.910f, 0.831f, 0.302f),
+            StatusEffectKind.Stealth => new Color(0.545f, 0.510f, 0.780f),
             _ => Color.white
         };
     }
@@ -191,9 +246,15 @@ public class StatusApplication
 {
     [Tooltip("Which effect to apply. Bleed, Poison and Burn are identical damage-over-time and differ " +
              "only in presentation.\n\n" +
-             "Stun is different: leave Damage Per Turn at 0 and set Rounds to how many of the " +
+             "Stun is different: leave Damage Per Turn at 0 and set Turns to how many of the " +
              "target's turns to skip. Each skip ramps their stun resistance by 50% until they " +
-             "actually get a turn, so chaining one gets rapidly harder.")]
+             "actually get a turn, so chaining one gets rapidly harder.\n\n" +
+             "Stealth is BENEFICIAL — damage 0, and it ignores resistance entirely, since an " +
+             "ally shouldn't be able to shrug off a friendly effect. Author it on an Apply " +
+             "Status action aimed at Single Ally.\n\n" +
+             "Turns for Stun and Stealth count the BEARER'S OWN TURNS, not rounds. Stealth 1 means " +
+             "'hidden until the end of your next turn' — so it always covers a full round of enemy " +
+             "turns regardless of initiative.")]
     public StatusEffectKind kind = StatusEffectKind.Bleed;
 
     [Tooltip("Damage dealt at the start of each of the victim's turns. Leave at 0 for a control " +

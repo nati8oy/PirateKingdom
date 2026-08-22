@@ -172,6 +172,13 @@ a guaranteed miss would cost the player their attempt for nothing.
 *Balance note:* enemy attacks now land less often than they used to, so any tuning done before this
 was against enemies that hit 100% of the time. Crew `defenseValue` is now live and worth checking.
 
+### Stealth doesn't cover multi-target actions
+`AllAllies` / `AllEnemies` still resolve against a single clicked target, so a party-wide stealth
+isn't authorable yet — deliberately, since it would let the crew forfeit every enemy turn. When
+multi-target lands (see "Multi-target attacks" in `META.md` Phase B), the stealth filter needs
+applying per-target inside the loop, and `FilterHiddenTargets`'s all-hidden fallback becomes much
+more likely to matter.
+
 ### `Action.TargetType` means different things to the player and to enemies
 Found while adding the drive actions. `CombatController.IsValidTarget()` reads it **absolutely** —
 `SingleEnemy` means "an object tagged `Enemy`". `EnemyManager.SelectTarget()` reads it

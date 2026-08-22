@@ -115,6 +115,12 @@ public class CharacterManager : MonoBehaviour
              "being struck again rather than bleeding, so a quieter effect belongs here.")]
     public MMF_Player damageOverTimeFeedback;
 
+    [Tooltip("Optional. ONE-SHOT burst played the moment this character becomes hidden — the 'vanish' " +
+             "flourish. Exactly the same role as Buff Feedback, which is a one-shot too.\n\n" +
+             "It is also stopped when the stealth ends, so a looping MMF_Player works here as well if " +
+             "you'd rather do the whole thing in one slot.")]
+    public MMF_Player stealthFeedback;
+
     [Tooltip("Optional. Played when a stun takes this character's turn away. Leave empty and the " +
              "'STUNNED' text still shows, cleared by Status Text Fallback Duration above — but a " +
              "skipped turn is easy to miss, so this is worth wiring.")]
@@ -128,6 +134,11 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Particle shown continuously while any buff is active on this character, and stopped " +
              "when the last one expires. Same Play/Stop pattern as driveParticles.")]
     public ParticleImage buffParticles;
+
+    [Tooltip("Particle shown continuously while this character is hidden, and stopped when the " +
+             "stealth ends however it ends. Same Play/Stop pattern as Buff Particles — a " +
+             "ParticleImage genuinely sustains, which an MMF_Player does not.")]
+    public ParticleImage stealthParticles;
     
     [Header("Character-Specific Audio")]
     [Tooltip("MMF_Player for this character's attack audio (configure with MMF_AudioSource)")]
@@ -156,6 +167,20 @@ public class CharacterManager : MonoBehaviour
     /// once already. Use this instead of rolling that comparison by hand.
     /// </remarks>
     public bool IsAlive => !isDead && (!hasInitialised || CurrentHealth > 0f);
+
+    // Resolved lazily rather than in Awake: TurnManager and the combatants both come up during the
+    // same Awake/Start phase, and this is only read mid-battle by which point it certainly exists.
+    private TurnManager cachedTurnManager;
+
+    private bool IsActingCharacter
+    {
+        get
+        {
+            if (cachedTurnManager == null) cachedTurnManager = FindObjectOfType<TurnManager>();
+
+            return cachedTurnManager != null && cachedTurnManager.currentCharacterTurn == this;
+        }
+    }
 
     private DriveManager driveManager;
 
@@ -576,6 +601,57 @@ public class CharacterManager : MonoBehaviour
     /// </summary>
     public event System.Action StatusesChanged;
 
+    // Tracks whether the sustained stealth effect is running, so it isn't restarted on every status
+    // change — StatusesChanged fires on each round tick, not only when stealth itself moves.
+    private bool stealthFeedbackPlaying;
+
+    /// <summary>
+    /// The single exit point for "this character's statuses changed": refreshes any sustained
+    /// presentation, then tells the displays.
+    /// </summary>
+    /// <remarks>
+    /// Everything that mutates <c>activeStatuses</c> goes through here rather than firing the event
+    /// directly. Stealth can end three different ways — expiry at the round tick, broken by acting,
+    /// or cleared by a debug tool — and a sustained effect started at the cast site would have to be
+    /// stopped at all three. Deriving it from current state in one place means it can't be missed.
+    /// Same reasoning as <see cref="RefreshBuffParticles"/>.
+    /// </remarks>
+    private void NotifyStatusesChanged()
+    {
+        RefreshStealthFeedback();
+        StatusesChanged?.Invoke();
+    }
+
+    private void RefreshStealthFeedback()
+    {
+        bool shouldPlay = IsHiddenFromHostileActions;
+
+        if (shouldPlay == stealthFeedbackPlaying) return;
+
+        stealthFeedbackPlaying = shouldPlay;
+
+        // Announced here rather than at the three call sites that end stealth (turn spent, broken by
+        // acting, debug clear), because this is the one place that sees the transition — the same
+        // reason the feedback itself lives here.
+        if (!shouldPlay) ShowRevealed();
+
+        // Sustained channel — a ParticleImage, the same type buffParticles uses, because it really
+        // does hold between Play() and Stop().
+        if (stealthParticles != null)
+        {
+            if (shouldPlay) stealthParticles.Play();
+            else stealthParticles.Stop();
+        }
+
+        // One-shot burst on the way in, mirroring how AddBuff fires buffFeedback. Stopped on the way
+        // out as well, so a looping player also works if that's how it's been set up.
+        if (stealthFeedback != null)
+        {
+            if (shouldPlay) stealthFeedback.PlayFeedbacks();
+            else stealthFeedback.StopFeedbacks();
+        }
+    }
+
     /// <summary>
     /// Ceiling on total damage-over-time per turn, as a fraction of max health.
     /// </summary>
@@ -655,7 +731,7 @@ public class CharacterManager : MonoBehaviour
                   $"Stun resistance now +{StunResistanceBonus:P0} ({stunResistanceStacks} stack(s)); " +
                   $"{(stun.IsExpired ? "stun has worn off" : $"{stun.TurnsRemaining} more turn(s) stunned")}.");
 
-        StatusesChanged?.Invoke();
+        NotifyStatusesChanged();
     }
 
     /// <summary>
@@ -670,7 +746,82 @@ public class CharacterManager : MonoBehaviour
                   $"stun resistance bonus of +{StunResistanceBonus:P0} cleared.");
 
         stunResistanceStacks = 0;
-        StatusesChanged?.Invoke();
+        NotifyStatusesChanged();
+    }
+
+    /// <summary>
+    /// Spends a turn of stealth because this character's turn has just finished.
+    /// </summary>
+    /// <remarks>
+    /// <b>Stealth is measured in the bearer's own turns, not rounds</b> — see
+    /// <see cref="StatusEffect.IsTurnScoped"/>. So <c>turns: 1</c> means "hidden until the end of
+    /// your next turn", which always covers a full round of enemy turns whatever the initiative roll
+    /// happened to be. Expiring it on the round tick instead would have given anywhere between a full
+    /// round of cover and none at all.
+    ///
+    /// A SKIPPED turn still spends it: a turn is a turn, and being stunned shouldn't extend how long
+    /// you stay hidden.
+    ///
+    /// This is separate from <see cref="BreakStealthFromHostileAction"/>, which ends it early. The
+    /// two together read as "hidden until your next turn ends, or until you attack".
+    /// </remarks>
+    public void ConsumeStealthForCompletedTurn()
+    {
+        StatusEffect stealth = FindStatus(StatusEffectKind.Stealth);
+
+        if (stealth == null) return;
+
+        // A stealth cast on this character during this very turn doesn't count it — the turn was
+        // already underway when the effect landed. Without this a self-cast is applied and consumed
+        // inside one frame and never visibly happens at all.
+        if (stealth.SkipNextTurnConsumption)
+        {
+            stealth.SpendTurnConsumptionGrace();
+
+            Debug.Log($"[Stealth] {characterData?.characterName ?? gameObject.name} was hidden during their " +
+                      "own turn, so that turn doesn't count against it.");
+            return;
+        }
+
+        stealth.ReduceTurns();
+
+        if (stealth.IsExpired)
+        {
+            activeStatuses.Remove(stealth);
+            Debug.Log($"[Stealth] {characterData?.characterName ?? gameObject.name} is no longer hidden.");
+        }
+        else
+        {
+            Debug.Log($"[Stealth] {characterData?.characterName ?? gameObject.name} stays hidden for " +
+                      $"{stealth.TurnsRemaining} more turn(s).");
+        }
+
+        NotifyStatusesChanged();
+    }
+
+    /// <summary>
+    /// Announces that this character is no longer hidden, on the same floating text the parry and
+    /// stun messages use.
+    /// </summary>
+    /// <remarks>
+    /// Covers every way stealth can end — the turn being spent, an attack breaking it early, or a
+    /// debug clear — because it's driven from the one place that observes the transition rather than
+    /// from each of those call sites.
+    ///
+    /// Coloured with the stealth tint so it reads as "that effect just ended" rather than as an
+    /// unrelated message, matching how a damage-over-time tick names its effect in its own colour.
+    /// </remarks>
+    public void ShowRevealed()
+    {
+        if (actionStatusText == null) return;
+
+        actionStatusText.enabled = true;
+        actionStatusText.text = $"<color={StatusEffectStyle.HexColour(StatusEffectKind.Stealth)}>Visible</color>";
+
+        // Written by code, so nothing else will take it away again — same safety net as the drive
+        // numbers and the STUNNED banner.
+        CancelInvoke(nameof(HideHealthUI));
+        Invoke(nameof(HideHealthUI), statusTextFallbackDuration);
     }
 
     /// <summary>Announces a skipped turn on the character, so it never looks like a dropped turn.</summary>
@@ -716,7 +867,12 @@ public class CharacterManager : MonoBehaviour
         // on the action it met (25% resistance ate a quarter of a 100% rider, but ALL of a 25% one,
         // producing silent immunity). With one number that can't happen, and 25% resistance always
         // means exactly 25% fewer applications.
-        float resistance = GetResistance(application.kind);
+        // Beneficial effects are never resisted — being good at shrugging off poison must not make a
+        // friendly stealth harder to receive.
+        float resistance = StatusEffectRules.IsBeneficial(application.kind)
+            ? 0f
+            : GetResistance(application.kind);
+
         float chance = Mathf.Clamp01(1f - resistance);
 
         if (chance <= 0f || Random.value >= chance)
@@ -731,17 +887,21 @@ public class CharacterManager : MonoBehaviour
         if (existing != null)
         {
             existing.Refresh(application.damagePerTurn, application.turns);
+            GrantGraceIfAppliedDuringOwnTurn(existing);
             Debug.Log($"{characterData?.characterName ?? gameObject.name} refreshed {application.kind} " +
                       $"to {existing.DamagePerTurn}/turn for {existing.TurnsRemaining} turns");
         }
         else
         {
-            activeStatuses.Add(new StatusEffect(application.kind, application.damagePerTurn, application.turns));
+            StatusEffect added = new StatusEffect(application.kind, application.damagePerTurn, application.turns);
+            activeStatuses.Add(added);
+            GrantGraceIfAppliedDuringOwnTurn(added);
+
             Debug.Log($"{characterData?.characterName ?? gameObject.name} is afflicted with {application.kind} " +
                       $"— {application.damagePerTurn}/turn for {application.turns} turns");
         }
 
-        StatusesChanged?.Invoke();
+        NotifyStatusesChanged();
         return true;
     }
 
@@ -774,10 +934,19 @@ public class CharacterManager : MonoBehaviour
 
         StatusEffect existing = FindStatus(kind);
 
-        if (existing != null) existing.Refresh(damagePerTurn, turns);
-        else activeStatuses.Add(new StatusEffect(kind, damagePerTurn, turns));
+        if (existing != null)
+        {
+            existing.Refresh(damagePerTurn, turns);
+            GrantGraceIfAppliedDuringOwnTurn(existing);
+        }
+        else
+        {
+            StatusEffect added = new StatusEffect(kind, damagePerTurn, turns);
+            activeStatuses.Add(added);
+            GrantGraceIfAppliedDuringOwnTurn(added);
+        }
 
-        StatusesChanged?.Invoke();
+        NotifyStatusesChanged();
 
         Debug.Log($"[Debug] {kind} applied to {characterData?.characterName ?? gameObject.name} " +
                   $"({damagePerTurn}/turn for {turns} turns). It ticks at the start of each of THEIR OWN " +
@@ -790,11 +959,23 @@ public class CharacterManager : MonoBehaviour
         if (activeStatuses.Count == 0) return;
 
         activeStatuses.Clear();
-        StatusesChanged?.Invoke();
+        NotifyStatusesChanged();
 
         Debug.Log($"[Debug] Cleared all status effects from {characterData?.characterName ?? gameObject.name}.", this);
     }
 #endif
+
+    /// <summary>
+    /// Gives a turn-scoped effect one turn of grace when it lands on a character who is <i>currently
+    /// taking their turn</i>, so that turn — already underway — can't immediately consume it.
+    /// </summary>
+    private void GrantGraceIfAppliedDuringOwnTurn(StatusEffect status)
+    {
+        if (status == null || !status.IsTurnScoped) return;
+        if (!IsActingCharacter) return;
+
+        status.GrantTurnConsumptionGrace();
+    }
 
     /// <summary>Applies every status rider on an action to this character. No-op for actions with none.</summary>
     public void ApplyStatusEffectsFrom(Action action)
@@ -815,6 +996,48 @@ public class CharacterManager : MonoBehaviour
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether hostile actions are currently unable to target this character.
+    /// </summary>
+    /// <remarks>
+    /// Read by <c>CombatController.IsValidTarget</c> and <c>EnemyManager.SelectTarget</c> — the two
+    /// authorities on who can be hit. Friendly actions ignore it entirely.
+    /// </remarks>
+    public bool IsHiddenFromHostileActions
+    {
+        get
+        {
+            foreach (StatusEffect status in activeStatuses)
+            {
+                if (StatusEffectRules.HidesFromHostileActions(status.Kind)) return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Drops stealth because this character did something hostile.
+    /// </summary>
+    /// <remarks>
+    /// <b>Stealth breaks on attacking, deliberately.</b> Without it a hidden character attacks with
+    /// total impunity for the duration, which isn't a defensive tool — it's just a win. Breaking on
+    /// use makes it a repositioning move: safe until you do something.
+    ///
+    /// Friendly actions do NOT break it, so a hidden Surgeon can keep healing. That's the whole
+    /// reason to hide a support character.
+    /// </remarks>
+    public void BreakStealthFromHostileAction()
+    {
+        StatusEffect stealth = FindStatus(StatusEffectKind.Stealth);
+        if (stealth == null) return;
+
+        activeStatuses.Remove(stealth);
+        NotifyStatusesChanged();
+
+        Debug.Log($"[Stealth] {characterData?.characterName ?? gameObject.name} broke stealth by acting.");
     }
 
     /// <summary>Whether this character currently has the given effect.</summary>
@@ -936,7 +1159,7 @@ public class CharacterManager : MonoBehaviour
 
         // Unconditional: reaching here means at least one status ticked, so any turns counter on
         // screen is now stale even when nothing expired.
-        StatusesChanged?.Invoke();
+        NotifyStatusesChanged();
     }
 
     // The unbuffed crit rule: a natural 20 and nothing else, i.e. 5%.
@@ -1148,6 +1371,12 @@ public class CharacterManager : MonoBehaviour
     public void OnTurnComplete()
     {
         UpdateBuffsForCharacterTurn();
+
+        // Stealth is counted in this character's own turns, so it's spent here alongside buff
+        // durations rather than at the round tick. Note a stun-skipped turn reaches here too, which
+        // is intended — see ConsumeStealthForCompletedTurn.
+        ConsumeStealthForCompletedTurn();
+
         UpdateActionCooldowns();
         driveManager?.OnTurnEnd(); // Handle drive turn end effects
         RefreshStats(); // Update stats after buffs are reduced

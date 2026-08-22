@@ -41,6 +41,11 @@ public static class StatusEffectDebugMenu
     [MenuItem(MenuRoot + "Stun Selected Character", false, 103)]
     private static void StunSelected() => ApplyToSelection(StatusEffectKind.Stun, 0f, 1);
 
+    // Beneficial, so it never rolls against resistance. 1 turn is the intended default: turn-scoped,
+    // so it lasts until the end of the bearer's next turn rather than to the round boundary.
+    [MenuItem(MenuRoot + "Stealth Selected Character", false, 104)]
+    private static void StealthSelected() => ApplyToSelection(StatusEffectKind.Stealth, 0f, 1);
+
     // --- Whole sides --------------------------------------------------------------------------
 
     [MenuItem(MenuRoot + "Bleed All Enemies", false, 120)]

@@ -403,6 +403,7 @@ public class EnemyManager : MonoBehaviour
             Action.ActionType.DriveGrant => enemyData.driveGrantWeight,
             Action.ActionType.DriveDrain => enemyData.driveDrainWeight,
             Action.ActionType.HealthDrain => enemyData.healthDrainWeight,
+            Action.ActionType.ApplyStatus => enemyData.applyStatusWeight,
             _ => 0.1f
         };
     }
@@ -442,6 +443,9 @@ public class EnemyManager : MonoBehaviour
                         validTargets.Add(playerManager);
                     }
                 }
+
+                validTargets = FilterHiddenTargets(action, validTargets);
+
                 return validTargets.Count > 0 ? SelectPlayerTarget(validTargets) : null;
                 
             case Action.TargetType.SingleAlly:
@@ -464,6 +468,34 @@ public class EnemyManager : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Drops hidden characters from a hostile action's candidate list — <b>unless every candidate is
+    /// hidden</b>, in which case the list is returned untouched.
+    /// </summary>
+    /// <remarks>
+    /// <b>The fallback is the point.</b> Without it, hiding the whole party means every enemy finds
+    /// no target and forfeits its turn, which stalls the fight rather than adding tension. Stealth
+    /// protects an individual by making someone else the better target; it was never meant to be a
+    /// party-wide "skip the enemy's turn" button.
+    ///
+    /// Single-ally-only stealth makes an all-hidden party hard to reach, but not impossible — three
+    /// crew stealthing each other in sequence gets there, and a fight that quietly stops working
+    /// would be a miserable thing to diagnose. Three lines is cheap insurance.
+    /// </remarks>
+    private List<CharacterManager> FilterHiddenTargets(Action action, List<CharacterManager> candidates)
+    {
+        if (action == null || !action.IsHostile) return candidates;
+
+        var visible = candidates.Where(c => c != null && !c.IsHiddenFromHostileActions).ToList();
+
+        if (visible.Count > 0) return visible;
+
+        Debug.Log($"[EnemyManager] Every target of {action.actionName} is hidden — attacking anyway, " +
+                  "since forfeiting the turn would stall the fight.");
+
+        return candidates;
+    }
+
     private CharacterManager SelectPlayerTarget(List<CharacterManager> validTargets)
     {
         if (validTargets.Count == 0) return null;
@@ -553,6 +585,9 @@ public class EnemyManager : MonoBehaviour
     private void PerformAction(CharacterManager targetManager)
     {
         if (_selectedAction == null || targetManager == null) return;
+
+        // Same rule as the player: swinging gives away your position, healing an ally doesn't.
+        if (_selectedAction.IsHostile) _characterManager?.BreakStealthFromHostileAction();
         
         // HealthDrain goes down the parryable path alongside Attack. It's a damaging swing with a
         // windup like any other, and an enemy attack the player can't parry reads as a bug. It also
@@ -733,6 +768,16 @@ public class EnemyManager : MonoBehaviour
                 float driveDrained = targetManager.LoseDrive(_selectedAction.driveAmount);
                 Debug.Log($"[EnemyManager] {gameObject.name} drained {driveDrained} drive from " +
                           $"{targetManager.characterData?.characterName}");
+                break;
+
+            // Applies its riders and nothing else. SingleAlly resolves to another enemy (or this one
+            // when alone) via SelectTarget, so an enemy hiding a wounded ally already works.
+            case Action.ActionType.ApplyStatus:
+                CharacterManager statusTarget = targetManager != null ? targetManager : _characterManager;
+
+                statusTarget.ApplyStatusEffectsFrom(_selectedAction);
+                Debug.Log($"[EnemyManager] {gameObject.name} applied {_selectedAction.actionName} to " +
+                          $"{statusTarget.characterData?.characterName ?? statusTarget.name}");
                 break;
 
             case Action.ActionType.Buff:

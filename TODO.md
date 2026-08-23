@@ -11,11 +11,22 @@ that's due.
 
 ## Outstanding right now
 
-### Phase E — class assets don't exist yet
-`Character` no longer holds any stats; they all come from a `ClassDefinition`, and **a class is
-required** — an asset without one logs an error and fights at 1 HP. Nothing about Phase E can be
-verified until the class assets are authored and every Character and Enemy asset points at one.
-See `META.md` Phase E.
+### Roster rebuild against the class system
+The class assets exist — **Hunter, Gunner, Surgeon, Master-at-arms, Cook, Witch Doctor** for crew,
+plus Skeleton and Skeleton Elite — but the older four (Duelist, Muscle, Musketeer, Healer) are still
+present and presumably superseded, and every Character and Enemy asset needs pointing at one.
+
+**A class is required.** An asset without one logs an error and fights at 1 HP, because `Character`
+holds no numbers of its own.
+
+Two things worth doing in the same pass:
+
+- **New class assets carry the field defaults**, which are well outside the band you've tuned to —
+  `maxHealth 100` against the Duelist's 28. A forgotten one is a 100 HP crew member, not an obviously
+  broken 1 HP one.
+- **Re-band the status resistances upward.** Now that a rider always applies unless resisted,
+  resistance is the *only* dial. At 0.2 it stops nothing at all across roughly half of all fights;
+  0.4–0.6 is the band where a class actually reads as resistant.
 
 ### Three action assets are mis-authored
 | Asset | Currently | Should be |
@@ -26,6 +37,12 @@ See `META.md` Phase E.
 
 `buffValue` is `[Min(0f)]` now, but that only clamps as the Inspector draws the field — the saved
 negatives survive until each asset is opened and re-entered.
+
+### Orphaned keys in older assets
+Assets authored before Phase E still carry `characterClass:`, `classId:`, `chanceToApply:` and the
+old per-character stat keys in their YAML. Unity ignores keys with no matching field and drops them
+when it next rewrites each asset, so there is nothing to do — just don't be surprised to see them in
+a diff.
 
 ---
 
@@ -491,8 +508,9 @@ merely ungated — see "Different ways to use drive" below.
 switch is what made adding a class a code change in the first place.
 
 `DriveManager.GetAvailableActions()` is the natural gate: it already decides what the utility menu
-would offer, so filtering it by `characterData.characterClass` is a small change once the menu exists.
-That makes drive read differently in each character's hands without new systems.
+would offer, so filtering it against a list on the character's `ClassDefinition` is a small change
+once the menu exists. That makes drive read differently in each character's hands without new
+systems.
 
 ### Things to settle
 
@@ -500,8 +518,9 @@ That makes drive read differently in each character's hands without new systems.
   filtering at the point of use. Picking one matters — gating by class *and* level *and* loadout
   simultaneously means no single thing is the real constraint.
 - **Passives need a home** before any are authored, or each will be special-cased.
-- **Enemies share `Character`**, so they carry `characterClass` too. Decide whether it means anything
-  for them or is player-only — and if it's player-only, that's a reason to move it off the base.
+- ~~**Enemies share `Character`**, so they carry `characterClass` too.~~ Settled: the enum is gone,
+  and enemies simply reference their own `ClassDefinition` assets (Skeleton, Skeleton Elite). An
+  enemy class is just numbers with no archetype label attached.
 - **This is also the recruitment axis.** META.md §7 proposes a `CrewArchetype` per class for
   generating rank-and-file crew, so whatever combat identity a class gets also defines what a
   recruited crew member plays like. Worth designing once, for both.

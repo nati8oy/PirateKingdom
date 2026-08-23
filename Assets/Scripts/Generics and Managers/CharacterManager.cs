@@ -104,6 +104,12 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Feedback player for a buff landing on this character — the one-shot cast burst.")]
     public MMF_Player buffFeedback;
 
+    [Tooltip("One-shot cast burst for a DEBUFF landing — Slow, Expose, a vulnerability. Its own slot " +
+             "rather than reusing Buff Feedback, because the 'you got stronger' flourish is the wrong " +
+             "signal for being weakened.\n\n" +
+             "Leave it empty and debuffs land silently, which is how they behaved before this existed.")]
+    public MMF_Player debuffFeedback;
+
     [Tooltip("Optional. Played when a DriveGrant action fills this character's drive meter.")]
     public MMF_Player driveGrantedFeedback;
 
@@ -134,6 +140,11 @@ public class CharacterManager : MonoBehaviour
     [Tooltip("Particle shown continuously while any buff is active on this character, and stopped " +
              "when the last one expires. Same Play/Stop pattern as driveParticles.")]
     public ParticleImage buffParticles;
+
+    [Tooltip("Particle shown continuously while any DEBUFF is active, and stopped when the last one " +
+             "expires. Independent of Buff Particles — a character carrying both a buff and a debuff " +
+             "shows both.")]
+    public ParticleImage debuffParticles;
 
     [Tooltip("Particle shown continuously while this character is hidden, and stopped when the " +
              "stealth ends however it ends. Same Play/Stop pattern as Buff Particles — a " +
@@ -886,14 +897,15 @@ public class CharacterManager : MonoBehaviour
 
         if (existing != null)
         {
-            existing.Refresh(application.damagePerTurn, application.turns);
+            existing.Refresh(application.damagePerTurn, application.turns, application.icon);
             GrantGraceIfAppliedDuringOwnTurn(existing);
             Debug.Log($"{characterData?.characterName ?? gameObject.name} refreshed {application.kind} " +
                       $"to {existing.DamagePerTurn}/turn for {existing.TurnsRemaining} turns");
         }
         else
         {
-            StatusEffect added = new StatusEffect(application.kind, application.damagePerTurn, application.turns);
+            StatusEffect added = new StatusEffect(application.kind, application.damagePerTurn, application.turns,
+                                                  application.icon);
             activeStatuses.Add(added);
             GrantGraceIfAppliedDuringOwnTurn(added);
 
@@ -1316,35 +1328,47 @@ public class CharacterManager : MonoBehaviour
     // Tracks whether buffParticles is currently running, so the sustained effect isn't restarted
     // on every buff refresh — UpdateBuffDisplay runs on each turn boundary, not only on change.
     private bool buffParticlesPlaying;
+    private bool debuffParticlesPlaying;
 
     /// <summary>
-    /// Starts or stops the sustained buff particle to match the character's current state.
-    ///
-    /// Driven from <see cref="UpdateBuffDisplay"/> rather than from the cast site, so it stays
-    /// correct however a buff arrives or leaves — applied, expired at a turn boundary, or stripped
-    /// by drive's RemoveDebuff. Only positive buffs light it; a debuff shouldn't glow.
+    /// Starts and stops the sustained buff and debuff particles to match this character's state.
     /// </summary>
+    /// <remarks>
+    /// Driven from <see cref="UpdateBuffDisplay"/> rather than from the cast site, so it stays correct
+    /// however a buff arrives or leaves — applied, expired at a turn boundary, or stripped by drive's
+    /// RemoveDebuff.
+    ///
+    /// The two are tracked independently: a character carrying a +2 Accuracy and a -3 Speed at once is
+    /// genuinely both buffed and debuffed, and should show both.
+    /// </remarks>
     private void RefreshBuffParticles()
     {
-        if (buffParticles == null) return;
-
-        bool shouldPlay = false;
+        bool anyBuff = false;
+        bool anyDebuff = false;
 
         foreach (var buff in activeBuffs)
         {
-            if (buff.Value > 0f)
-            {
-                shouldPlay = true;
-                break;
-            }
+            if (buff.Value > 0f) anyBuff = true;
+            else if (buff.Value < 0f) anyDebuff = true;
         }
 
-        if (shouldPlay == buffParticlesPlaying) return;
+        // Each guarded separately: an early return on a missing buffParticles used to skip the
+        // debuff one entirely.
+        if (buffParticles != null && anyBuff != buffParticlesPlaying)
+        {
+            buffParticlesPlaying = anyBuff;
 
-        buffParticlesPlaying = shouldPlay;
+            if (anyBuff) buffParticles.Play();
+            else buffParticles.Stop();
+        }
 
-        if (shouldPlay) buffParticles.Play();
-        else buffParticles.Stop();
+        if (debuffParticles != null && anyDebuff != debuffParticlesPlaying)
+        {
+            debuffParticlesPlaying = anyDebuff;
+
+            if (anyDebuff) debuffParticles.Play();
+            else debuffParticles.Stop();
+        }
     }
 
     /// <summary>Longest remaining duration among buffs of one type, or 0 if none are active.</summary>
@@ -1664,13 +1688,12 @@ public class CharacterManager : MonoBehaviour
         int turns = Mathf.RoundToInt(duration);
         activeBuffs.Add(new Character.ActiveBuff(type, amount, turns));
 
-        // One-shot cast burst, mirroring DriveManager's driveFeedbacks. Buffs only — a debuff
-        // landing shouldn't play the "you got stronger" flourish. The sustained particle is not
-        // started here: RefreshStats below reaches UpdateBuffDisplay, which owns that state.
-        if (amount > 0f && buffFeedback != null)
-        {
-            buffFeedback.PlayFeedbacks();
-        }
+        // One-shot cast burst, mirroring DriveManager's driveFeedbacks. Buffs and debuffs each have
+        // their own slot — the "you got stronger" flourish is the wrong signal for being weakened,
+        // which is why they aren't shared. The sustained particles are not started here: RefreshStats
+        // below reaches UpdateBuffDisplay, which owns that state.
+        MMF_Player castBurst = amount > 0f ? buffFeedback : debuffFeedback;
+        if (castBurst != null) castBurst.PlayFeedbacks();
         Debug.Log($"Added {(amount > 0 ? "buff" : "debuff")} to {characterData?.characterName}: {type} {amount:+0;-0} for {turns} turns");
         RefreshStats(); // Immediately update stats to reflect the new buff
     }

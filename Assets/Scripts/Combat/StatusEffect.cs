@@ -96,16 +96,27 @@ public class StatusEffect
     [SerializeField] private StatusEffectKind kind;
     [SerializeField] private float damagePerTurn;
     [SerializeField] private int turnsRemaining;
+    [SerializeField] private Sprite icon;
 
     public StatusEffectKind Kind => kind;
     public float DamagePerTurn => damagePerTurn;
     public int TurnsRemaining => turnsRemaining;
 
-    public StatusEffect(StatusEffectKind kind, float damagePerTurn, int turns)
+    /// <summary>
+    /// Icon the applying action supplied, or null to let the display use its own per-kind sprite.
+    /// </summary>
+    /// <remarks>
+    /// Carried per instance so two actions of the same kind can look different — a "Vanish" and a
+    /// "Smoke Bomb" both apply Stealth but needn't share an icon.
+    /// </remarks>
+    public Sprite Icon => icon;
+
+    public StatusEffect(StatusEffectKind kind, float damagePerTurn, int turns, Sprite icon = null)
     {
         this.kind = kind;
         this.damagePerTurn = Mathf.Max(0f, damagePerTurn);
         this.turnsRemaining = Mathf.Max(1, turns);
+        this.icon = icon;
     }
 
     /// <summary>
@@ -116,10 +127,14 @@ public class StatusEffect
     /// Max on duration as well as damage, so a weak late application can't cut short a strong one
     /// that still had turns to run. "Refresh" that shortened an effect would be a nasty surprise.
     /// </remarks>
-    public void Refresh(float newDamagePerTurn, int newTurns)
+    public void Refresh(float newDamagePerTurn, int newTurns, Sprite newIcon = null)
     {
         damagePerTurn = Mathf.Max(damagePerTurn, Mathf.Max(0f, newDamagePerTurn));
         turnsRemaining = Mathf.Max(turnsRemaining, Mathf.Max(1, newTurns));
+
+        // The most recent application wins the icon, unlike the values, which take the max. There's
+        // no "higher" of two sprites, and showing what just landed is the less surprising of the two.
+        if (newIcon != null) icon = newIcon;
     }
 
     public void ReduceTurns() => turnsRemaining--;
@@ -270,4 +285,12 @@ public class StatusApplication
              "next turn.")]
     [Min(1)]
     public int turns = 2;
+
+    [Tooltip("Icon shown on the afflicted character while this effect is on them.\n\n" +
+             "Optional. Left empty, the Status Icon Display falls back to whatever sprite that slot " +
+             "was set up with on the prefab — so a per-kind icon still works and this is only needed " +
+             "when one action wants its own.\n\n" +
+             "The character needs a matching slot for this kind on its Status Icon Display, or there " +
+             "is nowhere to draw it.")]
+    public Sprite icon;
 }

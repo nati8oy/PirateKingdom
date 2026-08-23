@@ -87,6 +87,13 @@ third-party and should not be modified** unless explicitly requested:
     - Slots default to **`StatusEffectStyle.Tint(kind)`**, the same single definition the floating
       damage number uses, so a red `-3 Bleed` and a red bleed icon can't drift apart. `HexColour()`
       derives from that one `Color` rather than being a second literal.
+    - **The sprite can come from the action.** `StatusApplication.icon` is optional and carried onto
+      the live `StatusEffect`, so two actions of the same kind can look different — a "Vanish" and a
+      "Smoke Bomb" both apply Stealth but needn't share an icon. The slot's own sprite is the
+      per-kind fallback when an action supplies none. On a refresh the **most recent** application
+      wins the icon, unlike the values, which take the max — there's no "higher" of two sprites.
+    - The damage label is **blanked for kinds that deal none**, so a stun or stealth slot doesn't
+      show a meaningless "0".
     - **Wire it on `PlayerCharacter.prefab` only.** `EnemyCharacterVariant` is a variant of it and
       inherits components added to the base, which is exactly how `BuffIconDisplay` already reaches
       enemies — it exists on the base and nowhere else.
@@ -181,6 +188,11 @@ third-party and should not be modified** unless explicitly requested:
       active spawn point. `DriveManager`, `ParrySystem` and `EnemyManager` all dereference
       `characterData` in `Awake()`, and the enemy prefab carries no default — a plain `Instantiate`
       throws before the data can be set.
+  - `EncounterSequence.cs` — an ordered gauntlet of `EncounterDefinition`s, with `repeat` per row and
+    a `RepeatLast` / `Loop` / `Stop` behaviour when it runs out. Assigned on `RunManager`; position
+    lives in `RunState.sequenceIndex`, which is why **Tools > Pirate Kingdom > Restart Gauntlet**
+    exists — editing the asset otherwise looks like it does nothing. A linear stand-in for Phase 3's
+    map, reached through the same `RunManager.GetCurrentEncounter()` seam a map graph will use.
   - `EncounterFlow.cs` — buttons for the victory/defeat screens: `RestartEncounter()` reloads the
     scene for another fight with the crew's carried damage, `StartNewRun()` rebuilds from Debug
     Starting Crew. Gives a repeatable attrition loop, and `RunState.encountersSurvived` counts the
@@ -212,7 +224,14 @@ third-party and should not be modified** unless explicitly requested:
       — or it quotes damage that never lands and the shortfall reads as a bug.
     - Still carries the `DontDestroyOnLoad`-on-a-Canvas-child bug logged in `TODO.md`.
   - `ActionButtonHover.cs` / `TargetHoverHandler.cs` — EventSystem hover handlers that call into it.
-- `Player/PlayerCombatController.cs`, `Debugs/`, `PlayerControls.cs` (generated input).
+- `Debugs/`
+  - `StatusEffectDebugMenu.cs` — the **Tools > Pirate Kingdom > Debug** items for applying bleed,
+    poison, burn, stun and stealth without authoring an action and landing an attack first. All
+    bypass the resistance roll and all require Play mode.
+  - `Debug_DriveButtons.cs`, `Debug_Player.cs` — scene-wired drive testing.
+- `Player/PlayerCombatController.cs` (inert — its input handling is commented out),
+  `Combat/ActionSet.cs` (**unused**; a 6-slot action holder superseded by `Character.actionSlots`),
+  `PlayerControls.cs` (generated input).
 
 ## Key architecture concepts
 
@@ -551,6 +570,14 @@ third-party and should not be modified** unless explicitly requested:
     nothing but an enum member. For a status that *can* miss, use an Attack with 0 damage and a rider
     — that path rolls to hit and this one doesn't.
   - Statuses are **per-battle** — nothing reaches `RunState`, exactly like buffs.
+  - **Buffs and debuffs have separate feedback channels**, two each: a one-shot `MMF_Player` cast
+    burst (`buffFeedback` / `debuffFeedback`) and a sustained `ParticleImage`
+    (`buffParticles` / `debuffParticles`). Separate rather than shared because the "you got stronger"
+    flourish is the wrong signal for being weakened. **Debuffs originally fired neither** — both gates
+    were `amount > 0f` — so a Slow landed completely silently.
+    - The two sustained particles are tracked independently, so a character carrying a +2 Accuracy
+      and a −3 Speed at once shows both. Each is null-guarded separately: an early return on a
+      missing `buffParticles` used to skip the debuff one entirely.
   - **Every buff type has a working debuff form for free.** `ActionType.Debuff` negates `buffValue`
     before calling `AddBuff`, on both the player and enemy paths, so Speed, Defense, Accuracy,
     Crit Chance and Damage Reduction all debuff with no extra code — author them as `Debuff` with a

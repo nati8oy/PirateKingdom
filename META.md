@@ -11,18 +11,34 @@ See `CLAUDE.md` for how the combat systems work today, and `TODO.md` for outstan
 
 **Phases 1 and 2 are complete and verified in the Editor, as is the 2.5D presentation refactor.**
 
-**Phase D — Status effects is COMPLETE and verified in the Editor.**
+**Phase D — Status effects is COMPLETE and verified**, including stealth (D3), which was added after
+D was first closed.
 
 | | |
 |---|---|
-| **D1 — Status effect substrate + damage over time** | ✅ **DONE, verified.** Bleed, and the same mechanic reskinned as poison or fire. Per-character resistance gates whether it lands. DoT ignores protection and grants no drive, and everyone ticks together at the top of the round. |
-| **D2 — Stun** | ✅ **DONE, verified.** Skips a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
-| **E — Class definitions & level scaling** | ✅ **Code complete**, ⬅ **blocked on Editor work.** A `ClassDefinition` asset supplies *every* stat and resistance a character has, scaled by level. `Character` now holds no numbers at all, and **a class is required** — an asset without one errors and fights at 1 HP. Nothing can be verified until the class assets exist and the roster is rebuilt against them. |
+| **D1 — Substrate + damage over time** | ✅ Bleed, and the same mechanic reskinned as poison or fire. DoT ignores protection and grants no drive, and everyone ticks together at the top of the round. |
+| **D2 — Stun** | ✅ Skips a turn, with Darkest Dungeon's stacking stun-resistance ramp so a unit can't be chained indefinitely. |
+| **D3 — Stealth** | ✅ Hidden characters can't be targeted by hostile actions but can still be healed and buffed. Self and single-ally; party-wide waits on multi-target. |
+| **E — Class definitions & level scaling** | ✅ **Code complete. The class assets now exist** (4 crew + 2 enemy, plus 6 new crew classes authored) and the roster rebuild is in progress. |
 
-**E was deliberately held until D was proven**, because it touches every character asset and
-`RefreshStats()`, which everything reads. Nothing in D depended on it: resistances are authored
-per-character behind the single `CharacterManager.GetResistance()` accessor, so moving that data onto
-a class is invisible to every caller — which is exactly the seam E now uses.
+**Two things about D changed after it was written down, and both are now the rule:**
+
+- **A rider always applies unless resisted.** `chanceToApply` was removed from `StatusApplication`.
+  The old `chance − resistance` didn't scale — 25% resistance ate a quarter of a 100% rider but *all*
+  of a 25% one, giving silent immunity from two innocuous numbers meeting. **Damage and duration now
+  carry all the differentiation between two riders of the same kind**, and resistance values want
+  banding at 0.4–0.6 to be felt at all.
+- **Resistance comes from the class alone.** Characters have no list of their own.
+
+**Phase E turned out simpler than planned.** The class was to be an optional baseline with
+per-character deltas on top; instead **`Character` holds no numbers at all** and a class is required.
+The `CharacterClass` enum is gone too — the `ClassDefinition` asset reference *is* the class
+identity, so adding a class is creating an asset, with no code change and no append-only reordering
+hazard. `Action.allowedClasses` gates abilities by asset reference for the same reason.
+
+The trade, stated plainly: two characters of the same class at the same level are numerically
+identical, so a named anchor differs from a generic crew member only by name, art, audio and action
+slots. If that becomes a problem the answer is a one-off `ClassDefinition`, not reintroducing deltas.
 
 **Phase F — Counter / riposte** is queued behind E and **not designed yet** — a placeholder capturing
 the idea (parry + an extra button, spending drive, for a set amount of damage) along with the
@@ -671,8 +687,8 @@ New file `Assets/Scripts/Combat/StatusEffect.cs`:
 public enum StatusEffectKind { Bleed, Poison, Burn, Stun }
 
 [System.Serializable] public class StatusEffect      { kind; damagePerTurn; turnsRemaining; }
-[System.Serializable] public class StatusResistance  { kind; [Range(0,1)] value; }   // authored on Character
-[System.Serializable] public class StatusApplication { kind; damagePerTurn; turns; [Range(0,1)] chanceToApply; }
+[System.Serializable] public class StatusResistance  { kind; [Range(0,1)] value; }   // on ClassDefinition
+[System.Serializable] public class StatusApplication { kind; damagePerTurn; turns; }  // chanceToApply removed
 ```
 
 `StatusApplication` is the authored *rider* on an `Action`; `StatusEffect` is the live instance on a
@@ -818,7 +834,56 @@ layer; see `CLAUDE.md`.
 same character on consecutive turns gets progressively harder and then stops landing; once they take
 a turn it's as landable as it was at the start.
 
-### Phase E — Class definitions & level scaling ✅ CODE COMPLETE, awaiting Editor verification
+**D3 — Stealth. ✅ DONE, verified in Editor.** Added after D was closed; it's a status effect, so it
+belongs here rather than in a phase of its own.
+
+A hidden character **cannot be targeted by a hostile action, but can still be healed and buffed** —
+which is the entire reason to hide a support character. Self and single-ally only; party-wide waits
+on multi-target.
+
+Three pieces of structure came with it, each of which will outlive stealth itself:
+
+- **`StatusEffectKind.Stealth` is the first BENEFICIAL status**, so
+  `StatusEffectRules.IsBeneficial()` makes it skip the resistance roll. Being good at shrugging off
+  poison must not make an ally's stealth harder to receive. Regeneration or haste land free on that.
+- **`ActionType.ApplyStatus`** applies riders and nothing else — no damage, no to-hit roll. Generic
+  rather than an `ActionType.Stealth`, so future beneficial statuses cost only an enum member. For a
+  status that *can* miss, an Attack with 0 damage and a rider still works; that path rolls to hit and
+  this one doesn't.
+- **`Action.IsHostile` derives from `ActionType`, never `TargetType`.** Load-bearing: TargetType is
+  read caster-relatively by enemies, so an enemy's "SingleEnemy" points at the crew, whereas an
+  Attack is hostile whoever swings it. `ApplyStatus` is judged by its payload.
+
+**Enforced in exactly two places** — `CombatController.IsValidTarget` and
+`EnemyManager.SelectTarget`. Getting there meant deleting `TooltipUI`'s duplicate copy of the
+targeting rules, which had been sitting there since early development: stealth is what finally made
+it bite, because hover said "valid" while the click refused.
+
+Four things that were wrong on the way, all worth not repeating:
+
+1. **Round-scoping the duration.** Stealth is applied part-way through a round, so expiring at the
+   round tick covered every enemy turn if the caster acted first and *nothing at all* if they acted
+   last. Fixed by making it turn-scoped like stun.
+2. **Turn-scoping then ate self-casts.** `OnTurnComplete` fires for the very turn the stealth was
+   cast in, so a self-cast was applied and consumed inside one frame and never visibly happened.
+   Fixed with a one-shot grace (`StatusEffect.SkipNextTurnConsumption`) granted only when the bearer
+   is the acting character, so ally-casts are unaffected.
+3. **Using an `MMF_Player` for a sustained effect.** `PlayFeedbacks()` runs feedbacks once through;
+   it is not a Play/Stop state. Buffs already had this right with **two** channels of **different
+   types** — a one-shot `MMF_Player` plus a sustained `ParticleImage` — and stealth now mirrors that
+   exactly.
+4. **An all-hidden party would have stalled the fight.** `EnemyManager.FilterHiddenTargets` falls
+   back to attacking a hidden target when every candidate is hidden. Single-ally-only stealth makes
+   that hard to reach but not impossible — three crew hiding each other in sequence gets there.
+
+Stealth ends three ways — turn spent, broken by a hostile action, debug clear — so both the sustained
+feedback and the **"Visible"** floating text are driven from the one transition that observes it
+rather than from each call site.
+
+*Verified:* enemies visibly retarget; the attack cursor reads invalid over a hidden character;
+friendly heals still reach them; attacking from stealth reveals immediately.
+
+### Phase E — Class definitions & level scaling ✅ CODE COMPLETE, roster rebuild in progress
 
 **Goal:** stop authoring every stat on every character. A class defines the baseline — health, attack,
 defense, speed, drive multipliers and **status resistances** — and level scales it. Creating a new
@@ -1324,19 +1389,20 @@ every run converges on the same survivors.
 Realistically you need **8-12 recruitable crew**. Two ways there:
 
 - *Author them all.* Most control, most work — each needs stats, drive multipliers, art, audio.
-- *Archetype + generation.* A `CrewArchetype` SO per class (Duelist / Muscle / Musketeer /
-  Healer) plus a pirate name pool; generated crew roll stats within an archetype band.
+- *Archetype + generation.* A pirate name pool plus generated crew rolling stats within a class's
+  band. **`ClassDefinition` is that band** — it already holds every stat and its per-level growth,
+  so the separate `CrewArchetype` SO this originally proposed is no longer needed.
   Named characters stay as hand-authored uniques.
 
 I'd recommend the hybrid: your 4 named crew as anchors, generated rank-and-file for the rest.
 It fits the fantasy (nobodies you pick up in port) and makes losing a generic crew member sting
 differently than losing Black Sam.
 
-> **This depends on classes meaning something first.** `Character.CharacterClass` exists on every
-> character and **nothing reads it** — two crew of different classes differ only in stat values
-> today. Generation bands are not worth building until a class implies actual capability: which
-> actions it can take, what it can spend drive on, what passives it has. See "Defining hero classes"
-> in `TODO.md`. Designing it once covers both recruitment and combat identity.
+> **Partly unblocked since this was written.** A class now means something numerically — stats,
+> growth and resistances all come from its `ClassDefinition` — and `Action.allowedClasses` gates
+> abilities by class. So generation bands ARE buildable now: roll within the class asset's values.
+> What's still open is the *capability* half — what a class can spend drive on, and passives, which
+> have no home at all. See "Defining hero classes" in `TODO.md`.
 
 **Run length.** Node count drives all tuning. 12-15 is the genre norm for a ~30-45 min run.
 

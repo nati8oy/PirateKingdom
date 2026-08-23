@@ -2339,6 +2339,7 @@ RectTransform:
   - {fileID: 7771757804790460915}
   - {fileID: 5700760810969453415}
   - {fileID: 2156134091541309270}
+  - {fileID: 5811733555261933570}
   m_Father: {fileID: 2883925891502609661}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -10807,6 +10808,81 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!1 &4794257216459854546
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5811733555261933570}
+  - component: {fileID: 7811957615931956882}
+  - component: {fileID: 82102043787553889}
+  m_Layer: 0
+  m_Name: icn_stealth
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &5811733555261933570
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4794257216459854546}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7169115789867907218}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 25, y: 25}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!222 &7811957615931956882
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4794257216459854546}
+  m_CullTransparentMesh: 1
+--- !u!114 &82102043787553889
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4794257216459854546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 0.52759326, b: 0.015686274, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 3900363994317415728, guid: 7a51c9b1c1d5a4228b3adeacfddd0009, type: 3}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
 --- !u!1 &4879667956975031156
 GameObject:
   m_ObjectHideFlags: 0
@@ -10887,6 +10963,7 @@ MonoBehaviour:
   missFeedback: {fileID: 8656548966867776500}
   parryFeedback: {fileID: 5538178216688167945}
   buffFeedback: {fileID: 6646330902932926293}
+  debuffFeedback: {fileID: 6646330902932926293}
   driveGrantedFeedback: {fileID: 0}
   driveDrainedFeedback: {fileID: 0}
   damageOverTimeFeedback: {fileID: 8711236214558657599}
@@ -10895,6 +10972,7 @@ MonoBehaviour:
   feedbackPlayer: {fileID: 2520015946496009997}
   driveParticles: {fileID: 1588365729076261259}
   buffParticles: {fileID: 4448634062430033439}
+  debuffParticles: {fileID: 0}
   stealthParticles: {fileID: 8395378084371867716}
   attackAudioFeedback: {fileID: 4097834152788725009}
   deathAudioFeedback: {fileID: 47833187982209731}
@@ -11527,6 +11605,13 @@ MonoBehaviour:
   - kind: 0
     icon: {fileID: 5637980936983291916}
     sprite: {fileID: 8352252378513780126, guid: d6c1a93d2daca47ae88d07fd1da8baac, type: 3}
+    useKindColour: 1
+    customTint: {r: 1, g: 0, b: 0, a: 1}
+    turnsText: {fileID: 3491356579212790700}
+    damageText: {fileID: 0}
+  - kind: 4
+    icon: {fileID: 82102043787553889}
+    sprite: {fileID: 1099493764, guid: 3fc0859f4706a4285a970acc13f2b3e0, type: 3}
     useKindColour: 1
     customTint: {r: 1, g: 0, b: 0, a: 1}
     turnsText: {fileID: 3491356579212790700}

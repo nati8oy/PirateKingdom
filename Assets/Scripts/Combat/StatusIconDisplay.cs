@@ -32,8 +32,10 @@ public class StatusIconDisplay : MonoBehaviour
         [Tooltip("Image toggled on and off. Its GameObject is what gets shown/hidden, so put each icon on its own object.")]
         public Image icon;
 
-        [Tooltip("Optional. Sprite to show for this kind. Leave empty to keep whatever the Image already has, " +
-                 "which is what you want if each icon object already has its own artwork.")]
+        [Tooltip("Fallback sprite for this kind, used when the applying action didn't supply one of " +
+                 "its own.\n\n" +
+                 "An action's Status Effect entry can carry an Icon, and that wins where set — so this " +
+                 "is the per-kind default. Leave both empty to keep whatever the Image already has.")]
         public Sprite sprite;
 
         [Tooltip("Tint the icon with this kind's standard colour — the same one the floating damage " +
@@ -48,7 +50,8 @@ public class StatusIconDisplay : MonoBehaviour
         [Tooltip("Optional. Filled with the turns remaining.")]
         public TMP_Text turnsText;
 
-        [Tooltip("Optional. Filled with the damage this effect deals per turn.")]
+        [Tooltip("Optional. Filled with the damage this effect deals per turn, and blanked for the " +
+                 "kinds that deal none — stun and stealth.")]
         public TMP_Text damageText;
     }
 
@@ -109,7 +112,12 @@ public class StatusIconDisplay : MonoBehaviour
 
             slot.icon.gameObject.SetActive(true);
 
-            if (slot.sprite != null) slot.icon.sprite = slot.sprite;
+            // The applying action's icon wins where it supplied one, so two actions of the same kind
+            // can look different. Falling back to the slot's own sprite keeps per-kind icons working
+            // with nothing authored on the action.
+            Sprite sprite = active.Icon != null ? active.Icon : slot.sprite;
+            if (sprite != null) slot.icon.sprite = sprite;
+
             slot.icon.color = slot.useKindColour ? StatusEffectStyle.Tint(slot.kind) : slot.customTint;
 
             if (slot.turnsText != null)
@@ -119,9 +127,11 @@ public class StatusIconDisplay : MonoBehaviour
 
             if (slot.damageText != null)
             {
-                // Rounded to match what TakeDamage will actually apply, so the icon and the floating
-                // number can't disagree.
-                slot.damageText.text = string.Format(damageFormat, Mathf.Round(active.DamagePerTurn));
+                // Blanked for effects that deal no damage — stun and stealth would otherwise show a
+                // meaningless "0" beside their icon.
+                slot.damageText.text = active.IsDamageOverTime
+                    ? string.Format(damageFormat, Mathf.Round(active.DamagePerTurn))
+                    : string.Empty;
             }
         }
     }
